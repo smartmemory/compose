@@ -274,7 +274,8 @@ function CockpitView({
   // COMPOSE-WIKI-TAB-1: {workspace, frameBase} from useWikiTab
   wikiTab,
   // COMP-ROADMAP-DOC-LINKS-1: the doc the wiki opens on ({path}) and the double-click handler for tree rows and graph nodes
-  wikiDoc, onOpenDoc,
+  // COMP-WIKI-DOC-PATH-LINKS-1: onOpenFile(path) opens any repo doc path in the wiki (navigateToWiki)
+  wikiDoc, onOpenDoc, onOpenFile,
   // COMP-AUDIT-18: Home
   agentErrors, onStopAgent, untriagedIdeas, cadenceAvailable, onJumpToGate, onNavigate, onOpenFleet,
   // COMP-AUDIT-17: view keys reachable by clicks (Settings default-view picker)
@@ -428,7 +429,7 @@ function CockpitView({
     case 'qa-scope':
       return <QaScopeView featureCode={featureCode} />;
     case 'decisions':
-      return <DecisionsPane projectRoot={projectRoot} />;
+      return <DecisionsPane projectRoot={projectRoot} onOpenFile={onOpenFile} />;
     case 'journal':
       return <JournalView />;
     case 'settings':
@@ -1294,7 +1295,8 @@ function AppInner() {
   }, [handleViewChange, onContextSelect, ensureItemVisible]);
 
   // COMPOSE-DOCS-RETIRE-1: a file click lands on Library > Wiki. COMP-ROADMAP-DOC-LINKS-1: with a path it opens that doc
-  // (WikiView matches the path to a wiki note); without one, or when the hub lists no such file, the feature hub stays open.
+  // (WikiView matches the path to a wiki note: the feature hub's list, then COMP-WIKI-DOC-PATH-LINKS-1's path lookup for any
+  // other repo path); without one, or when neither finds the file, the feature hub stays open.
   // `wikiDoc` is a new object per request so the same doc can be asked for twice, and it is dropped once the view leaves the wiki.
   const [wikiDoc, setWikiDoc] = useState(null);
   const navigateToWiki = useCallback((path) => {
@@ -1553,6 +1555,7 @@ function AppInner() {
                       wikiTab={wikiTab}
                       wikiDoc={wikiDoc}
                       onOpenDoc={openItemDoc}
+                      onOpenFile={navigateToWiki}
                       onFocusHandled={handleGateFocusHandled}
                       onOpenFile={navigateToWiki}
                       agentErrors={agentErrors}

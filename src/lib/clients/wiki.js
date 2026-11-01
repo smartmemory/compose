@@ -43,5 +43,7 @@ export function createWikiDataClient() {
     graphPage: ({ workspace, cursor, size }) => call('/query/graph', { workspace, ...(cursor ? { cursor } : {}), ...(size ? { size } : {}) }),
     // One note with its text, for the graph's doc pane; the query string is built, never concatenated.
     note: ({ workspace, id }) => call(`/note?${new URLSearchParams({ workspace, id })}`),
+    // COMP-WIKI-DOC-PATH-LINKS-1: a repo-relative doc path to `{workspace, id}` (not part of the wiki's DataClient contract: Compose's own call).
+    docByPath: ({ workspace, path, source }) => call('/query/doc_by_path', { workspace, path, ...(source ? { source } : {}) }),
   };
 }

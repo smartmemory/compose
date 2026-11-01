@@ -115,6 +115,12 @@ export function attachDecisionsRoutes(app, { remote = false, env = process.env, 
   const rel = relative(opsRoot, ledgerFile);
   const inRepo = rel && !rel.startsWith('..') && !isAbsolute(rel) && !rel.startsWith(`..${sep}`);
   if (!inRepo && !deps.blame) warn(`${LOG} ${ledgerFile} is outside ${opsRoot}: rows have no commit links`);
+  const opsDoc = (file) => {
+    const r = relative(opsRoot, file);
+    return r && !r.startsWith('..') && !isAbsolute(r) ? r.split(sep).join('/') : null;
+  };
+  const ledgerDoc = opsDoc(ledgerFile);
+  const queueDoc = opsDoc(ownerQueueFile);
   const blame = deps.blame ?? (inRepo ? createLedgerBlame({ repo: opsRoot, relPath: rel, cacheFile: join((deps.dataDir ?? getDataDir)(), 'ledger-blame.json'), now, warn, info }) : null);
 
   // No boot warm: the first request starts the blame build in the background (a cold full build is ~90 s, and a git
@@ -143,6 +149,8 @@ export function attachDecisionsRoutes(app, { remote = false, env = process.env, 
         total: page.total, nextCursor: page.nextCursor, counts: page.counts,
         rows: page.rows.map(({ ts: _ts, ...r }) => ({ ...r, commitPending: r.source === 'ledger' && !r.commit })),
         projects: sc.projects.map((p) => ({ name: p.name, label: p.label, root: p.root, modules: p.modules })),
+        // COMP-WIKI-DOC-PATH-LINKS-1: the ledger and the owner queue as paths inside the ops repo (posix), so the pane can open them as wiki docs; null outside it.
+        ledgerDoc, queueDoc,
         blame: b ? { state: b.state, head: b.head, nlines: b.nlines, lastBuild: b.lastBuild } : { state: 'off' },
         sourceErrors,
       });

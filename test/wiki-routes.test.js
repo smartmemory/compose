@@ -64,6 +64,17 @@ async function fakeWiki(calls) {
   app.get('/note', (req, res) => (req.query.id === 'MISSING'
     ? res.status(404).json({ code: 'not_found', message: 'no such note' })
     : res.json({ workspace: req.query.workspace, note: { id: req.query.id, text: 'hello' }, generated_at: 't' })));
+  // COMP-WIKI-DOC-PATH-LINKS-1: the answers of the wiki's /note/by-path (smart-memory-wiki wiki/spine/api/notes.py), keyed by the path asked.
+  app.get('/note/by-path', (req, res) => {
+    const p = req.query.path;
+    if (p === 'MISSING') return res.status(404).json({ code: 'not_found', message: 'no such note', retryable: false });
+    if (p === 'AMBIG') return res.status(409).json({ code: 'ambiguous', message: 'more than one source holds a note at that path', retryable: false });
+    if (p === 'REFUSED') return res.status(400).json({ code: 'invalid_request', message: 'request does not match the route schema', retryable: false });
+    if (p === 'BAD_ID') return res.json({ workspace: req.query.workspace, id: '../../etc/passwd', generated_at: 't' });
+    if (p === 'NO_ID') return res.json({ workspace: req.query.workspace, generated_at: 't' });
+    if (p === 'REDIRECT') return res.redirect(303, '/signin');
+    return res.json({ workspace: req.query.workspace, id: 'eng-mac-ops:coordination/ledger.md', generated_at: 't', note: { text: 'the note body' }, text: 'the note body' });
+  });
   app.use((_req, res) => res.status(418).json({ code: 'reached_the_wiki' }));
   return listen(app);
 }
@@ -262,6 +273,54 @@ const ROWS = [
   ['note: wiki down', 'down', true, 'GET', '/note?workspace=wiki-eng&id=d1', null, null, 502, 'wiki_unreachable', 0],
   ['note: POST is not proxied', 'ok', true, 'POST', '/note', { workspace: 'wiki-eng', id: 'd1' }, null, 404, 'not_proxied', 0],
   ['note: a path below it is not proxied', 'ok', true, 'GET', '/note/d1?workspace=wiki-eng', null, null, 404, 'not_proxied', 0],
+  // COMP-WIKI-DOC-PATH-LINKS-1: POST /query/doc_by_path -> GET /note/by-path. The 200 is built here (id only); refusals pass through.
+  ['doc_by_path: a hit answers the id only, never the note', 'ok', true, 'POST', '/query/doc_by_path', { workspace: 'wiki-eng', path: 'coordination/ledger.md', extra: 'dropped' }, null, 200, null, 1,
+    ['GET', '/note/by-path', {}], (b, _base, calls) => {
+      assert.deepEqual(b, { workspace: 'wiki-eng', id: 'eng-mac-ops:coordination/ledger.md' });
+      assert.equal(calls[0].url, '/note/by-path?workspace=wiki-eng&path=coordination%2Fledger.md');
+    }],
+  ['doc_by_path: a source travels as one more parameter', 'ok', true, 'POST', '/query/doc_by_path', { workspace: 'wiki-eng', path: 'docs/a b/ü.md', source: 'eng-mac-ops' }, null, 200, null, 1,
+    ['GET', '/note/by-path', {}], (_b, _base, calls) => assert.equal(calls[0].url, '/note/by-path?workspace=wiki-eng&path=docs%2Fa+b%2F%C3%BC.md&source=eng-mac-ops')],
+  ['doc_by_path: the wiki\'s 404 passes through', 'ok', true, 'POST', '/query/doc_by_path', { workspace: 'wiki-eng', path: 'MISSING' }, null, 404, 'not_found', 1,
+    null, (b) => assert.deepEqual(b, { code: 'not_found', message: 'no such note', retryable: false })],
+  ['doc_by_path: the wiki\'s 409 ambiguous passes through', 'ok', true, 'POST', '/query/doc_by_path', { workspace: 'wiki-eng', path: 'AMBIG' }, null, 409, 'ambiguous', 1],
+  ['doc_by_path: the wiki\'s own 400 refusal passes through', 'ok', true, 'POST', '/query/doc_by_path', { workspace: 'wiki-eng', path: 'REFUSED' }, null, 400, 'invalid_request', 1],
+  ['doc_by_path: a traversal-shaped id from the wiki is not handed on', 'ok', true, 'POST', '/query/doc_by_path', { workspace: 'wiki-eng', path: 'BAD_ID' }, null, 502, 'bad_response', 1,
+    null, (b) => assert.ok(!JSON.stringify(b).includes('passwd'))],
+  ['doc_by_path: an answer with no id', 'ok', true, 'POST', '/query/doc_by_path', { workspace: 'wiki-eng', path: 'NO_ID' }, null, 502, 'bad_response', 1],
+  ['doc_by_path: wiki redirects: not followed', 'ok', true, 'POST', '/query/doc_by_path', { workspace: 'wiki-eng', path: 'REDIRECT' }, null, 502, 'bad_response', 1],
+  ['doc_by_path: path at 1024 characters passes', 'ok', true, 'POST', '/query/doc_by_path', { workspace: 'wiki-eng', path: 'a'.repeat(1024) }, null, 200, null, 1, ['GET', '/note/by-path', {}]],
+  ['doc_by_path: path ..', 'ok', true, 'POST', '/query/doc_by_path', { workspace: 'wiki-eng', path: '..' }, null, 400, 'bad_request', 0],
+  ['doc_by_path: path a/../b', 'ok', true, 'POST', '/query/doc_by_path', { workspace: 'wiki-eng', path: 'docs/../coordination/ledger.md' }, null, 400, 'bad_request', 0],
+  ['doc_by_path: path ../x', 'ok', true, 'POST', '/query/doc_by_path', { workspace: 'wiki-eng', path: '../smart-memory-core/README.md' }, null, 400, 'bad_request', 0],
+  ['doc_by_path: path ./x', 'ok', true, 'POST', '/query/doc_by_path', { workspace: 'wiki-eng', path: './x' }, null, 400, 'bad_request', 0],
+  ['doc_by_path: path with an empty segment', 'ok', true, 'POST', '/query/doc_by_path', { workspace: 'wiki-eng', path: 'a//b' }, null, 400, 'bad_request', 0],
+  ['doc_by_path: absolute /etc/passwd', 'ok', true, 'POST', '/query/doc_by_path', { workspace: 'wiki-eng', path: '/etc/passwd' }, null, 400, 'bad_request', 0],
+  ['doc_by_path: drive C:\\x', 'ok', true, 'POST', '/query/doc_by_path', { workspace: 'wiki-eng', path: 'C:\\x' }, null, 400, 'bad_request', 0],
+  ['doc_by_path: drive C:/x', 'ok', true, 'POST', '/query/doc_by_path', { workspace: 'wiki-eng', path: 'C:/x' }, null, 400, 'bad_request', 0],
+  ['doc_by_path: home ~/x', 'ok', true, 'POST', '/query/doc_by_path', { workspace: 'wiki-eng', path: '~/x' }, null, 400, 'bad_request', 0],
+  ['doc_by_path: backslash traversal', 'ok', true, 'POST', '/query/doc_by_path', { workspace: 'wiki-eng', path: 'docs\\..\\x' }, null, 400, 'bad_request', 0],
+  ['doc_by_path: NUL', 'ok', true, 'POST', '/query/doc_by_path', { workspace: 'wiki-eng', path: 'coordination/ledger.md\u0000' }, null, 400, 'bad_request', 0],
+  ['doc_by_path: newline', 'ok', true, 'POST', '/query/doc_by_path', { workspace: 'wiki-eng', path: 'a\nb' }, null, 400, 'bad_request', 0],
+  ['doc_by_path: DEL', 'ok', true, 'POST', '/query/doc_by_path', { workspace: 'wiki-eng', path: 'a\u007fb' }, null, 400, 'bad_request', 0],
+  ['doc_by_path: C1 control', 'ok', true, 'POST', '/query/doc_by_path', { workspace: 'wiki-eng', path: 'a\u0085b' }, null, 400, 'bad_request', 0],
+  ['doc_by_path: encoded .. (%2e%2e)', 'ok', true, 'POST', '/query/doc_by_path', { workspace: 'wiki-eng', path: '%2e%2e/x' }, null, 400, 'bad_request', 0],
+  ['doc_by_path: encoded slash (%2f)', 'ok', true, 'POST', '/query/doc_by_path', { workspace: 'wiki-eng', path: 'docs%2f..%2fx' }, null, 400, 'bad_request', 0],
+  ['doc_by_path: path of 1025 characters', 'ok', true, 'POST', '/query/doc_by_path', { workspace: 'wiki-eng', path: 'a'.repeat(1025) }, null, 400, 'bad_request', 0],
+  ['doc_by_path: path empty', 'ok', true, 'POST', '/query/doc_by_path', { workspace: 'wiki-eng', path: '' }, null, 400, 'bad_request', 0],
+  ['doc_by_path: path as an array', 'ok', true, 'POST', '/query/doc_by_path', { workspace: 'wiki-eng', path: ['a', 'b'] }, null, 400, 'bad_request', 0],
+  ['doc_by_path: source ..', 'ok', true, 'POST', '/query/doc_by_path', { workspace: 'wiki-eng', path: 'a.md', source: '..' }, null, 400, 'bad_request', 0],
+  ['doc_by_path: source with a slash', 'ok', true, 'POST', '/query/doc_by_path', { workspace: 'wiki-eng', path: 'a.md', source: 'eng/ops' }, null, 400, 'bad_request', 0],
+  ['doc_by_path: source carrying another parameter', 'ok', true, 'POST', '/query/doc_by_path', { workspace: 'wiki-eng', path: 'a.md', source: 'x&workspace=wiki-private' }, null, 400, 'bad_request', 0],
+  ['doc_by_path: source not a string', 'ok', true, 'POST', '/query/doc_by_path', { workspace: 'wiki-eng', path: 'a.md', source: 7 }, null, 400, 'bad_request', 0],
+  ['doc_by_path: path missing', 'ok', true, 'POST', '/query/doc_by_path', { workspace: 'wiki-eng' }, null, 400, 'bad_request', 0],
+  ['doc_by_path: workspace wiki-private', 'ok', true, 'POST', '/query/doc_by_path', { workspace: 'wiki-private', path: 'a.md' }, null, 403, 'workspace_refused', 0],
+  ['doc_by_path: no workspace', 'ok', true, 'POST', '/query/doc_by_path', { path: 'a.md' }, null, 403, 'workspace_refused', 0],
+  ['doc_by_path: missing token', 'ok', false, 'POST', '/query/doc_by_path', { workspace: 'wiki-eng', path: 'a.md' }, null, 503, 'token_missing', 0],
+  ['doc_by_path: config off', 'off', true, 'POST', '/query/doc_by_path', { workspace: 'wiki-eng', path: 'a.md' }, null, 503, 'wiki_disabled', 0],
+  ['doc_by_path: wiki down', 'down', true, 'POST', '/query/doc_by_path', { workspace: 'wiki-eng', path: 'coordination/ledger.md' }, null, 502, 'wiki_unreachable', 0],
+  ['doc_by_path: foreign Host (DNS rebinding)', 'ok', true, 'POST', '/query/doc_by_path', { workspace: 'wiki-eng', path: 'a.md' }, 'evil.example:4001', 403, 'host_refused', 0],
+  ['doc_by_path: GET is not proxied', 'ok', true, 'GET', '/query/doc_by_path?workspace=wiki-eng&path=a.md', null, null, 404, 'not_proxied', 0],
   ['unlisted query (notes_tree)', 'ok', true, 'POST', '/query/notes_tree', { workspace: 'wiki-eng' }, null, 404, 'not_proxied', 0],
   ['unlisted GET (/pages/home)', 'ok', true, 'GET', '/pages/home', null, null, 404, 'not_proxied', 0],
   ['/commands', 'ok', true, 'POST', '/commands', { command: 'apply' }, null, 404, 'not_proxied', 0],
@@ -334,6 +393,7 @@ describe('attachWikiRoutes', () => {
           assert.deepEqual([calls[0].method, calls[0].path, calls[0].body ?? {}], [m, p, b], `${name}: upstream request`);
         }
         for (const call of calls) {
+          assert.ok(!call.url.includes(TOKEN), `${name}: token in the upstream URL`);
           assert.equal(call.headers[OWNER_TOKEN_HEADER], TOKEN, `${name}: owner token header`);
           assert.equal(call.headers.cookie, undefined, `${name}: browser cookie forwarded`);
           assert.equal(call.headers.authorization, undefined, `${name}: browser authorization forwarded`);
@@ -341,6 +401,10 @@ describe('attachWikiRoutes', () => {
         check?.(json, wikiBase, calls);
       }
       assert.ok(warned.length > 0 && warned.every((w) => !w.includes(TOKEN)), 'warnings logged, none carrying the token');
+      // COMP-WIKI-DOC-PATH-LINKS-1: the by-path warnings name the call, never the doc path asked.
+      const byPath = warned.filter((w) => w.includes('/note/by-path'));
+      assert.ok(byPath.length >= 3, `by-path warnings logged (${byPath.length})`);
+      assert.ok(warned.every((w) => !w.includes('coordination') && !w.includes('BAD_ID') && !w.includes('REDIRECT')), 'no warning names a doc path');
     } finally {
       console.warn = warn;
       compose.close();

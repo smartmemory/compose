@@ -6,8 +6,14 @@
  * row picks this project, Fleet-wide (rows naming no project) or All, the deciders, and standing-only. Read-only, plain
  * `fetch` (the route is loopback and global, never workspace-scoped). A failing source shows as a line, never a blank.
  *
+ * COMP-WIKI-DOC-PATH-LINKS-1: every ledger reference in a row (its source `ledger.md#L<n>` or commit, `Refs: ledger :<n>`, echoes,
+ * "maybe changed by", the line that superseded it) opens the ledger in the wiki at `<ledgerDoc>#L<n>`, and an owner-queue row's id
+ * opens the queue file. `ledgerDoc`/`queueDoc` are the paths /api/decisions reports inside the ops repo; with no path, or no
+ * `onOpenFile`, the reference stays text.
+ *
  * Props:
  *   projectRoot {string}  the cockpit's bound root (App's `projectRoot`)
+ *   onOpenFile  {(path: string) => void}  opens a repo doc path in the wiki (App's `navigateToWiki`); optional
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useProjectModel } from '../../lib/fleetProjects.js';
@@ -40,7 +46,18 @@ function Segmented({ label, testid, options, isOn, onPick }) {
   );
 }
 
-function DecisionRow({ row }) {
+const DOC_LINK = 'font-mono underline decoration-dotted underline-offset-2 hover:text-foreground';
+
+/** A ledger line reference: a button opening the ledger at `line` when `openLine` is given, else plain text in `className`. */
+function LineRef({ line, openLine, children, testid, className = 'font-mono', linkClass = DOC_LINK, title }) {
+  if (!openLine || !Number.isInteger(line)) return <span className={className} data-testid={testid} title={title}>{children}</span>;
+  return (
+    <button type="button" className={linkClass} data-testid={testid ?? 'decision-line-link'} data-line={line} title={title ?? `open the ledger at line ${line} in the wiki`}
+      onClick={(e) => { e.stopPropagation(); openLine(line); }}>{children}</button>
+  );
+}
+
+function DecisionRow({ row, openLine, openQueue }) {
   const [open, setOpen] = useState(false);
   const src = rowSource(row);
   const status = statusLabel(row);
@@ -52,29 +69,41 @@ function DecisionRow({ row }) {
         <button type="button" className="flex-1 min-w-0 text-left hover:underline decoration-dotted" aria-expanded={open} onClick={() => setOpen((v) => !v)} data-testid="decision-summary">
           {row.summary}
         </button>
-        <span className={`${CHIP} ${status === 'standing' ? 'border-border text-muted-foreground' : 'border-destructive/50 text-destructive'}`} data-testid="decision-status">{status}</span>
+        {(() => {
+          const chip = `${CHIP} ${status === 'standing' ? 'border-border text-muted-foreground' : 'border-destructive/50 text-destructive'}`;
+          return <LineRef line={row.statusBy?.line} openLine={openLine} testid="decision-status" className={chip} linkClass={`${chip} hover:underline`}>{status}</LineRef>;
+        })()}
       </div>
       <div className="mt-1 flex flex-wrap items-center gap-1.5 pl-[7.5rem] text-[10px] text-muted-foreground">
         {row.by ? <span className="font-mono">{row.by}{row.via ? ` via ${row.via}` : ''}</span> : null}
         {rowTags(row).map((t) => <span key={t} className={`${CHIP} border-border`} data-testid="decision-tag">{t}</span>)}
         {(row.projects ?? []).map((p) => <span key={p} className={`${CHIP} border-border`}>{p}</span>)}
-        <span className="font-mono" title={src.title} data-testid="decision-source">{src.kind === 'pending' ? `commit pending · ${src.label}` : src.label}</span>
+        {src.kind === 'queue'
+          ? (openQueue
+            ? <button type="button" className={DOC_LINK} title="open the owner queue in the wiki" data-testid="decision-source" onClick={openQueue}>{src.label}</button>
+            : <span className="font-mono" data-testid="decision-source">{src.label}</span>)
+          : <LineRef line={row.line} openLine={openLine} testid="decision-source" title={src.title}>{src.kind === 'pending' ? `commit pending · ${src.label}` : src.label}</LineRef>}
       </div>
       {open && (
         <div className="mt-1.5 pl-[7.5rem] text-[11px] text-muted-foreground space-y-1" data-testid="decision-premises">
           <div className="whitespace-pre-wrap break-words text-foreground/80">{row.text}</div>
           {row.reverse ? <div>To reverse: {row.reverse}</div> : null}
           {row.units?.length ? <div>Units: <span className="font-mono">{row.units.join(', ')}</span></div> : null}
-          {row.refs?.length ? <div>Refs: <span className="font-mono">{row.refs.map((r) => (r.kind === 'line' ? `ledger :${r.value}` : `${r.kind} ${r.value}`)).join(', ')}</span></div> : null}
-          {row.echoes?.length ? <div>Echoes: <span className="font-mono">{row.echoes.map((e) => `L${e.line}${e.by ? ` ${e.by}` : ''}`).join(', ')}</span></div> : null}
-          {row.maybe?.length ? <div>Maybe changed by: <span className="font-mono">{row.maybe.map((l) => `L${l}`).join(', ')}</span></div> : null}
+          {row.refs?.length ? <div>Refs: {joined(row.refs.map((r, i) => (r.kind === 'line'
+            ? <LineRef key={i} line={Number(r.value)} openLine={openLine}>{`ledger :${r.value}`}</LineRef>
+            : <span key={i} className="font-mono">{`${r.kind} ${r.value}`}</span>)))}</div> : null}
+          {row.echoes?.length ? <div>Echoes: {joined(row.echoes.map((e, i) => <LineRef key={i} line={e.line} openLine={openLine}>{`L${e.line}${e.by ? ` ${e.by}` : ''}`}</LineRef>))}</div> : null}
+          {row.maybe?.length ? <div>Maybe changed by: {joined(row.maybe.map((l, i) => <LineRef key={i} line={l} openLine={openLine}>{`L${l}`}</LineRef>))}</div> : null}
         </div>
       )}
     </li>
   );
 }
 
-export default function DecisionsPane({ projectRoot }) {
+/** Items separated by ", ". */
+const joined = (items) => items.flatMap((el, i) => (i ? [', ', el] : [el]));
+
+export default function DecisionsPane({ projectRoot, onOpenFile }) {
   const { model } = useProjectModel();
   const project = projectOfRoot(model?.projects, projectRoot);
   const [scope, setScope] = useState('this');
@@ -86,6 +115,10 @@ export default function DecisionsPane({ projectRoot }) {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const reqId = useRef(0);
+  // COMP-WIKI-DOC-PATH-LINKS-1: ledger lines and the owner queue open in the wiki at the paths the route reports.
+  const ledgerDoc = data?.ledgerDoc;
+  const openLine = onOpenFile && ledgerDoc ? (line) => onOpenFile(`${ledgerDoc}#L${line}`) : null;
+  const openQueue = onOpenFile && data?.queueDoc ? () => onOpenFile(data.queueDoc) : null;
 
   const load = useCallback(async (cursor = null) => {
     const my = ++reqId.current;
@@ -150,7 +183,7 @@ export default function DecisionsPane({ projectRoot }) {
       {data && !rows.length && !error ? <div className="text-[12px] text-muted-foreground italic" data-testid="decisions-empty">No decisions match these filters.</div> : null}
       {!data && !error ? <div className="text-[12px] text-muted-foreground">Loading…</div> : null}
 
-      <ul data-testid="decisions-list">{rows.map((r) => <DecisionRow key={r.id} row={r} />)}</ul>
+      <ul data-testid="decisions-list">{rows.map((r) => <DecisionRow key={r.id} row={r} openLine={openLine} openQueue={openQueue} />)}</ul>
 
       {data?.nextCursor ? (
         <button type="button" className={`mt-2 ${pill(false)} border border-border`} disabled={loading} onClick={() => load(data.nextCursor)} data-testid="decisions-more">

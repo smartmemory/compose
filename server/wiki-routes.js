@@ -18,6 +18,8 @@
  *   POST /api/wiki/query/search        -> POST /query/search       {workspace, q}
  *   POST /api/wiki/query/graph         -> POST /query/graph        {workspace, all: true} (the whole graph in one answer) or {workspace, cursor?, size?} (paged, size 1-200)
  *   GET  /api/wiki/note?workspace=&id= -> GET  /note?workspace=&id=  (one doc with its text; id is a doc id, never a path)
+ *   POST /api/wiki/query/doc_by_path   -> GET  /note/by-path?workspace=&path=&source=  {workspace, path, source?} (COMP-WIKI-DOC-PATH-LINKS-1:
+ *                                         a repo-relative path to its doc id; answers `{workspace, id}` only, never the note)
  *   anything else under /api/wiki      -> 404 not_proxied (`/commands` included), no upstream call
  *
  * The upstream body is built here from the checked fields, never forwarded. Rules:
@@ -71,6 +73,21 @@ export const GRAPH_QUERY = 'graph';
 // the VALUE of one `id` query parameter upstream (URLSearchParams), never a path, but a traversal-shaped id has no business reaching the wiki.
 export const NOTE_ID_RE = /^[A-Za-z0-9_.:@/-]{1,512}$/;
 const DOTDOT_SEGMENT_RE = /(^|\/)\.\.(\/|$)/;
+
+// COMP-WIKI-DOC-PATH-LINKS-1: a repo-relative doc path as the wiki's `/note/by-path` accepts it (smart-memory-wiki
+// wiki/spine/api/notes.py `rel_path_ok`), checked here too so a refused shape never reaches the wiki: 1 to DOC_PATH_MAX
+// characters, no `..`/`.`/empty segment, no leading `/` or `~`, no drive letter, no backslash, no `%` (a second encoding such as
+// `%2e%2e`), no control character (C0, DEL, C1). `source` is the wiki's SOURCE_ID: never dot-led, never holding `..`.
+export const DOC_PATH_MAX = 1024;
+const DRIVE_RE = /^[A-Za-z]:/;
+const CONTROL_RE = /[\u0000-\u001f\u007f-\u009f]/;
+export const SOURCE_ID_RE = /^(?!.*\.\.)[A-Za-z0-9][A-Za-z0-9_.:@-]{0,255}$/;
+export function docPathOk(path) {
+  if (typeof path !== 'string' || !path || path.length > DOC_PATH_MAX) return false;
+  if (path[0] === '/' || path[0] === '~' || DRIVE_RE.test(path) || path.includes('\\') || path.includes('%') || CONTROL_RE.test(path)) return false;
+  return path.split('/').every((seg) => seg !== '' && seg !== '.' && seg !== '..');
+}
+export const DOC_BY_PATH = 'doc_by_path';
 
 // The one feed the tab reads. A fixed name, not a `/feeds/:name` route: any other name is not proxied.
 export const WIKI_FEED = 'upcoming_calls';
@@ -183,7 +200,8 @@ export function attachWikiRoutes(app, {
   };
 
   // Sends one contract call upstream: `{status, body}`. `body` is null for GET. The token goes in one header and nowhere else.
-  async function upstream(cfg, method, path, body) {
+  // `label` names the call in a warning (default: the path); a call whose query string carries a doc path passes a fixed one.
+  async function upstream(cfg, method, path, body, label = path) {
     const token = env[cfg.tokenEnv];
     if (!token) return error(503, 'token_missing', `the wiki token env var ${cfg.tokenEnv} is not set for the Compose server`);
     let answer;
@@ -196,13 +214,13 @@ export function attachWikiRoutes(app, {
         signal: AbortSignal.timeout(cfg.timeoutMs),
       });
     } catch (e) {
-      console.warn(`[wiki] ${path}: the wiki is unreachable (${e?.name ?? 'error'})`);
+      console.warn(`[wiki] ${label}: the wiki is unreachable (${e?.name ?? 'error'})`);
       return error(502, 'wiki_unreachable', 'the wiki did not answer');
     }
     let json;
     try { json = JSON.parse(await answer.text()); } catch { json = undefined; }
     if (json === undefined || (answer.status >= 300 && answer.status < 400)) {
-      console.warn(`[wiki] ${path}: HTTP ${answer.status} without a JSON answer`);
+      console.warn(`[wiki] ${label}: HTTP ${answer.status} without a JSON answer`);
       return error(502, 'bad_response', `the wiki answered HTTP ${answer.status} without JSON`);
     }
     return { status: answer.status, body: json };
@@ -253,6 +271,35 @@ export function attachWikiRoutes(app, {
       return refuse(res, 400, 'bad_request', 'id must be a doc id: 1 to 512 characters from A-Z a-z 0-9 _ . : @ / - with no .. segment');
     }
     return send(res, await upstream(cfg, 'GET', `/note?${new URLSearchParams({ workspace: cfg.workspace, id })}`, null));
+  });
+
+  // COMP-WIKI-DOC-PATH-LINKS-1: a doc known only by its repo path, to its doc id. Registered before the generic `/query/:name`. The body is
+  // `{workspace, path, source?}`, checked here; the path travels upstream only as one URLSearchParams value, beside the token's header, and never
+  // into a log line. A 200 answers `{workspace, id}` built here from a checked id (never the wiki's body: no note, no text); a refusal passes
+  // through as its `{code, message, retryable}`.
+  app.post(`${PREFIX}/query/${DOC_BY_PATH}`, async (req, res) => {
+    const cfg = config(req);
+    if (!cfg.ok) return refuse(res, cfg.code === 'workspace_refused' ? 403 : 503, cfg.code, 'the wiki tab is not configured');
+    const { workspace, path, source } = req.body ?? {};
+    if (workspace !== cfg.workspace) return refuse(res, 403, 'workspace_refused', `only ${cfg.workspace} is served here`);
+    if (!docPathOk(path)) {
+      return refuse(res, 400, 'bad_request', `path must be a repo-relative path of 1 to ${DOC_PATH_MAX} characters: no .. or . or empty segment, no leading / or ~, no drive letter, backslash, % or control character`);
+    }
+    if (source !== undefined && (typeof source !== 'string' || !SOURCE_ID_RE.test(source))) {
+      return refuse(res, 400, 'bad_request', 'source must be a wiki source id: A-Z a-z 0-9 _ . : @ -, not dot-led, no ..');
+    }
+    const q = new URLSearchParams({ workspace: cfg.workspace, path, ...(source !== undefined ? { source } : {}) });
+    const r = await upstream(cfg, 'GET', `/note/by-path?${q}`, null, '/note/by-path');
+    if (r.status === 200) {
+      const id = r.body?.id;
+      if (typeof id !== 'string' || !NOTE_ID_RE.test(id) || DOTDOT_SEGMENT_RE.test(id)) {
+        console.warn('[wiki] /note/by-path: the answer carried no usable doc id');
+        return refuse(res, 502, 'bad_response', 'the wiki answered without a doc id');
+      }
+      return res.status(200).json({ workspace: cfg.workspace, id });
+    }
+    const { code, message, retryable } = r.body ?? {};
+    return res.status(r.status).json({ code, message, ...(retryable !== undefined ? { retryable } : {}) });
   });
 
   app.post(`${PREFIX}/query/:name`, async (req, res, next) => {

@@ -27,10 +27,10 @@ const fakeLedger = (text = LEDGER) => ({ get: async () => ({ value: parseLedger(
 const coldBlame = { refresh() {}, snapshot: () => ({ state: 'cold', head: null, nlines: 0, error: null, lastBuild: null, shaAt: () => null, linesOf: () => [] }) };
 const warmBlame = { refresh() {}, snapshot: () => ({ state: 'warm', head: 'h', nlines: 99, error: null, lastBuild: { kind: 'full', ms: 1 }, shaAt: (l) => `sha${l}`, linesOf: () => [] }) };
 
-async function get(query, over = {}, remote = false) {
+async function get(query, { env = {}, ...over } = {}, remote = false) {
   const app = express();
   const mounted = attachDecisionsRoutes(app, {
-    remote, env: {},
+    remote, env,
     deps: { now: () => Date.parse('2026-11-01T06:00:00Z'), warn: () => {}, info: () => {}, opsRoot: '/ops', hostRoot: '/host', dataDir: () => '/tmp',
       ledger: fakeLedger(), loadOwnerQueue: async () => [{ id: 'Q-1', by: 'forge-main', text: 'COMP-Q-1 now?', ts: 1793487600, status: 'closed', answer: 'OWNER (via s1-chat): yes', closed_ts: 1793487700 }],
       loadScope: async () => SCOPE, blame: coldBlame, ...over },
@@ -48,7 +48,7 @@ describe('GET /api/decisions', () => {
   const ROWS = [
     ['the contract keys; newest first; a cold blame says commit pending', '', {}, ({ status, body }) => {
       assert.equal(status, 200);
-      assert.deepEqual(Object.keys(body), ['asOf', 'filters', 'total', 'nextCursor', 'counts', 'rows', 'projects', 'blame', 'sourceErrors']);
+      assert.deepEqual(Object.keys(body), ['asOf', 'filters', 'total', 'nextCursor', 'counts', 'rows', 'projects', 'ledgerDoc', 'queueDoc', 'blame', 'sourceErrors']);
       assert.deepEqual(ids(body), ['L7', 'D-0002', 'D-0001', 'Q:Q-1', 'L4', 'L3', 'L2', 'L1']);
       assert.deepEqual([body.blame.state, body.rows.find((r) => r.id === 'D-0001').commitPending, body.rows.find((r) => r.id === 'Q:Q-1').commitPending], ['cold', true, false]);
     }],
@@ -81,6 +81,13 @@ describe('GET /api/decisions', () => {
     }],
     ['a failing project model is a sourceError and every row is Fleet-wide', '?project=fleet', { loadScope: async () => { throw new Error('compose.json broken'); } }, ({ status, body }) => {
       assert.deepEqual([status, body.sourceErrors.projects, body.total], [200, 'compose.json broken', 8]);
+    }],
+    // COMP-WIKI-DOC-PATH-LINKS-1: the ledger and owner queue as ops-repo paths, for the pane's wiki links; a file outside the ops repo has none.
+    ['the ledger and the owner queue as paths inside the ops repo', '', {}, ({ body }) => {
+      assert.deepEqual([body.ledgerDoc, body.queueDoc], ['coordination/ledger.md', 'coordination/owner-queue.jsonl']);
+    }],
+    ['a ledger or queue outside the ops repo has no doc path', '', { env: { COMPOSE_DECISIONS_LEDGER: '/elsewhere/ledger.md', COMPOSE_RIBBON_OWNER_QUEUE: '/ops/../x/q.jsonl' } }, ({ body }) => {
+      assert.deepEqual([body.ledgerDoc, body.queueDoc], [null, null]);
     }],
     ['a bad decider is 400', '?decider=boss', {}, ({ status, body }) => assert.deepEqual([status, /decider/.test(body.error)], [400, true])],
     ['a bad status is 400', '?status=maybe', {}, ({ status }) => assert.equal(status, 400)],

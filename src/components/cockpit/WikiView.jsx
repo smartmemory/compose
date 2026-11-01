@@ -29,6 +29,26 @@ export async function findDocTarget(client, { workspace, docPath, featureId }) {
   return hit ? { kind: 'note', workspace, docId: hit.doc_id } : null;
 }
 
+// COMP-WIKI-DOC-PATH-LINKS-1: any other repo path (`coordination/ledger.md#L12`) resolves through the wiki's path lookup
+// (`docByPath`, Compose's `/api/wiki/query/doc_by_path`). A `#...` anchor is dropped before the lookup: the wiki's note page
+// opens at the top (it has no line anchor). The hub is asked first, so a feature doc opens exactly as before.
+export const docFileOf = (docPath) => (typeof docPath === 'string' ? docPath.replace(/#.*$/, '') : '');
+/** @returns {Promise<{kind:'note', workspace:string, docId:string}|null>} null (with one WARNING naming the path) when nothing holds it. */
+export async function resolveDocTarget(client, { workspace, docPath, featureId, warn = console.warn }) {
+  const file = docFileOf(docPath);
+  if (!workspace || !file) return null;
+  const hub = featureId ? await findDocTarget(client, { workspace, docPath: file, featureId }).catch(() => null) : null;
+  if (hub) return hub;
+  try {
+    const hit = await client.docByPath({ workspace, path: file });
+    if (typeof hit?.id === 'string' && hit.id) return { kind: 'note', workspace, docId: hit.id };
+    warn(`[wiki] no wiki doc for ${file}: the lookup answered no id; the feature hub stays open`);
+  } catch (e) {
+    warn(`[wiki] no wiki doc for ${file} (${e?.code ?? 'error'}); the feature hub stays open`);
+  }
+  return null;
+}
+
 /** Compose's resolved colour mode as the Graph's `useColorMode` wants it: `{resolved}`. Read from `<html class="dark">`, which App.jsx owns; never written here. */
 function useHtmlColorMode() {
   const read = () => (typeof document !== 'undefined' && document.documentElement.classList.contains('dark') ? 'dark' : 'light');
@@ -49,8 +69,8 @@ const GRAPH_ASPECT_HINT = 'grouping by feature aspect is not built yet';
  * fed by Compose's DataClient (all data through `/api/wiki`, `wiki-eng` only), plus "Open full wiki":
  * the Mac wiki's own UI in a frame, which rides the browser's wiki sign-in (WIKI-FRAME-LOOSEN-1 lets
  * http://127.0.0.1:4001 and :5195 frame it). Navigation is this component's state; the screens never route.
- * `client` is injectable for tests. `docOpen` ({path}, a new object per request) opens that repo doc as a wiki note; a doc the
- * hub does not list leaves the feature hub open.
+ * `client` is injectable for tests. `docOpen` ({path}, a new object per request) opens that repo doc as a wiki note (the hub's
+ * list, else the wiki's path lookup); a doc neither finds leaves the feature hub open, with a console WARNING naming the path.
  */
 export default function WikiView({ featureCode, workspace, frameBase, client, docOpen }) {
   const dataClient = useMemo(() => client ?? createWikiDataClient(), [client]);
@@ -78,7 +98,7 @@ export default function WikiView({ featureCode, workspace, frameBase, client, do
     const docPath = docOpen?.path;
     if (!docPath) return undefined;
     let live = true;
-    findDocTarget(dataClient, { workspace, docPath, featureId: featureOfDocPath(docPath) ?? featureCode })
+    resolveDocTarget(dataClient, { workspace, docPath, featureId: featureOfDocPath(docFileOf(docPath)) ?? featureCode })
       .then((target) => { if (!live) return; if (target) onNavigate(target); else setPane('feature'); })
       .catch(() => { if (live) setPane('feature'); });
     return () => { live = false; };
