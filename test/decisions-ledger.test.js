@@ -146,6 +146,24 @@ describe('decisions-ledger', () => {
       assert.equal(rowsOf(['## 2026-10-31', fixture(21350), fixture(22111), '- 11:00 s2-coord: OWNER QUESTION sent: x?', '- 11:01 cadence-main: OWNER ASK sent to s2-coord']).length, 0);
     }],
     ['an owner quote with a ? inside followed by a RULING is a decision (ledger.md:22574 verbatim)', () => assert.equal(rowsOf([fixture(22574)])[0].decider, 'owner')],
+    ['an owner question is not a decision: no `?` at the end, a `?` mid-quote, a trailing interrogative clause (ledger.md:22509, :22517 verbatim, 2026-11-01)', () => {
+      const lines = ['## 2026-11-01', "- 2026-11-01 09:0x s1-chat: OWNER \"ah right but mostly no edges, what's wrong\" (Flow editor). Cause: PipelineEditorCanvas.jsx:153/213/279 read `depends_on`; every pipelines/*.stratum.yaml declares deps as `after:` (v1 rename, bug-fix.stratum.yaml:37; after= bug-fix 8, build-quick 12, build 18, content 3, gsd 2, new 5, plan 4, refactor 6, research 2, review-fix 2; depends_on 0 real). Filed COMP-PIPE-EDIT-EDGES-1 (P1) to forge-main.", "- 2026-11-01 09:1x s1-chat: OWNER \"a more visual view for cadence than Board? something that shows activity in realtime across active units\" -> filed CADENCE-UI-LIVE-1 (P1, Opus design note first) to cadence-main, cc forge-main (Compose hosts the Cadence tab; compose/src/components/vision/AgentStream.jsx + agent-stream-lanes.js is the existing live-lanes surface to reuse)."];
+      assert.equal(rowsOf(lines).length, 0);
+      assert.deepEqual(parseLedger(lines.join('\n')).map((e) => classifyEntry(e).why), ['question', 'question']);
+    }],
+    ['an owner quote that asks and then gives an instruction or a pick stays a decision (fix them / use cleaned / dispatch)', () => {
+      for (const q of ['are there any gaps in metrics collection? fix them.', 'use cleaned, why handicap ourselves', 'why are there no logs? dispatch to a new session', 'can we run impeccable on the web UI', 'should we cut it? yes']) {
+        assert.equal(rowsOf(['## 2026-11-01', `- 10:00 s1-chat: OWNER "${q}" -> sent to ops-main`]).length, 1, q);
+      }
+    }],
+    ['a relayed owner instruction with no question stays a row (ledger.md:22500 shape: file issues to fix the gaps)', () => {
+      const [r] = rowsOf(['## 2026-11-01', "- 08:58 s2-coord: OWNER (via s1-chat 09:4x) 'file issues to fix the missing readers gaps' -> ops-main to file 4 units"]);
+      assert.equal(r.decider, 'owner');
+    }],
+    ['a `DECISION D-<id>:` line is exact whatever its punctuation, even ending in `?`', () => {
+      const [r] = rowsOf(['## 2026-11-01', '- 10:00 s1-chat: DECISION D-0007: OWNER "why not ship it now?"']);
+      assert.deepEqual([r.exact, r.dId, r.decider], [true, 'D-0007', 'owner']);
+    }],
     ['echoes of earlier rulings are not decisions: per X ruling, rulings applied, filed per', () => {
       assert.equal(rowsOf(['## 2026-10-31', fixture(20993), fixture(21246), fixture(22150), fixture(22161), fixture(21151)]).length, 0);
     }],
