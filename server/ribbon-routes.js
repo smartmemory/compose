@@ -1,7 +1,8 @@
 /**
  * ribbon-routes.js — `GET /api/ribbon?from=<iso>&to=<iso>` (COMP-COCKPIT-RIBBON-FEED-1): the one feed of the Day ribbon.
  * Reads the stamp files (through the unit index), the quota snapshots, the owner queue, gate.log, the seats, the cadence
- * outage state, the wiki ledger (through this server's own wiki proxy) and the ETA reader, and hands them to `buildRibbon`.
+ * outage state, the ops ledger's decisions (the Decisions pane's reader, COMP-COCKPIT-DECISIONS-1) and the ETA reader, and hands them
+ * to `buildRibbon`.
  * Read-only. Loopback only: absent in remote mode, like `/api/process`. One failing source goes to `sourceErrors` and renders
  * as not recorded; the route never answers 500 for one source.
  */
@@ -15,6 +16,8 @@ import { readSeats } from './usage-routes.js';
 import { getDataDir } from './project-root.js';
 import { buildUnitIndex } from '../lib/unit-index.js';
 import { buildRibbon, computeHistory, etaWithPrev, parseGateLog, remainingByLane } from '../lib/ribbon-feed.js';
+import { queueDecisions } from '../lib/decisions-ledger.js';
+import { ledgerDecisions, ledgerPath } from './decisions-routes.js';
 
 export const RIBBON_ROUTE = '/api/ribbon';
 const WINDOW_MAX_MS = 31 * 86_400_000;
@@ -23,8 +26,6 @@ const RESPONSE_MAX = 20;
 const SOURCE_TTL_MS = 120_000;
 const HISTORY_TTL_MS = 15 * 60_000;
 const ETA_CONCURRENCY = 4;
-const LEDGER_PAGE = 50;
-const LEDGER_MAX_PAGES = 20;
 const LOOPBACK_TIMEOUT_MS = 8_000;
 const ISO_OFFSET_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,6})?)?(Z|[+-]\d{2}:\d{2})$/;
 
@@ -51,21 +52,6 @@ async function loopbackJson(base, path, init = {}) {
   const res = await fetch(`${base}${path}`, { ...init, signal: AbortSignal.timeout(LOOPBACK_TIMEOUT_MS) });
   if (!res.ok) throw new Error(`${path} answered ${res.status}`);
   return res.json();
-}
-
-/** The wiki ledger entries of [from, to], newest first, through this server's wiki proxy (at most LEDGER_MAX_PAGES pages). */
-async function readLedger(base, fromMs, toMs) {
-  const items = [];
-  let cursor;
-  for (let i = 0; i < LEDGER_MAX_PAGES; i += 1) {
-    const body = { workspace: 'wiki-eng', from: new Date(fromMs).toISOString(), to: new Date(toMs).toISOString(), size: LEDGER_PAGE, ...(cursor ? { cursor } : {}) };
-    const doc = await loopbackJson(base, '/api/wiki/query/ledger', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
-    const d = doc?.data ?? doc;
-    if (Array.isArray(d?.items)) items.push(...d.items);
-    cursor = d?.next_cursor;
-    if (!cursor) break;
-  }
-  return items;
 }
 
 /** Returns true when mounted, false when skipped (remote mode). `deps` are for tests. */
@@ -95,6 +81,7 @@ export function attachRibbonRoutes(app, { remote = false, env = process.env, dep
   })), cacheOpts(SOURCE_TTL_MS));
   const snapshots = createSourceCache('ribbon snapshots', deps.loadSnapshots ?? (() => readJsonl(files.snapshots)), cacheOpts(SOURCE_TTL_MS));
   const ownerQueue = createSourceCache('ribbon owner queue', deps.loadOwnerQueue ?? (() => readJsonl(files.ownerQueue)), cacheOpts(SOURCE_TTL_MS));
+  const ledger = deps.ledger ?? ledgerDecisions(ledgerPath(env, opsRoot), { now, warn, info });
   const gateLog = createSourceCache('ribbon gate.log', deps.loadGateLog ?? (async () => parseGateLog(await readFile(files.gateLog, 'utf8'))), cacheOpts(SOURCE_TTL_MS));
   const seats = createSourceCache('ribbon seats', deps.loadSeats ?? (() => readSeats({
     python: env.COMPOSE_FLEET_PYTHON || 'python3',
@@ -136,13 +123,13 @@ export function attachRibbonRoutes(app, { remote = false, env = process.env, dep
 
   /**
    * Boot warm (COMP-COCKPIT-RIBBON-LIVE-DATA-1): fills the window-independent caches (units, snapshots, owner queue, gate.log,
-   * seats, and every lane's estimate) so the first real read waits for neither. The ledger and outage reads and the response
-   * itself depend on the client's window minute, so they stay cold. Never throws: a failed source logs its own WARNING.
+   * seats, the parsed ledger, and every lane's estimate) so the first real read waits for neither. The outage read and the
+   * response itself depend on the client's window minute, so they stay cold. Never throws: a failed source logs its own WARNING.
    */
   app.locals.warmRibbon = async () => {
     const t0 = now();
     try {
-      const [u] = await Promise.all([units.get(), snapshots.get(), ownerQueue.get(), gateLog.get(), seats.get()]);
+      const [u] = await Promise.all([units.get(), snapshots.get(), ownerQueue.get(), gateLog.get(), seats.get(), ledger.get()]);
       if (u.value) await etaFor(true, u.value.units, {});
       info(`[ribbon] warm done in ${now() - t0} ms`);
     } catch (error) {
@@ -164,13 +151,13 @@ export function attachRibbonRoutes(app, { remote = false, env = process.env, dep
     if (hit && t0 - hit.at < RESPONSE_TTL_MS) return res.json({ ...hit.body, ageS: Math.max(0, Math.floor((t0 - Date.parse(hit.body.asOf)) / 1000)) });
     try {
       const base = `http://127.0.0.1:${req.socket.localPort}`;
-      const [u, snap, oq, gl, st, ledger, outage] = await Promise.all([
+      const [u, snap, oq, gl, st, led, outage] = await Promise.all([
         settle(async () => { const e = await units.get(); if (!e.value) throw new Error(e.error ?? 'unit index unavailable'); return e.value; }),
         settle(async () => { const e = await snapshots.get(); if (!e.value) throw new Error(e.error ?? 'snapshots unavailable'); return e.value; }),
         settle(async () => { const e = await ownerQueue.get(); if (!e.value) throw new Error(e.error ?? 'owner queue unavailable'); return e.value; }),
         settle(async () => { const e = await gateLog.get(); if (!e.value) throw new Error(e.error ?? 'gate.log unavailable'); return e.value; }),
         settle(async () => { const e = await seats.get(); if (!e.value) throw new Error(e.error ?? 'seats unavailable'); return e.value; }),
-        settle(() => (deps.loadLedger ?? readLedger)(base, a.ms, b.ms)),
+        settle(async () => { const e = await ledger.get(); if (!e.value) throw new Error(e.error ?? 'ledger unavailable'); return ledger.rows(e.value); }),
         settle(() => (deps.loadOutage ?? (() => loopbackJson(base, '/api/cadence-ui/outage')))()),
       ]);
       const sourceErrors = {};
@@ -178,18 +165,20 @@ export function attachRibbonRoutes(app, { remote = false, env = process.env, dep
       if (snap.error) sourceErrors.quota = snap.error;
       if (oq.error) sourceErrors.ownerQueue = oq.error;
       if (gl.error) sourceErrors.holds = gl.error;
-      if (ledger.error) sourceErrors.ledger = ledger.error;
+      if (led.error) sourceErrors.ledger = led.error;
       if (outage.error) sourceErrors.outage = outage.error;
       if (st.error) sourceErrors.seats = st.error;
       for (const [lane, c] of Object.entries(u.value?.coverage ?? {})) if (c?.error) sourceErrors.stamps = [sourceErrors.stamps, c.error].filter(Boolean).join('; ');
 
       const unitList = u.value?.units ?? [];
       const live = t0 >= a.ms && t0 <= b.ms;
-      const history = historyOf({ units: unitList, snapshots: snap.value ?? [], ownerQueue: oq.value ?? [], gateEntries: gl.value ?? [] });
+      // The decide marks read the decisions feed: the ledger's rows and the owner queue's (COMP-COCKPIT-DECISIONS-1).
+      const decisions = [...(led.value ?? []), ...queueDecisions(oq.value ?? [])];
+      const history = historyOf({ units: unitList, snapshots: snap.value ?? [], ownerQueue: oq.value ?? [], gateEntries: gl.value ?? [], decisions });
       const etas = await etaFor(live, unitList, sourceErrors);
       const body = buildRibbon({
         from: a.ms, to: b.ms, now: t0, asOf: u.value ? Date.parse(u.value.asOf) : t0,
-        units: unitList, snapshots: snap.value ?? [], ownerQueue: oq.value ?? [], ledger: ledger.value ?? [],
+        units: unitList, snapshots: snap.value ?? [], ownerQueue: oq.value ?? [], decisions,
         gateEntries: gl.value ?? [], outage: outage.value ?? null, seats: st.value?.seats ?? null,
         etas, history, sourceErrors, warn,
       });

@@ -20,6 +20,7 @@ import { attachNotifyStateRoutes } from './notify-state-routes.js';
 import { attachProcessRoutes } from './process-routes.js';
 import { attachUnitIndexRoutes } from './unit-index-routes.js';
 import { attachRibbonRoutes } from './ribbon-routes.js';
+import { attachDecisionsRoutes } from './decisions-routes.js';
 import { attachStratumUiRoutes } from './stratum-ui-routes.js';
 import { attachCadenceUiRoutes } from './cadence-ui-routes.js';
 import { attachWikiRoutes } from './wiki-routes.js';
@@ -239,6 +240,8 @@ attachProcessRoutes(app, { remote: remoteMode });
 attachUnitIndexRoutes(app, { remote: remoteMode });
 // COMP-COCKPIT-RIBBON-FEED-1: GET /api/ribbon (one feed for the Day ribbon; loopback only, absent in remote mode).
 attachRibbonRoutes(app, { remote: remoteMode });
+// COMP-COCKPIT-DECISIONS-1: GET /api/decisions (the Decisions pane in Projects › Review; loopback only, absent in remote mode).
+attachDecisionsRoutes(app, { remote: remoteMode });
 // COMPOSE-WIKI-TAB-1: /api/wiki/* proxies the wiki DataClient's calls (wiki-eng only; absent in remote mode).
 attachWikiRoutes(app, { remote: remoteMode });
 

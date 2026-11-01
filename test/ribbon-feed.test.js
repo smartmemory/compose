@@ -10,6 +10,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { attachRibbonRoutes } from '../server/ribbon-routes.js';
 import { buildRibbon, etaWithPrev, holdBands, parseGateLog } from '../lib/ribbon-feed.js';
+import { buildDecisions, parseLedger, queueDecisions } from '../lib/decisions-ledger.js';
 
 const D = (s) => Date.parse(`2026-10-31T${s}:00Z`);
 const T = (s) => `2026-10-31T${s}:00.000Z`; // the feed prints toISOString()
@@ -102,11 +103,11 @@ describe('buildRibbon', () => {
     }],
     ['an APPLIED owner-queue row is a decide mark on its lane with the reverse text; a laneless one goes to ops', {
       units: [unit('U1', 'forge', FULL), unit('U2', 'ops', FULL)], history: HIST(T('00:00')),
-      ownerQueue: [
+      decisions: queueDecisions([
         { id: 'X-1', by: 'forge-main', ts: D('05:00') / 1000, text: 'APPLIED (night mode): ship it. Reverse = revert abc.' },
         { id: 'Y-1', by: 's2-coord', ts: D('06:00') / 1000, text: 'APPLIED: other. Reverse = undo.' },
         { id: 'Z-1', by: 'forge-main', ts: D('07:00') / 1000, text: 'Is this ok?' },
-      ],
+      ]),
     }, (r) => {
       const dec = (n) => lane(r, n).marks.filter((m) => m.kind === 'decide');
       assert.deepEqual(dec('forge').map((m) => [m.source, m.reverse]), [['owner-queue', 'revert abc.']]);
@@ -114,14 +115,21 @@ describe('buildRibbon', () => {
     }],
     ['a failed source is a notRecorded entry with its message, and the ledger-less decide marks still come back', {
       units: [unit('U1', 'forge', FULL)], history: HIST(T('00:00')), sourceErrors: { ledger: 'wiki is stopped' },
-      ownerQueue: [{ id: 'X', by: 'forge-main', ts: D('05:00') / 1000, text: 'APPLIED: yes' }],
+      decisions: queueDecisions([{ id: 'X', by: 'forge-main', ts: D('05:00') / 1000, text: 'APPLIED: yes' }]),
     }, (r) => {
       assert.match(r.notRecorded.find((n) => n.source === 'ledger').why, /wiki is stopped/);
       assert.equal(lane(r).marks.filter((m) => m.kind === 'decide').length, 1);
     }],
-    ['a ledger OWNER-ABSENT entry is a decide mark from the ledger', { units: [unit('U1', 'forge', FULL)], history: HIST(T('00:00')), ledger: [{ ts: '2026-10-31T05:00:00+00:00', text: 'OWNER-ABSENT decision: pick a. Reverse = pick b.' }, { ts: '2026-10-31T06:00:00+00:00', text: 'plain line' }] }, (r) => {
+    ['DECISIONS-1: ledger OWNER-ABSENT lines are decide marks from the ledger, with or without the colon (ledger.md:6764 shape)', {
+      units: [unit('U1', 'forge', FULL)], history: HIST(T('00:00')),
+      decisions: buildDecisions(parseLedger([
+        '- 2026-10-31T05:00Z s2-coord: OWNER-ABSENT decision: pick a. Reverse = pick b.',
+        '- 2026-10-31T05:30Z s2-coord: OWNER-ABSENT decision BYOC F3: REFUSE (option 1). Reverse = allow.',
+        '- 2026-10-31T06:00Z s2-coord: plain line',
+      ].join('\n'))),
+    }, (r) => {
       const m = r.lanes.flatMap((l) => l.marks).filter((x) => x.kind === 'decide');
-      assert.deepEqual(m.map((x) => [x.source, x.reverse]), [['ledger', 'pick b.']]);
+      assert.deepEqual(m.map((x) => [x.source, x.reverse]), [['ledger', 'pick b.'], ['ledger', 'allow.']]);
     }],
     ['quota: a wait while the lane\'s seat sat at the limit is cause quota', {
       units: [unit('U1', 'forge', { ...FULL, account: 'seat2' })], history: HIST(T('00:00')),
@@ -148,7 +156,7 @@ describe('etaWithPrev and holdBands', () => {
   for (const [name, run, want] of ROWS) it(name, () => assert.deepEqual(run(), want));
 });
 
-// The route over fake sources: validation, the wiki-stopped case, remote mode. One row table.
+// The route over fake sources: validation, the ledger-unreadable case, remote mode. One row table.
 describe('GET /api/ribbon', () => {
   const dataDir = mkdtempSync(join(tmpdir(), 'ribbon-route-'));
   const FROM = '2026-10-31T00:00:00Z';
@@ -158,7 +166,7 @@ describe('GET /api/ribbon', () => {
     loadUnits: async () => ({ units: [unit('U1', 'forge', FULL)], coverage: {}, asOf: new Date(NOW).toISOString() }),
     loadSnapshots: async () => [], loadGateLog: async () => [], loadSeats: async () => ({ seats: [] }),
     loadOwnerQueue: async () => [{ id: 'X', by: 'forge-main', ts: D('05:00') / 1000, text: 'APPLIED: yes. Reverse = no.' }],
-    loadLedger: async () => [], loadOutage: async () => ({ state: 'ok', since: null }),
+    ledger: { get: async () => ({ value: [] }), rows: (e) => buildDecisions(e) }, loadOutage: async () => ({ state: 'ok', since: null }),
     eta: async () => ({ p50: '2h', p80: '3h', asOf: 'a', raw: 'r' }),
     ...over,
   });
@@ -172,8 +180,8 @@ describe('GET /api/ribbon', () => {
   const ROWS = [
     ['a good window answers with the contract keys', `from=${FROM}&to=${TO}`, {}, 200, (b) => assert.deepEqual(Object.keys(b), ['from', 'to', 'now', 'live', 'asOf', 'ageS', 'lanes', 'bands', 'pins', 'coverage', 'history', 'notRecorded', 'sourceErrors'])],
     ['the eta carries prev null on the first reading and is written to the history file', `from=${FROM}&to=${TO}`, { loadUnits: async () => ({ units: [unit('U5', 'forge', { ready_at: T('10:00'), dispatched_at: T('11:00') })], coverage: {}, asOf: new Date(NOW).toISOString() }) }, 200, (b) => assert.deepEqual(lane(b).eta, { p50: '2h', p80: '3h', asOf: 'a', raw: 'r', prev: null })],
-    ['the wiki stopped: sourceErrors.ledger is set and the owner-queue decide mark still comes back', `from=${FROM}&to=${TO}`, { loadLedger: async () => { throw new Error('wiki is stopped'); } }, 200, (b) => {
-      assert.match(b.sourceErrors.ledger, /wiki is stopped/);
+    ['the ledger unreadable: sourceErrors.ledger is set and the owner-queue decide mark still comes back', `from=${FROM}&to=${TO}`, { ledger: { get: async () => ({ value: null, error: 'ENOENT ledger.md' }), rows: () => [] } }, 200, (b) => {
+      assert.match(b.sourceErrors.ledger, /ENOENT/);
       assert.equal(lane(b).marks.filter((m) => m.kind === 'decide' && m.source === 'owner-queue').length, 1);
     }],
     ['every source down: still 200, the stamps are not recorded, no lanes', `from=${FROM}&to=${TO}`, { loadUnits: async () => { throw new Error('no stamps'); } }, 200, (b) => {
