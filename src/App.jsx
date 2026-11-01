@@ -274,8 +274,9 @@ function CockpitView({
   // COMPOSE-WIKI-TAB-1: {workspace, frameBase} from useWikiTab
   wikiTab,
   // COMP-ROADMAP-DOC-LINKS-1: the doc the wiki opens on ({path}) and the double-click handler for tree rows and graph nodes
-  // COMP-WIKI-DOC-PATH-LINKS-1: onOpenFile(path) opens any repo doc path in the wiki (navigateToWiki)
-  wikiDoc, onOpenDoc, onOpenFile,
+  // COMP-WIKI-DOC-PATH-LINKS-1: onOpenFile(path) opens any repo doc path in the wiki (navigateToWiki); it is the one
+  // destructured above for COMP-WIKI-GATEVIEW-DOC-LINK-1, and a second binding is a syntax error that blanked the cockpit.
+  wikiDoc, onOpenDoc,
   // COMP-AUDIT-18: Home
   agentErrors, onStopAgent, untriagedIdeas, cadenceAvailable, onJumpToGate, onNavigate, onOpenFleet,
   // COMP-AUDIT-17: view keys reachable by clicks (Settings default-view picker)
