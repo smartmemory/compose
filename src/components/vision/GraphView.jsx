@@ -9,6 +9,7 @@ import { notify } from '../cockpit/NotificationBar.jsx';
 import { withComposeToken } from '../../lib/compose-api.js';
 import { useConfirmWithReason } from '../ui/DialogProvider.jsx';
 import { graphInitialViewport, largestGroupCentre } from './graphInitialViewport.js';
+import { separateLayout } from './graphSeparate.js';
 import GroupFilter from './GroupFilter.jsx';
 
 try { cytoscape.use(cytoscapeDagre); } catch (e) { /* already registered */ }
@@ -630,7 +631,7 @@ export default function GraphView({ items, connections, selectedItemId, onSelect
         savedPositionsLoadedRef.current = true;
         // If the graph already mounted before hydration completed, retro-apply.
         const cy = cyRef.current;
-        if (cy) applySavedAndCapture(cy);
+        if (cy) { applySavedAndCapture(cy); separateLayout(cy); }
       })
       .catch(() => { savedPositionsLoadedRef.current = true; });
     return () => { cancelled = true; };
@@ -809,8 +810,11 @@ export default function GraphView({ items, connections, selectedItemId, onSelect
         fit: false,
         padding: 20,
         nodeSeparation: 80,
-        idealEdgeLength: 120,
-        nodeRepulsion: 6000,
+        // COMP-WIKI-GRAPH-SURFACES-1: an edge longer than a card (150 px wide), so two linked cards are not pulled onto
+        // each other. On the merged SmartMemory graph (120 / 6000) 346 card pairs overlapped before separateLayout and
+        // the pass took 627 ms with 17 boxes sent to the edge; at 200 / 20000: 198 pairs, 239 ms, 1 box.
+        idealEdgeLength: 200,
+        nodeRepulsion: 20000,
         gravity: 0.3,
         gravityRange: 1.5,
         tilingPaddingVertical: 12,
@@ -825,6 +829,7 @@ export default function GraphView({ items, connections, selectedItemId, onSelect
     // any positions for nodes new to the layout file.
     cy.one('layoutstop', () => {
       if (savedPositionsLoadedRef.current) applySavedAndCapture(cy);
+      separateLayout(cy);
       cy.fit(undefined, 30);
       applyReadableViewport(cy);
     });
@@ -832,6 +837,7 @@ export default function GraphView({ items, connections, selectedItemId, onSelect
     // Fit synchronously after layout (no animation) — fcose with animate:false
     // may emit layoutstop synchronously during init; this fit is the fallback
     // for engines that don't.
+    separateLayout(cy);
     cy.fit(undefined, 30);
     applyReadableViewport(cy);
 
