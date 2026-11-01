@@ -60,12 +60,13 @@ export function ownerAsks(queueRows, state = null, _now = Date.now()) {
   const rank = (q) => (groupOf(q?.text) === 'security' ? 0 : 1);
   // NOTIFY-ACTIONS-1: with Compose's notify state, an ask answered from the cockpit stops counting until the queue drops
   // its id; a security row always counts. No state = the COUNT-ONE-1 count, unchanged. `_now` is the caller's clock, kept in
-  // the signature so every caller passes the same three arguments (an answer does not expire, so it is not read today).
+  // the signature so every caller passes the same three arguments. COMP-COCKPIT-NOTIFY-ANSWERED-REOPEN-1: an answer hides
+  // only the record it answered; the same id re-asked later (a newer record) counts again.
   const rows = queueRows
     .filter((q) => {
       const g = groupOf(q?.text);
       if (g === 'security') return true;
-      return g === 'asks' && !(state && answeredOf(state, `ask:${q?.id}`));
+      return g === 'asks' && !(state && answeredOf(state, `ask:${q?.id}`, { age: q?.age, now: _now }));
     })
     .sort((a, b) => rank(a) - rank(b) || (Number.isFinite(b?.age) ? b.age : -1) - (Number.isFinite(a?.age) ? a.age : -1));
   return { rows, n: rows.length };
@@ -243,9 +244,9 @@ export function defaultsLine(collected) {
  * acknowledged and not escalated since (same text hash), or resolved from the cockpit, no longer raises the banner; the
  * banner returns for a new id or a changed text, never for an age change. `more` counts the other unacknowledged rows.
  */
-export function bannerText(collected, state = null) {
+export function bannerText(collected, state = null, now = Date.now()) {
   const sec = collected.rows.filter((r) => r.kind === 'security')
-    .filter((r) => !state || (!securityAck(state, r.key, r) && !answeredOf(state, r.key)));
+    .filter((r) => !state || (!securityAck(state, r.key, r) && !answeredOf(state, r.key, { age: r.since, now })));
   if (!sec.length) return null;
   const top = sec[0];
   const age = top.since == null ? '' : ` (${fmtAge(top.since)})`;

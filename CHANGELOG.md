@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- **COMP-COCKPIT-NOTIFY-ANSWERED-REOPEN-1: a re-asked owner question is no longer hidden behind an old cockpit answer.** An `answered` entry used to hide every open ask with its id for up to 30 days, so `owner_queue.py add <id>` again vanished from the chip, the WHAT line and the NOW drawer (B20261101-forge-1 review M1). The answer route now stores the answered record's `ts` on the entry (`server/notify-state-routes.js`), and `answeredOf` (`notifyState.js`) hides a row only while its opened time (`now - age`) matches that `ts` within 120 s. A legacy entry with no `ts`, or the page's own accepted answer, hides it only if answered after the row opened. Applied to `ownerAsks`, the security banner, the tray and drawer answered state. Tests: `test/notify-cleared.test.js` (re-ask, same record, wrong ts, legacy, security banner), `test/fleet-routes.test.js` (entry stores `ts`).
+
 - **COMP-COCKPIT-SEATS-FOOT-1: the Day Seats panel drops its footer.** The "Dollars per seat: not recorded", "API credit: ..." and "as of HH:MM" lines under the seat bars are gone (owner 2026-11-01 "remove the last line"). `CostBars.jsx` only; the Usage page meter keeps its lines.
 
 - **COMP-COCKPIT-PROJECT-MODEL-1 (F1b): a link can name its far end by feature code.** In the merged project graph (`server/project-graph.js`) a connection's `fromCode` / `toCode` wins over its local id and resolves to the item shown for that code (the module owner beats the root), so a link between a compose item and a root-only item resolves across stores. A code no member holds still drops the link. Read-only. `test/project-graph.test.js`: 1 new row (root -> module code, module -> root code, unknown code dropped).

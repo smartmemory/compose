@@ -46,10 +46,28 @@ export function clearedOf(key, row, state, now = Date.now()) {
   return { action: e.action, at: e.at, ...(e.until ? { until: e.until } : {}) };
 }
 
-/** The `answered` entry for an owner-queue id (`ask:` or `security:` key), else null. */
-export function answeredOf(state, key) {
+/** Tolerance for a queue row's `age` being as old as the fleet cache (its opened time is `now - age`, never exact). */
+export const REASK_SLACK_MS = 120_000;
+
+/**
+ * The `answered` entry for an owner-queue id (`ask:` or `security:` key), else null.
+ * With `{age}` (the open queue row's age in seconds) the entry counts only while it answered THIS record: a re-ask under
+ * the same id opens a new record, so it is not hidden by the old answer. An entry stores the answered record's `ts`
+ * (epoch seconds): same record while the row's opened time (`now - age`) is within `REASK_SLACK_MS` of it. A legacy entry
+ * with no `ts` hides only if it was answered after the row opened. No `age` (the opened time is unknown) keeps the entry.
+ */
+export function answeredOf(state, key, opts = {}) {
   const e = entryOf(state, key);
-  return e && e.action === 'answered' ? e : null;
+  return e && e.action === 'answered' && answerHolds(e, opts) ? e : null;
+}
+
+/** True when an answer (`{at, ts?}`: a notify entry or the page's accepted answer) is for the open row, per `answeredOf`. */
+export function answerHolds(e, { age, now = Date.now() } = {}) {
+  if (!Number.isFinite(age)) return true;
+  const openedAt = now - age * 1000;
+  if (Number.isFinite(e.ts)) return Math.abs(openedAt - e.ts * 1000) <= REASK_SLACK_MS;
+  const at = ms(e.at);
+  return at !== null && at >= openedAt - REASK_SLACK_MS;
 }
 
 /** A security row escalated since it was acknowledged: its text hash differs from the one stored at ack. Age never counts. */

@@ -367,7 +367,7 @@ export async function answerOwner(body, { readers, env, onAccepted, warn = conso
   } catch (error) {
     return rejected(`owner_queue.py close failed (${String(error?.message ?? error).slice(0, 160)})`);
   }
-  onAccepted?.({ key: `${resolve ? 'security' : 'ask'}:${id}`, answer, first: resolve ? null : firstLineOf(record.text) });
+  onAccepted?.({ key: `${resolve ? 'security' : 'ask'}:${id}`, answer, first: resolve ? null : firstLineOf(record.text), ts: record.ts });
   return { reply: 'accepted' };
 }
 
@@ -415,8 +415,8 @@ export function attachFleetRoutes(app, {
       readers,
       env,
       warn,
-      onAccepted: ({ key, answer, first }) => {
-        try { notifyStore?.answered(key, { answer, first }); } catch (error) { warn(`[fleet] owner-answer: the answered entry was not written (${String(error?.message ?? error).slice(0, 160)})`); }
+      onAccepted: ({ key, answer, first, ts }) => {
+        try { notifyStore?.answered(key, { answer, first, ts }); } catch (error) { warn(`[fleet] owner-answer: the answered entry was not written (${String(error?.message ?? error).slice(0, 160)})`); }
         caches.sm_status.invalidate();
       },
     });

@@ -14,7 +14,7 @@ import { fmtAge, smPanel } from '../fleetLogic.js';
 import { groupInbox, linkParts, reverseText } from './inboxLogic.js';
 import NotifyActions, { useRowKeys } from './NotifyActions.jsx';
 import { useNotifyState } from './useNotifyState.js';
-import { isCleared, securityAck, answeredOf, answeredFold, fnv1a, keyOf, hhmm } from './notifyState.js';
+import { isCleared, securityAck, answeredOf, answerHolds, answeredFold, fnv1a, keyOf, hhmm } from './notifyState.js';
 
 const asOf = (fleet) => {
   const t = Date.parse(fleet?.generated ?? '');
@@ -41,7 +41,7 @@ function Row({ row, groupId, open, onToggle, notify, index, selected }) {
   const actRow = { ...row, group: groupId, ...(groupId === 'security' ? { textHash: fnv1a(row.text) } : {}) };
   const key = keyOf(actRow);
   const acked = groupId === 'security' && securityAck(state, key, actRow);
-  const answered = groupId === 'asks' && (answeredOf(state, key) || notify?.answers?.get(row.id)?.phase === 'accepted');
+  const answered = groupId === 'asks' && (answeredOf(state, key, { age: row.since }) || (notify?.answers?.get(row.id)?.phase === 'accepted' && answerHolds(notify.answers.get(row.id), { age: row.since })));
   return (
     <div
       data-testid="inbox-row"

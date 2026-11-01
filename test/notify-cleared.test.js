@@ -1,6 +1,6 @@
 /**
  * notify-cleared.test.js — COMP-COCKPIT-NOTIFY-ACTIONS-1: the pure rules over Compose's notify list. `isCleared`,
- * `ownerAsks(rows, state, now)`, `collect(..., state)`, `bannerText(collected, state)`, the snooze presets, the release
+ * `ownerAsks(rows, state, now)`, `collect(..., state)`, `bannerText(collected, state, now)`, the snooze presets, the release
  * keys and the ribbon marks. One row table; each row builds its sources and state and checks what the owner would see.
  */
 import { describe, it } from 'node:test';
@@ -82,17 +82,45 @@ describe('notify cleared state', () => {
       assert.equal(b.more, 1);
     }],
     ['an answered ask leaves ownerAsks, the chip, the WHAT line and the ops pill alike', () => {
-      const ans = st({ 'ask:A1': { action: 'answered', at, answer: 'OWNER (via cockpit): (b) no' } });
+      const ans = st({ 'ask:A1': { action: 'answered', at: iso(-0.05), answer: 'OWNER (via cockpit): (b) no' } }); // answered after the row (age 600 s) opened
       assert.deepEqual(ownerAsks(QUEUE, ans, NOW).rows.map((r) => r.id), ['S1']);
       assert.equal(collect(sources(), NOW, ans).rows.filter((r) => r.key.startsWith('ask:')).length, 0);
       assert.equal(whatCounts({ fleet: fleetOf(), now: NOW, notifyState: ans }).waitingYou, 1);
       assert.equal(fleetPills(fleetOf(), ans, NOW).find((p) => p.key === 'fleet:owner').label, '1 owner question');
       assert.equal(fleetPills(fleetOf()).find((p) => p.key === 'fleet:owner').label, '2 owner questions');
     }],
+    ['a re-asked id is not hidden by an old answer: answered a day ago, open ask age 60 counts', () => {
+      const old = st({ 'ask:A1': { action: 'answered', at: iso(-24), answer: 'OWNER (via cockpit): (b) no' } });
+      const queue = [q('A1', 'QUESTION: ship it again?', { age: 60 })];
+      assert.equal(ownerAsks(queue, old, NOW).n, 1);
+      assert.equal(collect(sources({ queue }), NOW, old).rows.filter((r) => r.key === 'ask:A1').length, 1);
+      assert.equal(whatCounts({ fleet: fleetOf({ queue }), now: NOW, notifyState: old }).waitingYou, 1);
+    }],
+    ['the same record still open (stored ts matches its opened time) stays hidden', () => {
+      const ts = NOW / 1000 - 600;
+      const ans = st({ 'ask:A1': { action: 'answered', at, ts, answer: 'x' } });
+      assert.equal(ownerAsks([q('A1', 'QUESTION: ship it?', { age: 600 })], ans, NOW).n, 0);
+      assert.equal(ownerAsks([q('A1', 'QUESTION: ship it?', { age: 630 })], ans, NOW).n, 0, 'age within the cache slack');
+    }],
+    ['a stored ts that is not this record shows the row, even when answered later than it opened', () => {
+      const ans = st({ 'ask:A1': { action: 'answered', at, ts: NOW / 1000 - 90_000, answer: 'x' } });
+      assert.equal(ownerAsks([q('A1', 'QUESTION: again?', { age: 600 })], ans, NOW).n, 1);
+    }],
+    ['a legacy entry (no ts) answered after the row opened hides it; answered before it opened shows it', () => {
+      const after = st({ 'ask:A1': { action: 'answered', at: iso(-0.05), answer: 'x' } });
+      assert.equal(ownerAsks([q('A1', 'QUESTION: q?', { age: 600 })], after, NOW).n, 0);
+      const before = st({ 'ask:A1': { action: 'answered', at: iso(-2), answer: 'x' } });
+      assert.equal(ownerAsks([q('A1', 'QUESTION: q?', { age: 600 })], before, NOW).n, 1);
+    }],
+    ['an old security answer does not silence a re-opened security row banner', () => {
+      const old = st({ 'security:S1': { action: 'answered', at: iso(-24), answer: 'x' } });
+      const queue = [q('S1', SEC_TEXT, { age: 60 })];
+      assert.match(bannerText(collect(sources({ queue }), NOW, old), old, NOW).text, /Security/);
+    }],
     ['an answered security row still counts (only the queue drops it)', () => {
       const ans = st({ 'security:S1': { action: 'answered', at, answer: 'OWNER (via cockpit): resolved: rotated' } });
       assert.equal(ownerAsks(QUEUE, ans, NOW).n, 2);
-      assert.equal(bannerText(collect(sources(), NOW, ans), ans), null);
+      assert.equal(bannerText(collect(sources(), NOW, ans), ans, NOW), null);
     }],
     ['state unavailable (null) hides nothing', () => {
       const c = collect(sources(), NOW, null);

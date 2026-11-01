@@ -252,6 +252,9 @@ describe('POST /api/fleet/owner-answer (golden flow, real owner_queue.py, scratc
       assert.ok(runs() >= 2, `sm_status re-ran after accept (runs=${runs()})`);
       const fleet = await (await fetch(`${base}/api/fleet`)).json();
       assert.equal(fleet.notify.entries['ask:TEST-ASK'].action, 'answered');
+      // REOPEN-1: the entry names the queue record it answered, so a later re-ask of the id is not hidden by it
+      assert.equal(fleet.notify.entries['ask:TEST-ASK'].ts, records(queue).find((r) => r.id === 'TEST-ASK').ts);
+      assert.ok(Number.isFinite(fleet.notify.entries['ask:TEST-ASK'].ts));
     } finally {
       await new Promise((r) => server.close(r));
       if (prevToken === undefined) delete process.env.COMPOSE_API_TOKEN; else process.env.COMPOSE_API_TOKEN = prevToken;

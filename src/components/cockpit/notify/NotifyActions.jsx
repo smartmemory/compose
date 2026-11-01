@@ -11,7 +11,7 @@
 import React from 'react';
 import { optionsOf, choiceText } from '../../../../lib/ask-options.js';
 import {
-  actionClassOf, keyOf, clearMeta, snoozePresets, isCleared, securityAck, answeredOf, CLEARED_WORD, hhmm,
+  actionClassOf, keyOf, clearMeta, snoozePresets, isCleared, securityAck, answeredOf, answerHolds, CLEARED_WORD, hhmm,
 } from './notifyState.js';
 import { writeState, answerOwner } from './useNotifyState.js';
 
@@ -103,8 +103,8 @@ function AskControls({ row, notify, state }) {
   const id = row.id;
   const [text, setText] = React.useState('');
   const a = notify.answers?.get(id);
-  const answered = answeredOf(state, `ask:${id}`);
-  if (a?.phase === 'accepted' || answered) {
+  const answered = answeredOf(state, `ask:${id}`, { age: row.since });
+  if ((a?.phase === 'accepted' && answerHolds(a, { age: row.since })) || answered) {
     const at = answered?.at ?? a?.at;
     const ans = answered?.answer || a?.answer || '';
     return <div className={note} data-testid="notify-answered">answered {hhmm(at)}: {ans}</div>;
@@ -165,7 +165,7 @@ function SecurityControls({ row, notify, state, now, resolveOpen, setResolveOpen
   const key = keyOf(row);
   const [text, setText] = React.useState('');
   const a = notify.answers?.get(id);
-  const resolved = answeredOf(state, key);
+  const resolved = answeredOf(state, key, { age: row.since });
   const acked = securityAck(state, key, row);
   const err = notify.errors?.get(key);
   if (a?.phase === 'accepted' || resolved) {

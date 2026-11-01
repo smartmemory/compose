@@ -129,8 +129,8 @@ export function createNotifyStateStore({ file = resolveNotifyStatePath(), now = 
       }
       return { ok: true, state: save(entries) };
     },
-    /** The answer route's write: `{action: 'answered', at, answer, first?}`; keeps a prior `sinceAt` for the ribbon. */
-    answered(key, { answer, first } = {}) {
+    /** The answer route's write: `{action: 'answered', at, answer, first?, ts?}` (`ts` = the answered queue record's, so a re-ask is not hidden); keeps a prior `sinceAt` for the ribbon. */
+    answered(key, { answer, first, ts } = {}) {
       const { entries } = read();
       const prev = entries[key] ?? null;
       entries[key] = {
@@ -138,6 +138,7 @@ export function createNotifyStateStore({ file = resolveNotifyStatePath(), now = 
         at: stamp(),
         answer: String(answer ?? '').slice(0, 1200),
         ...(first ? { first: String(first).slice(0, 140) } : {}),
+        ...(Number.isFinite(ts) ? { ts } : {}),
         ...(prev?.sinceAt ? { sinceAt: prev.sinceAt } : {}),
       };
       return save(entries);
