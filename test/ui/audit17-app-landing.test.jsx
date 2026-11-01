@@ -21,7 +21,7 @@ async function renderApp() {
 }
 
 describe('App landing (COMP-AUDIT-17)', () => {
-  beforeEach(() => { localStorage.clear(); sessionStorage.clear(); vi.spyOn(console, 'warn').mockImplementation(() => {}); });
+  beforeEach(() => { localStorage.clear(); sessionStorage.clear(); window.history.replaceState(null, '', '/'); /* URL-SYNC-1: the shell now writes ?view=, which would deep-link the next test */ vi.spyOn(console, 'warn').mockImplementation(() => {}); });
   afterEach(() => vi.restoreAllMocks());
 
   it('fresh storage lands on Day', async () => {

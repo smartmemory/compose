@@ -48,6 +48,7 @@ function stubFetch({ projects = ['main', 'hub'], rootsStatus = 200 } = {}) {
 
 async function mountApp(view, stub = {}) {
   sessionStorage.setItem('compose:activeView', view);
+  window.history.replaceState(null, '', '/'); // URL-SYNC-1: the shell writes ?view=, which the next mount would read as a deep link
   resetProcessPoller();
   const calls = stubFetch(stub);
   const { default: App } = await import('../../src/App.jsx');

@@ -6,7 +6,8 @@ import ProjectSwitchPopover from './components/ProjectSwitchPopover.jsx';
 // Cockpit shell components
 import ViewTabs, { ViewSubTabs, ProjectSubTabs, RoomBreadcrumb, RoomPaneSwitcher } from './components/cockpit/ViewTabs.jsx';
 import DayView from './components/ribbon/DayView.jsx';
-import { parseHash as parseRibbonHash } from './components/ribbon/rangeLogic.js';
+import { parseHash as parseRibbonHash, isRibbonHash } from './components/ribbon/rangeLogic.js';
+import { parseUrl, buildUrl, sameUrlState } from '../lib/url-state.js';
 import { itemFeatureCode, featureCodeResolves, resolveFeatureContext, filterFeatureCode, focusReducer, parseStoredFocus, FOCUS_STORAGE_KEY } from './components/cockpit/focusedFeature.js';
 import StratumView from './components/cockpit/StratumView.jsx';
 import CadenceView from './components/cockpit/CadenceView.jsx';
@@ -939,11 +940,35 @@ function AppInner() {
   }, [activeBuild]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // COMP-COCKPIT-12: a Fleet pill opens the Sessions tab on its Fleet pane.
-  const [sessionsPane, setSessionsPane] = useState('fleet'); // COMP-COCKPIT-RULE-DEFAULT-1: open on the populated pane
+  // COMP-COCKPIT-URL-SYNC-1: a `?pane=` on a sessions link opens that pane.
+  const [sessionsPane, setSessionsPane] = useState(() => parseUrl(window.location.search, '', null).pane ?? 'fleet'); // COMP-COCKPIT-RULE-DEFAULT-1: open on the populated pane
   const handleOpenFleet = useCallback(() => {
     setSessionsPane('fleet');
     handleViewChange('sessions');
   }, [handleViewChange]);
+
+  // COMP-COCKPIT-URL-SYNC-1: the URL follows the tab and pane. A change pushes `?view=[&pane=]` (the ribbon hash is dropped
+  // off Day); the first run only normalises the load URL (replace, no entry); `popstate` reads view and pane back, and the
+  // Day view re-reads its own hash when it remounts. State that already matches the URL never pushes.
+  const urlSynced = useRef(false);
+  useEffect(() => {
+    const state = { view: activeView, pane: sessionsPane };
+    if (urlSynced.current && sameUrlState(window.location.search, state)) return;
+    const { ribbonHash } = parseUrl(window.location.search, window.location.hash, isRibbonHash);
+    const url = `${window.location.pathname}${buildUrl({ ...state, ribbonHash }, window.location.search)}`;
+    window.history[urlSynced.current ? 'pushState' : 'replaceState'](window.history.state, '', url);
+    urlSynced.current = true;
+  }, [activeView, sessionsPane]);
+  useEffect(() => {
+    const onPop = () => {
+      const { view, pane } = parseUrl(window.location.search, '', null);
+      if (!view) return;
+      setActiveView(view);
+      if (pane) setSessionsPane(pane);
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
 
   // COMP-UX-1f: OpsStrip feature click → select item in context panel
   const handleOpsSelectFeature = useCallback((featureCode) => {
