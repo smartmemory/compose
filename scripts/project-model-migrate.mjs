@@ -17,6 +17,7 @@
  * and DEFAULT_FLEET_ROOTS (repo hints), and SEED below: the owner's lane lists (forge-main brief 2026-11-01; Q2: compose
  * and stratum are two lanes on ops lane `forge`; Q3: trader gets a config; Q4: only roots that own an ops lane).
  */
+import { createHash } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
@@ -128,6 +129,7 @@ export function planMigration({ host = DEFAULT_HOST, seed = SEED } = {}) {
   return steps;
 }
 
+const fileHash = (f) => createHash('sha256').update(readFileSync(f)).digest('hex');
 const manifestPath = (dir) => join(dir, 'migrate-manifest.json');
 
 export function applyMigration({ host = DEFAULT_HOST, seed = SEED, backupDir = DEFAULT_BACKUP_DIR, date = new Date().toISOString().slice(0, 10) } = {}) {
@@ -136,19 +138,21 @@ export function applyMigration({ host = DEFAULT_HOST, seed = SEED, backupDir = D
   if (!todo.length) return { written: [] };
   mkdirSync(backupDir, { recursive: true });
   const manifest = readJson(manifestPath(backupDir)) ?? { entries: [] };
+  const done = todo.find((s) => manifest.entries.some((m) => m.file === s.file));
+  if (done) throw new Error(`${done.root} is already migrated (manifest in ${backupDir}): not reapplying the seed over later config edits`);
   for (const s of todo) {
-    if (!manifest.entries.some((m) => m.file === s.file)) {
-      const backup = existsSync(s.file) ? join(backupDir, `${s.slug}.compose.json.${date}`) : null;
-      if (backup) {
-        if (existsSync(backup)) throw new Error(`backup ${backup} already exists and is not in the manifest: not overwriting it`);
-        copyFileSync(s.file, backup);
-      }
-      manifest.entries.push({ file: s.file, backup, createdDir: !existsSync(dirname(s.file)) });
-      writeFileSync(manifestPath(backupDir), JSON.stringify(manifest, null, 2) + '\n');
+    const backup = existsSync(s.file) ? join(backupDir, `${s.slug}.compose.json.${date}`) : null;
+    if (backup) {
+      if (existsSync(backup)) throw new Error(`backup ${backup} already exists and is not in the manifest: not overwriting it`);
+      copyFileSync(s.file, backup);
     }
+    manifest.entries.push({ file: s.file, backup, createdDir: !existsSync(dirname(s.file)) });
+    writeFileSync(manifestPath(backupDir), JSON.stringify(manifest, null, 2) + '\n');
     mkdirSync(dirname(s.file), { recursive: true });
     if (s.create) writeFileSync(s.file, '{}\n');
     writeComposeJson(s.root, s.patch);
+    manifest.entries.find((m) => m.file === s.file).wroteHash = fileHash(s.file);
+    writeFileSync(manifestPath(backupDir), JSON.stringify(manifest, null, 2) + '\n');
   }
   return { written: todo.map((s) => s.file) };
 }
@@ -156,6 +160,11 @@ export function applyMigration({ host = DEFAULT_HOST, seed = SEED, backupDir = D
 export function rollbackMigration({ backupDir = DEFAULT_BACKUP_DIR } = {}) {
   const manifest = readJson(manifestPath(backupDir));
   if (!manifest) throw new Error(`no manifest in ${backupDir}: nothing to roll back`);
+  for (const m of manifest.entries) {
+    if (!m.wroteHash || !existsSync(m.file) || fileHash(m.file) !== m.wroteHash) {
+      throw new Error(`${m.file} differs from what the migration wrote (or the manifest records no hash): refusing to roll back over later edits. The pre-migration copies are in ${backupDir}`);
+    }
+  }
   const restored = [];
   for (const m of manifest.entries) {
     if (m.backup) copyFileSync(m.backup, m.file);

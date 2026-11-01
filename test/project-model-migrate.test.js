@@ -59,6 +59,23 @@ const ROWS = [
     assert.deepEqual([w.read(w.host), w.read(w.a)], before);
     assert.equal(existsSync(join(w.b, '.compose', 'compose.json')), false);
   }],
+  ['a rerun over a migrated root is refused, even when the config was edited since (nothing is written)', (w) => {
+    applyMigration({ host: w.host, seed: w.seed, backupDir: w.backup, date: 'D' });
+    const edited = JSON.stringify({ ...JSON.parse(w.read(w.a)), project: { ...JSON.parse(w.read(w.a)).project, modules: [{ name: 'later' }] } }) + '\n';
+    writeFileSync(join(w.a, '.compose', 'compose.json'), edited);
+    assert.throws(() => applyMigration({ host: w.host, seed: w.seed, backupDir: w.backup, date: 'E' }), /already migrated/);
+    assert.equal(w.read(w.a), edited);
+  }],
+  ['--rollback is refused when a migrated file was edited after the migration; nothing is restored', (w) => {
+    applyMigration({ host: w.host, seed: w.seed, backupDir: w.backup, date: 'D' });
+    const edited = w.read(w.a).replace('{', '{ "later": 1,');
+    writeFileSync(join(w.a, '.compose', 'compose.json'), edited);
+    const host = w.read(w.host);
+    assert.throws(() => rollbackMigration({ backupDir: w.backup }), /refusing to roll back/);
+    assert.equal(w.read(w.a), edited);
+    assert.equal(w.read(w.host), host);
+    assert.ok(existsSync(join(w.backup, 'migrate-manifest.json')));
+  }],
 ];
 
 describe('project model migration (COMP-COCKPIT-PROJECT-MODEL-1)', () => {

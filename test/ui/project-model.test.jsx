@@ -94,12 +94,24 @@ const ROWS = [
   }],
   ['the shared forge row focuses both modules; the graph is readOnly and read by a plain GET', async () => {
     const calls = stubFetch();
-    render(<ProjectGraphView project="forge" lane="compose" model={MODEL} />);
+    render(<ProjectGraphView project="forge" lane="ops:forge" model={MODEL} />);
     expect((await screen.findByTestId('graph-stub')).textContent).toBe('compose:c1,stratum:s1');
     expect(screen.getByTestId('graph-stub').dataset.readonly).toBe('true');
     expect(screen.getByTestId('project-graph-counts').textContent).toBe('2 items · 1 edges · focus compose + stratum');
-    expect(calls.map(([u]) => u)).toEqual(['/api/projects/forge/graph?lane=compose']);
+    expect(calls.map(([u]) => u)).toEqual(['/api/projects/forge/graph?lane=ops%3Aforge']);
     clean(calls);
+  }],
+  ['a single lane focuses its own module: stratum shows stratum only, compose shows compose only; the chip is the shared row', async () => {
+    stubFetch();
+    const { unmount } = render(<ProjectGraphView project="forge" lane="stratum" model={MODEL} />);
+    expect((await screen.findByTestId('graph-stub')).textContent).toBe('stratum:s1');
+    expect(screen.getByTestId('project-graph-counts').textContent).toBe('1 items · 0 edges · focus stratum');
+    unmount();
+    render(<ProjectGraphView project="forge" lane="compose" model={MODEL} />);
+    await waitFor(() => expect(screen.getByTestId('project-graph-counts').textContent).toContain('focus compose'), { timeout: 5000 });
+    expect(screen.getByTestId('graph-stub').textContent).toBe('compose:c1');
+    expect(laneChips(MODEL).forge.lane).toBe('ops:forge');
+    expect(laneChips(MODEL).choir.lane).toBe('choir');
   }],
   ['a module with no store shows one plain line, never another store\'s items', async () => {
     stubFetch();

@@ -9,7 +9,7 @@
  */
 import React, { useEffect, useMemo, useState } from 'react';
 import GraphView from './GraphView.jsx';
-import { closeProjectGraph, fetchProjectDoc, fetchProjectGraph, openProjectGraph } from '../../lib/fleetProjects.js';
+import { OPS_PREFIX, closeProjectGraph, fetchProjectDoc, fetchProjectGraph, openProjectGraph } from '../../lib/fleetProjects.js';
 
 const MUTED = { color: 'hsl(var(--muted-foreground))' };
 
@@ -39,12 +39,16 @@ export default function ProjectGraphView({ project, lane = null, model = null })
 
   const info = model?.projects?.find((p) => p.name === project) ?? null;
   const laneEntry = info?.lanes?.find((l) => l.id === lane) ?? null;
-  // The shared ops row (`?lane=` naming the first lane of an ops lane) focuses every module of that ops lane.
+  // `?lane=ops:<opsLane>` (the Day/Process chip) is the shared ops row: every module of that ops lane. A plain lane id
+  // focuses its own module only, as the server answers (`focus.modules`).
   const focusModules = useMemo(() => {
-    if (!laneEntry) return graph?.focus?.modules ?? [];
-    const siblings = info.lanes.filter((l) => l.opsLane === laneEntry.opsLane && l.module).map((l) => l.module);
-    return siblings.length ? [...new Set(siblings)] : [];
-  }, [graph, info, laneEntry]);
+    if (lane?.startsWith(OPS_PREFIX)) {
+      const ops = lane.slice(OPS_PREFIX.length);
+      return [...new Set((info?.lanes ?? []).filter((l) => l.opsLane === ops && l.module).map((l) => l.module))];
+    }
+    if (laneEntry) return laneEntry.module ? [laneEntry.module] : [];
+    return graph?.focus?.modules ?? [];
+  }, [graph, info, laneEntry, lane]);
   const shown = useMemo(() => focusGraph(graph, focusModules), [graph, focusModules]);
   const emptyModule = focusModules.length > 0 && shown.items.length === 0
     ? (info?.modules ?? []).find((m) => focusModules.includes(m.name) && !m.hasStore) : null;

@@ -183,10 +183,16 @@ export function useProjectModel(enabled = true) {
 /** True when the server answered with the project model (not the legacy fleet path, not an old server). */
 export const modelConfigured = (model) => model?.configured === true && Array.isArray(model.projects);
 
-/** The project and first lane id an ops lane belongs to: `{project, lane}` or null (unassigned / no model). */
+/** `?lane=ops:<opsLane>`: the shared ops row (every module of that ops lane), distinct from one lane's own id. */
+export const OPS_PREFIX = 'ops:';
+
+/** The project and lane an ops lane belongs to: `{project, lane, label}` or null (unassigned / no model). An ops lane
+ *  shared by several lanes gets `ops:<opsLane>`; a single lane keeps its own id. */
 export function laneTarget(laneIndex, opsLane) {
   const e = laneIndex?.[opsLane];
-  return e ? { project: e.project, lane: e.laneIds?.[0] ?? null, label: e.label ?? e.project } : null;
+  if (!e) return null;
+  const lane = (e.laneIds?.length ?? 0) > 1 ? `${OPS_PREFIX}${opsLane}` : e.laneIds?.[0] ?? null;
+  return { project: e.project, lane, label: e.label ?? e.project };
 }
 
 /** `{opsLane: {project, lane, label}}` for the Day and Process lane chips; `{}` while the model is absent or unconfigured. */
