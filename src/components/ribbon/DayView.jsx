@@ -201,7 +201,7 @@ export default function DayView({ onOpenFleet, onNavigate, active = true }) {
       {/* The shared meter's full form is ~470 px tall and would squeeze the ribbon to a thumbnail at 1440x900, so it sits in a
           capped, scrollable box that opens fully on request. Nothing is dropped; the ribbon keeps the height. */}
       <div className="shrink-0 flex flex-col gap-1" data-testid="day-meter">
-        <div className={meterOpen ? 'max-h-[40vh] overflow-y-auto' : 'max-h-[104px] overflow-y-auto'} data-testid="day-meter-box">
+        <div className={meterOpen ? 'max-h-[40vh] overflow-y-auto' : 'max-h-[176px] overflow-y-auto'} data-testid="day-meter-box">
           <RibbonMeterLayer meter={meter} flashSeat={flashSeat} onNavigate={onNavigate} />
         </div>
         <button type="button" className={`${link} self-start`} aria-expanded={meterOpen} data-testid="day-meter-toggle" onClick={() => setMeterOpen((v) => !v)}>

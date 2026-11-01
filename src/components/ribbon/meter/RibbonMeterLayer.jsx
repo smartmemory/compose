@@ -42,6 +42,7 @@ export default function RibbonMeterLayer({ meter, flashSeat = null, onNavigate, 
     <>
       <CostMeter
         compact
+        bars
         {...meter}
         now={now}
         flashSeat={flashSeat}

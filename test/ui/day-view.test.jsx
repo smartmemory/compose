@@ -106,7 +106,7 @@ describe('Day front page (COMP-COCKPIT-RIBBON-TOP-1)', () => {
     expect(screen.queryByTestId('day-skeleton')).toBeNull();
     // The meter sits in a capped box so the ribbon keeps its height; the toggle opens it fully.
     const toggle = screen.getByTestId('day-meter-toggle');
-    expect([toggle.getAttribute('aria-expanded'), screen.getByTestId('day-meter-box').className.includes('max-h-[104px]')]).toEqual(['false', true]);
+    expect([toggle.getAttribute('aria-expanded'), screen.getByTestId('day-meter-box').className.includes('max-h-[176px]')]).toEqual(['false', true]);
     fireEvent.click(toggle);
     expect([toggle.getAttribute('aria-expanded'), screen.getByTestId('day-meter-box').className.includes('max-h-[40vh]')]).toEqual(['true', true]);
     fireEvent.click(screen.getByTestId('day-link-process'));

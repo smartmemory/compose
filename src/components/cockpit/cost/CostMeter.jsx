@@ -8,27 +8,17 @@
  * `spend` (`fleetSpend(...)` or null), `spendLoading`, `asOf` (seats reader `generated_at`), `now` (ISO, tests), `compact`,
  * `credit` (`{value, error}` from GET /api/usage/credit, null while pending).
  * COMP-COCKPIT-RIBBON-METER-1, optional: `onSeatOpen(seat, rect)` and `onMoneyOpen(rect)` make a seat row and the Dollars block
- * clickable, `flashSeat` (a seat id) outlines that row. Without them the meter renders exactly as before.
+ * clickable, `flashSeat` (a seat id) outlines that row.
+ * COMP-COCKPIT-MONEY-COMPACT-1, optional: `bars` swaps the list form for `CostBars` (the same numbers as bars and one-line summaries). Without them the meter renders exactly as before.
  */
 import React from 'react';
 import { cn } from '@/lib/utils.js';
 import {
   meterRows, fmtPct, asOfText, RETIRED_NOTE, apiCreditText, DOLLARS_PER_SEAT_NOTE,
 } from './costLogic.js';
+import CostBars, { pressable, PRESS } from './CostBars.jsx';
 
 const MUTED = 'text-muted-foreground';
-
-/** Click and Enter/Space on a non-button block, handing the handler the block's rect. Plain props when there is no handler. */
-function pressable(handler, label) {
-  if (!handler) return {};
-  const fire = (el) => handler(el.getBoundingClientRect());
-  return {
-    role: 'button', tabIndex: 0, 'aria-label': label,
-    onClick: (e) => fire(e.currentTarget),
-    onKeyDown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fire(e.currentTarget); } },
-  };
-}
-const PRESS = 'cursor-pointer rounded hover:bg-muted focus-visible:bg-muted outline-none';
 
 function Line({ title, testId, children }) {
   return (
@@ -39,12 +29,23 @@ function Line({ title, testId, children }) {
   );
 }
 
-export default function CostMeter({ seats, seatsError = null, loading = false, spend = null, spendLoading = false, asOf = null, now, compact = false, credit = null, onSeatOpen, onMoneyOpen, flashSeat = null }) {
+export default function CostMeter({ seats, seatsError = null, loading = false, spend = null, spendLoading = false, asOf = null, now, compact = false, credit = null, bars = false, onSeatOpen, onMoneyOpen, flashSeat = null }) {
   const at = now ? Date.parse(now) : Date.now();
   const rows = meterRows(seats, spend, at);
   const pending = seats === null && !seatsError;
   const ceiling = spend?.ceiling;
   const barPct = typeof ceiling?.pct === 'number' && Number.isFinite(ceiling.pct) ? Math.min(100, Math.max(0, ceiling.pct)) : null;
+  if (bars) {
+    return (
+      <section className="rounded-lg border border-border bg-card flex flex-col p-2 gap-1.5" data-testid="cost-meter" data-layout="bars">
+        <CostBars
+          rows={rows} seats={seats} seatsError={seatsError} pending={pending} spend={spend} spendLoading={spendLoading}
+          ceiling={ceiling} barPct={barPct} credit={credit} asOfLine={loading && pending ? 'reading…' : asOfText(asOf, at)}
+          onSeatOpen={onSeatOpen} onMoneyOpen={onMoneyOpen} flashSeat={flashSeat}
+        />
+      </section>
+    );
+  }
   return (
     <section
       className={cn('rounded-lg border border-border bg-card flex flex-col', compact ? 'p-2 gap-2' : 'p-3 gap-3')}

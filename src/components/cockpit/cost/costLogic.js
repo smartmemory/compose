@@ -48,6 +48,7 @@ export function asOfText(iso, now) {
   return `as of ${hhmm} (${ago}m ago)`;
 }
 
+const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 const cut = (arr, n) => ({ shown: arr.slice(0, n), more: Math.max(0, arr.length - n) });
 export const LAST_HOUR_SHOWN = 3;
 
@@ -63,7 +64,7 @@ export function meterRows(seats, spend, now) {
   const seatLines = active.filter((s) => !s.codex_daily).map((s) => ({
     id: s.id,
     label: s.label,
-    five: { pct: fmtPct(s.five_h?.used_pct), reset: resetIn(s.five_h?.resets_at, now) },
+    five: { pct: fmtPct(s.five_h?.used_pct), n: num(s.five_h?.used_pct), reset: resetIn(s.five_h?.resets_at, now) },
     seven: s.seven_d?.status === 'missing'
       ? { fiveOnly: true, text: FIVE_H_ONLY }
       : { fiveOnly: false, text: fmtPct(s.seven_d?.used_pct), reset: resetIn(s.seven_d?.resets_at, now) },
@@ -72,6 +73,8 @@ export function meterRows(seats, spend, now) {
     id: s.id,
     label: s.label,
     text: s.fable.used_pct === null ? 'no reading' : fmtPct(s.fable.used_pct),
+    n: num(s.fable.used_pct),
+    capN: num(s.fable.cap_pct),
     reset: resetIn(s.fable.resets_at, now),
     cap: s.fable.cap_pct === null ? null : fmtPct(s.fable.cap_pct),
     over: s.fable.over_cap === true,
@@ -83,6 +86,25 @@ export function meterRows(seats, spend, now) {
     state: codexRow.codex_daily.off ? 'cap off' : codexRow.codex_daily.state ?? '—',
     off: codexRow.codex_daily.off === true,
   } : null;
-  const hour = spend && Array.isArray(spend.spend?.rows) ? cut(spend.spend.rows, LAST_HOUR_SHOWN) : null;
+  const hour = spend && Array.isArray(spend.spend?.rows) ? { ...cut(spend.spend.rows, LAST_HOUR_SHOWN), all: spend.spend.rows } : null;
   return { seats: seatLines, fable, codex, retired: { count: retired.length, names: retired.map((s) => s.label) }, hour };
+}
+
+/** COMP-COCKPIT-MONEY-COMPACT-1 (the bars layout): "Claude Team seat 2" -> "s2"; any other label is kept as is. */
+export function shortSeat(label) {
+  const m = /seat\s*(\d+)/i.exec(String(label ?? ''));
+  return m ? `s${m[1]}` : String(label ?? '');
+}
+
+/** Bar fill width, 0-100: `n` as a share of `of` (default 100). `null` when there is no reading. */
+export function fillPct(n, of = 100) {
+  if (typeof n !== 'number' || !Number.isFinite(n)) return null;
+  const cap = typeof of === 'number' && of > 0 ? of : 100;
+  return Math.min(100, Math.max(0, (n / cap) * 100));
+}
+
+/** "$   14.89  s1-chat" (the spend panel's row) -> "s1-chat $14.89". An unrecognised row is returned trimmed. */
+export function sessionChip(row) {
+  const m = /^\$\s*([\d,.]+)\s+(.+)$/.exec(String(row).trim());
+  return m ? `${m[2]} $${m[1]}` : String(row).trim();
 }
