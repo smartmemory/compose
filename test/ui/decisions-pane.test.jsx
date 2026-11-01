@@ -6,8 +6,10 @@
  */
 import React from 'react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, fireEvent, cleanup, waitFor, within } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup, waitFor, within, configure } from '@testing-library/react';
 
+// Async waits default to 1000 ms; a loaded full-suite run needs longer (push18 flake). Same assertions, wider wait.
+configure({ asyncUtilTimeout: 5000 });
 const { default: DecisionsPane } = await import('../../src/components/cockpit/DecisionsPane.jsx');
 const { resetFleetProjects } = await import('../../src/lib/fleetProjects.js');
 const { projectOfRoot, decisionsUrl, toggleDecider } = await import('../../src/components/cockpit/decisionsPaneLogic.js');

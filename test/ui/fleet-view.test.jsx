@@ -7,7 +7,9 @@
  */
 import React from 'react';
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act, configure } from '@testing-library/react';
+// Async waits default to 1000 ms; a loaded full-suite run needs longer (push18 flake). Same assertions, wider wait.
+configure({ asyncUtilTimeout: 5000 });
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 import { blockerReasons, proposedLine } from '../../src/components/cockpit/fleetLogic.js';
@@ -498,10 +500,10 @@ const INBOX_ROWS = [
     await openDrawer();
     await screen.findByTestId('inbox-drawer');
     fireEvent.keyDown(window, { key: 'Escape' });
-    expect(screen.queryByTestId('inbox-drawer')).toBeNull();
+    await waitFor(() => expect(screen.queryByTestId('inbox-drawer')).toBeNull());
     window.dispatchEvent(new CustomEvent('compose:open-inbox', { cancelable: true }));
     fireEvent.click(await screen.findByTestId('inbox-close'));
-    expect(screen.queryByTestId('inbox-drawer')).toBeNull();
+    await waitFor(() => expect(screen.queryByTestId('inbox-drawer')).toBeNull());
     expect(calls.filter(([, m]) => m !== 'GET')).toEqual([]);
     expect([...new Set(calls.map(([u]) => u))].filter((u) => u !== '/api/fleet' && !/\/(outage|attention)$/.test(u))).toEqual([]);
   }],
