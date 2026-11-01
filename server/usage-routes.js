@@ -165,8 +165,9 @@ export function attachUsageRoutes(app, deps = {}) {
     now,
   })), { ttlMs: deps.hourlyTtlMs ?? HOURLY_TTL_MS, now, logPrefix: '[usage]' });
 
-  // Boot warm: the first read of this source takes ~29 s, so one read runs now and every later one is served from the cache.
-  if (deps.warm) hourlyCache.get().catch(() => {});
+  // Boot warm: the first read of this source takes ~29 s. Not run at attach (every VisionServer/workspace attaches); index.js calls
+  // app.locals.warmUsage() once at real server boot, and every later read is served from the cache.
+  app.locals.warmUsage = () => hourlyCache.get().catch(() => {});
 
   app.get('/api/usage/credit', async (_req, res) => {
     res.json({ v: 1, generated_at: new Date(now()).toISOString(), credit: await creditCache.get() });

@@ -92,15 +92,17 @@ const ROWS = [
     assert.match(w.to, /^2026-10-31T14:00:00[+-]\d\d:\d\d$/);
     assert.equal(closedHoursWindow(new Date(2026, 9, 31, 0, 40, 0).getTime()), null);
   }],
-  ['LIVE-DATA-1: warm reads the hourly source once at attach, and a rejecting reader still leaves /api/usage/hourly answering', async () => {
+  ['LIVE-DATA-1: attach reads nothing, app.locals.warmUsage() reads the hourly source once, and a rejecting reader still leaves /api/usage/hourly answering', async () => {
     let calls = 0;
     const app = express();
     const warns = [];
     const orig = console.warn;
     console.warn = (m) => warns.push(String(m));
-    attachUsageRoutes(app, { warm: true, readHourly: async () => { calls += 1; throw new Error('spend_attr down'); }, readCredit: async () => ({}), readSeats: async () => ({ seats: [] }) });
+    attachUsageRoutes(app, { readHourly: async () => { calls += 1; throw new Error('spend_attr down'); }, readCredit: async () => ({}), readSeats: async () => ({ seats: [] }) });
     await new Promise((r) => setImmediate(r));
-    assert.equal(calls, 1);
+    assert.equal(calls, 0, 'attach reads nothing');
+    await app.locals.warmUsage();
+    assert.equal(calls, 1, 'warmUsage reads once');
     const server = await new Promise((r) => { const s2 = app.listen(0, '127.0.0.1', () => r(s2)); });
     try {
       const res = await fetch(`http://127.0.0.1:${server.address().port}/api/usage/hourly`);
@@ -110,7 +112,7 @@ const ROWS = [
     const quiet = express();
     attachUsageRoutes(quiet, { readHourly: async () => { calls += 1; return {}; }, readCredit: async () => ({}), readSeats: async () => ({ seats: [] }) });
     await new Promise((r) => setImmediate(r));
-    assert.equal(calls, 1, 'without warm nothing is read at attach');
+    assert.equal(calls, 1, 'a second attach still reads nothing');
   }],
 ];
 
