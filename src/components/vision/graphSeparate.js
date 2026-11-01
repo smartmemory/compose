@@ -11,16 +11,16 @@
  * it was: a box that hits placed boxes tries the spots that just clear each box it hits (left, right, above, below) and
  * all of them at once, nearest first. Every box ends at least `gap` from every other, and the same input always gives the
  * same output. (Push-apart alone still had 303 overlapping pairs after 300 passes on the SmartMemory graph: dense clumps
- * oscillate. Placement alone took over 1 s there, with 17 to 51 boxes sent to the edge.)
+ * oscillate. Placement alone took over 1 s there, with 17 to 51 boxes sent past the search.)
  */
 
 /**
  * @param {{id: string, x: number, y: number, w: number, h: number}[]} boxes centre x, y and full width, height
- * @param {{gap?: number, maxTries?: number}} [opts] `maxTries`: candidate spots tried per box before the last resort
+ * @param {{gap?: number, maxTries?: number}} [opts] `maxTries`: candidate spots tried per box before the ring walk
  * @returns {{positions: Map<string, {x: number, y: number}>, unplaced: string[]}}
- *   `positions`: the boxes that moved, with their new centres. `unplaced`: ids that found no free spot near their place
- *   within `maxTries` and went to the last resort, just right of every box placed before them (still no overlap, but far
- *   from their links: the caller warns, never hides it).
+ *   `positions`: the boxes that moved, with their new centres. `unplaced`: ids that found no free spot within `maxTries`
+ *   of the best-first search and went to the last resort, the nearest free spot on a ring-by-ring grid walk around their
+ *   place (still no overlap, a little farther from their place than the rest: the caller warns, never hides it).
  */
 export function separateBoxes(input, { gap = 16, maxTries = 4000, relax = 60 } = {}) {
   const n = input.length;
@@ -65,10 +65,19 @@ export function separateBoxes(input, { gap = 16, maxTries = 4000, relax = 60 } =
       if (hits.length > 1) { offer(x1 - hw, y); offer(x2 + hw, y); offer(x, y1 - hh); offer(x, y2 + hh); }
     }
     if (!at) {
-      // No free spot within maxTries: just right of everything placed so far, which is always free.
-      let right = -Infinity;
-      for (const p of placed) right = Math.max(right, p.x + p.hw);
-      at = { x: right + hw, y: b.y };
+      // No free spot within maxTries: walk outward ring by ring on a grid around the box's own place and take the nearest
+      // free spot of the first ring that has one. Space is unbounded and the placed boxes are finite, so a ring is free at last.
+      const step = Math.min(b.w, b.h) / 2 + gap;
+      for (let r = 1; !at; r++) {
+        let bestD = Infinity;
+        for (let gx = -r; gx <= r; gx++) {
+          for (let gy = -r; gy <= r; gy++) {
+            if (Math.max(Math.abs(gx), Math.abs(gy)) !== r) continue;
+            const x = b.x + gx * step, y = b.y + gy * step, d = Math.hypot(gx, gy);
+            if (d < bestD && !grid.hits(placed, x, y, hw, hh).length) { bestD = d; at = { x, y }; }
+          }
+        }
+      }
       unplaced.push(b.id);
     }
     const k = placed.push({ x: at.x, y: at.y, hw, hh }) - 1;
@@ -161,7 +170,7 @@ const boxOf = (id, bb) => ({ id, x: (bb.x1 + bb.x2) / 2, y: (bb.y1 + bb.y2) / 2,
 /**
  * The Graph's pass over a laid-out cytoscape instance (GraphView runs it after the layout and after the saved positions):
  * first the cards inside each group, then the groups (moved whole, label included) with the cards that sit in no group.
- * Positions it moves are not saved: the pass gives the same result on every load. A box sent to the edge is warned about.
+ * Positions it moves are not saved: the pass gives the same result on every load. A box that needed the ring walk is warned about.
  * @param {import('cytoscape').Core} cy
  * @returns {{unplaced: string[]}}
  */
@@ -187,6 +196,6 @@ export function separateLayout(cy) {
     });
   });
   unplaced.push(...r.unplaced);
-  if (unplaced.length) console.warn(`[graph] ${unplaced.length} node(s) found no free spot near their layout place and were put at the edge: ${unplaced.slice(0, 5).join(', ')}`);
+  if (unplaced.length) console.warn(`[graph] ${unplaced.length} node(s) found no free spot near their layout place and did not fit the best-first search and were placed near their spot by a ring walk: ${unplaced.slice(0, 5).join(', ')}`);
   return { unplaced };
 }

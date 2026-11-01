@@ -1,7 +1,8 @@
 /**
  * graph-separate.test.js — COMP-WIKI-GRAPH-SURFACES-1: no Graph card covers another's label.
  *
- * separateBoxes (pure) over a table of box layouts, the real merged SmartMemory graph among them; then separateLayout
+ * separateBoxes (pure) over a table of box layouts, the real merged SmartMemory graph among them (and a box boxed in by
+ * a ring of bigger ones, with the search cut short, to prove the last resort lands next to the ring); then separateLayout
  * over a headless cytoscape with groups, so the mechanism GraphView runs (cards inside a group, then groups moved whole
  * with the loose cards) is what is asserted, not only the helper.
  */
@@ -32,25 +33,36 @@ function crowded(boxes, positions, gap) {
 const PILE = Array.from({ length: 60 }, (_, i) => card(`p${i}`, 0, 0));
 const ROW = Array.from({ length: 12 }, (_, i) => card(`r${i}`, i * 40, 0));
 
+// Eight bigger boxes in a 3 x 3 block around a hole too narrow for the 260 px card at its centre. Placed first (bigger),
+// so the card finds them all there; with `maxTries: 1` and no relax it goes straight to the last resort. The old last
+// resort put it just right of the whole block (x 462); the ring walk puts it just above, 212 px from its place.
+const RING = [-1, 0, 1].flatMap((i) => [-1, 0, 1].filter((j) => i || j).map((j) => ({ id: `ring${i}${j}`, x: i * 216, y: j * 116, w: 200, h: 100 })));
+const BOXED_IN = [...RING, { id: 'boxed', x: 0, y: 0, w: 260, h: 60 }];
+
 const CASES = [
-  // name, boxes, gap, moved (exact count or null), max edge sends
-  ['already apart: nothing moves', [card('a', 0, 0), card('b', 400, 0), card('c', 0, 300)], 16, 0, 0],
+  // name, boxes, gap, moved (exact count or null), max edge sends, max displacement of any box in px (or null), opts
+  ['already apart: nothing moves', [card('a', 0, 0), card('b', 400, 0), card('c', 0, 300)], 16, 0, 0, 0],
   ['two cards on one spot', [card('a', 0, 0), card('b', 0, 0)], 16, null, 0],
   ['a row of cards 40 px apart', ROW, 16, null, 0],
   ['sixty cards on one spot', PILE, 16, null, 0],
   ['a group box over loose cards', [{ id: 'g', x: 0, y: 0, w: 600, h: 400 }, card('a', 50, 20), card('b', -100, -80), card('c', 700, 0)], 24, null, 0],
-  ['the merged SmartMemory graph (440 boxes, 52 groups)', real, 24, null, 5],
+  ['the merged SmartMemory graph (440 boxes, 52 groups)', real, 24, null, 5, 14.1 * 150],
+  ['a box boxed in by a ring, search cut short: lands next to the ring, not at the far right', BOXED_IN, 16, 1, 1, 250, { maxTries: 1, relax: 0 }],
 ];
 
 describe('separateBoxes: every box ends at least `gap` from every other', () => {
-  for (const [name, boxes, gap, moved, maxEdge] of CASES) {
+  for (const [name, boxes, gap, moved, maxEdge, maxDisp = null, opts = {}] of CASES) {
     test(name, () => {
-      const r = separateBoxes(boxes, { gap });
+      const r = separateBoxes(boxes, { gap, ...opts });
       assert.deepEqual(crowded(boxes, r.positions, gap), []);
       if (moved !== null) assert.equal(r.positions.size, moved);
       assert.ok(r.unplaced.length <= maxEdge, `${r.unplaced.length} boxes sent to the edge (max ${maxEdge})`);
+      if (maxDisp !== null) {
+        const far = Math.max(0, ...boxes.map((b) => { const p = r.positions.get(b.id); return p ? Math.hypot(p.x - b.x, p.y - b.y) : 0; }));
+        assert.ok(far <= maxDisp, `a box moved ${Math.round(far)} px from its place (max ${maxDisp})`);
+      }
       // The same input gives the same output, so a reload never reshuffles the graph.
-      assert.deepEqual([...separateBoxes(boxes, { gap }).positions], [...r.positions]);
+      assert.deepEqual([...separateBoxes(boxes, { gap, ...opts }).positions], [...r.positions]);
     });
   }
 });
