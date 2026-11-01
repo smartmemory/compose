@@ -167,3 +167,67 @@ test('gate post_id mapping and post bounds (_grammar.post_id, R14, R15, R16, R17
   assert.doesNotMatch(masked.card.body, /ghp_abcdefghijklmnop1234/);
   assert.equal(masked.severity, 'info');
 });
+
+// COMP-NOTIFY-GATES-1 F1 (review M1, M2)
+const diskGate = (dataDir) => JSON.parse(readFileSync(join(dataDir, 'vision-state.json'), 'utf8')).gates.find((g) => g.id === GATE_ID);
+
+test('gate answer M1: a server-created gate on a probe miss is transient (no file write, retry resolves via the server)', async (t) => {
+  const row = { gate: pending() };
+  const { dataDir, env } = seed(t, row);
+  const { store, port } = await startServer(t, dataDir);
+  writePointer({ post_id: POST_ID, gate_id: GATE_ID, data_dir: dataDir, workspace_id: WS, port, version: CREATED, via_server: true }, env);
+  const before = readFileSync(join(dataDir, 'vision-state.json'), 'utf8');
+  let down = true;
+  const writerFor = (ptr) => {
+    const w = new VisionWriter(ptr.data_dir, { port: ptr.port, workspaceId: ptr.workspace_id });
+    const probe = w._serverAvailable.bind(w);
+    w._serverAvailable = async () => (down ? false : probe());
+    return w;
+  };
+  await assert.rejects(answerGate(event('phone', 'approve'), { env, writerFor }), /unreachable/);
+  assert.equal(readFileSync(join(dataDir, 'vision-state.json'), 'utf8'), before, 'no direct file write on the miss');
+  assert.equal(store.gates.get(GATE_ID).status, 'pending');
+  down = false;
+  const reply = await answerGate(event('phone', 'approve'), { env, writerFor });
+  assert.equal(reply.reply, 'accepted');
+  assert.equal(store.gates.get(GATE_ID).resolvedBy, 'notify:phone');
+  assert.equal(diskGate(dataDir).status, 'resolved', 'the server persisted it');
+});
+
+test('gate answer M1: a file-created gate (via_server false) still resolves through the file on a miss', async (t) => {
+  const { dataDir, env } = seed(t, { gate: pending() });
+  writePointer({ post_id: POST_ID, gate_id: GATE_ID, data_dir: dataDir, workspace_id: WS, port: 1, version: CREATED, via_server: false }, env);
+  const reply = await answerGate(event('phone', 'approve'), { env });
+  assert.equal(reply.reply, 'accepted');
+  assert.equal(diskGate(dataDir).resolvedBy, 'notify:phone');
+});
+
+test('gate answer M1: createGate records which path made the gate', async (t) => {
+  const { dataDir } = seed(t, { gate: pending() });
+  const w = new VisionWriter(dataDir, { port: 1 });
+  await w.createGate('flow-x', 'review', null, { policyMode: 'gate', round: 1 });
+  assert.equal(w.lastGateViaServer, false);
+  const { port } = await startServer(t, dataDir);
+  const w2 = new VisionWriter(dataDir, { port });
+  w2._serverAvailable = async () => true;
+  await w2.createGate('flow-y', 'review', null, { policyMode: 'gate', round: 1 });
+  assert.equal(w2.lastGateViaServer, true);
+});
+
+test('gate answer M2: the posted deadline wins over the handler env; a legacy pointer keeps the env rule', async (t) => {
+  const created = new Date(Date.now() - 2 * 3600_000).toISOString(); // handler env default is 30 min: past it
+  const deadline = new Date(Date.now() + 2 * 3600_000).toISOString(); // the build posted 4 h
+  for (const [name, ptrExtra, want] of [
+    ['posted deadline', { deadline }, 'accepted'],
+    ['legacy pointer (no deadline)', {}, 'rejected'],
+    ['posted deadline already past', { deadline: new Date(Date.now() - 1000).toISOString() }, 'rejected'],
+  ]) {
+    await t.test(name, async (t) => {
+      const { dataDir, env } = seed(t, { gate: pending({ createdAt: created }) });
+      writePointer({ post_id: POST_ID, gate_id: GATE_ID, data_dir: dataDir, workspace_id: WS, port: 1, version: created, ...ptrExtra }, env);
+      const reply = await answerGate(event('phone', 'approve', { version: created }), { env });
+      assert.equal(reply.reply, want);
+      if (want === 'rejected') assert.equal(reply.reason, 'expired');
+    });
+  }
+});
