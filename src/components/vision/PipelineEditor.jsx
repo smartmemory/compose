@@ -455,7 +455,7 @@ export default function PipelineEditor() {
         <div
           className={cn(
             'flex flex-col overflow-hidden border-border',
-            phone ? 'shrink-0 max-h-[45vh] border-t' : 'w-80 shrink-0 border-l',
+            phone ? 'shrink-0 h-[45vh] max-h-[45vh] border-t' : 'w-80 shrink-0 border-l', // definite height so the chat input stays in view
           )}
           data-testid="side-pane"
         >

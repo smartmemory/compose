@@ -196,6 +196,23 @@ describe('history, cancel, guards', () => {
   });
 });
 
+describe('dispatch ledger attribution', () => {
+  // Dispatch capture is fail-open (stratum-mcp-client.js), so a site the ledger enum rejects
+  // is dropped silently. Found live 2026-11-01: 'pipe-chat' was missing and no row was written.
+  test("a dispatch row with site 'pipe-chat' passes the ledger validator and reads back", async () => {
+    const { appendEvent, readEvents, DISPATCH_SITES } = await import(`${ROOT}/lib/dispatch-ledger.js`);
+    assert.ok(DISPATCH_SITES.includes(CHAT_SITE));
+    appendEvent(work, {
+      kind: 'dispatch', dispatch_id: 'pipe-chat-test', site: CHAT_SITE, agent: 'claude', outcome: 'ok',
+      model: CHAT_MODEL, effort_intended: 'low', effort_executed: 'low',
+      tokens_in: 10, tokens_out: 5, tokens_total: 15, usd: null, usd_source: null, duration_ms: 1, transport_derived: null,
+    });
+    const rows = readEvents(work, { kind: 'dispatch' }).filter((r) => r.site === 'pipe-chat');
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].model, 'claude-sonnet-5-5');
+  });
+});
+
 describe('prompt helpers', () => {
   test('extractProposal takes only the first yaml fence', () => {
     const r = prompt.extractProposal('a\n```yaml\none: 1\n```\nb\n```yaml\ntwo: 2\n```');

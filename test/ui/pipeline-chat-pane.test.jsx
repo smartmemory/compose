@@ -129,6 +129,7 @@ describe('PipelineEditor right pane', () => {
     expect(screen.getByTestId('editor-body').dataset.phone).toBe('1');
     expect(screen.getByTestId('editor-body').className).toMatch(/flex-col/);
     expect(screen.getByTestId('side-pane').className).toMatch(/max-h-\[45vh\]/);
+    expect(screen.getByTestId('side-pane').className).toMatch(/(^| )h-\[45vh\]/); // definite, or the chat input clips
     for (const t of ['chat', 'inspector', 'contracts', 'yaml']) expect(screen.getByTestId(`pane-tab-${t}`)).toBeTruthy();
     unmount();
     setWidth(1280); render(<PipelineEditor />);
