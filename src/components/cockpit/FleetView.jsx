@@ -30,7 +30,8 @@ export default function FleetView({ fleet }) {
         {data?.generated && <span>as of {new Date(data.generated).toLocaleTimeString()}</span>}
         {error && <span style={{ color: 'hsl(var(--warning))' }}>last poll failed: {error}</span>}
       </div>
-      <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', alignItems: 'start' }}>
+      {/* Columns, not grid rows: a row-aligned grid left ~1300 px of blank space under the short cards at 1440. Each card stays whole. */}
+      <div className="[&>section]:mb-2 [&>section]:break-inside-avoid" style={{ columnWidth: '320px', columnGap: '0.5rem' }} data-testid="fleet-cards">
         <FleetPanels data={data} variant="desktop" />
       </div>
     </div>

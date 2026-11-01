@@ -30,6 +30,9 @@ const CLS = {
     card: 'rounded-md border border-border bg-card p-3 flex flex-col gap-1.5 min-w-0',
     title: 'text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2',
     row: 'flex items-baseline gap-2 text-xs min-w-0',
+    // Fixed tracks, so the age/lane/kind/note columns start at one x on every row and a long cell clips (full text in its title) instead of wrapping.
+    rowJob: 'grid grid-cols-[1rem_3.25rem_minmax(0,1fr)_5rem] items-baseline gap-2 text-xs min-w-0 [&>*]:min-w-0 [&>*]:truncate',
+    rowReady: 'grid grid-cols-[1rem_minmax(0,3fr)_3.5rem_minmax(0,2fr)] items-baseline gap-2 text-xs min-w-0 [&>*]:min-w-0 [&>*]:truncate',
     text: 'truncate',
     mono: 'font-mono text-[11px]',
     note: 'text-[11px] text-muted-foreground',
@@ -39,6 +42,8 @@ const CLS = {
     card: 'm-fleet-card',
     title: 'm-section-title',
     row: 'm-fleet-row',
+    rowJob: 'm-fleet-row',
+    rowReady: 'm-fleet-row',
     text: 'm-fleet-text',
     mono: 'm-fleet-mono',
     note: 'm-fleet-note',
@@ -155,7 +160,7 @@ export default function FleetPanels({ data, variant = 'desktop' }) {
       <Card key="jobs" id="jobs" title="Open jobs" extra={String(rows.length)} cls={cls}>
         <div className={cls.list}>
         {sorted.map((j) => (
-          <div key={`${j.session}/${j.id}`} className={cls.row} data-testid="fleet-job-row">
+          <div key={`${j.session}/${j.id}`} className={cls.rowJob} data-testid="fleet-job-row">
             <span
               style={j.alive === true ? TONE.ok : j.alive === false ? TONE.red : TONE.dim}
               title={`alive: ${j.alive ?? 'unknown'} (from ${j.aliveFrom ?? 'sm_status'})`}
@@ -163,7 +168,7 @@ export default function FleetPanels({ data, variant = 'desktop' }) {
             >{j.alive === true ? '●' : j.alive === false ? '✕' : '·'}</span>
             <span className={cls.mono}>{fmtAge(j.age)}</span>
             <span className={cls.text}>{j.session} / <UnitName id={j.id} compact /></span>
-            <span className={cls.mono} style={TONE.dim}>{j.kind}</span>
+            <span className={cls.mono} style={TONE.dim} title={j.kind}>{j.kind}</span>
           </div>
         ))}
         </div>
@@ -224,11 +229,11 @@ export default function FleetPanels({ data, variant = 'desktop' }) {
         {c.errors?.length > 0 && <div className={cls.note} style={TONE.yellow}>unavailable: {c.errors[0]}</div>}
         <div className={cls.list}>
         {shown.map((u) => (
-          <div key={`${u.lane}/${u.id}`} className={cls.row} data-testid="fleet-ready-row">
+          <div key={`${u.lane}/${u.id}`} className={cls.rowReady} data-testid="fleet-ready-row">
             <span style={u.decision === 'launchable' ? TONE.ok : TONE.dim}>{u.decision === 'launchable' ? '▶' : '·'}</span>
             <span className={cls.text}><UnitName id={u.id} lane={u.lane} compact /></span>
             <span className={cls.mono} style={TONE.dim}>{u.lane}</span>
-            <span className={cls.note}>{blockerReasons(u)}</span>
+            <span className={cls.note} title={blockerReasons(u)}>{blockerReasons(u)}</span>
           </div>
         ))}
         </div>
