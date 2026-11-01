@@ -1042,6 +1042,22 @@ describe('useVisionStore — spec chat (COMP-PIPE-EDIT-CHAT-PANE-1)', () => {
     expect(store().editorDirty).toBe(true);
   });
 
+  it('loadChat fetches a spec once, so a pane switch never wipes a live proposal or its Revert', async () => {
+    installChatFetch();
+    await store().loadChat('demo.stratum.yaml');
+    expect(chatCalls.filter((c) => c.method === 'GET')).toHaveLength(1);
+    await seedProposal();
+    await store().applyChatProposal(1);
+    const msgs = store().chatByFile['demo.stratum.yaml'].messages;
+    useVisionStore.setState({ chatByFile: { 'demo.stratum.yaml': { ...store().chatByFile['demo.stratum.yaml'], loaded: true } } });
+    await store().loadChat('demo.stratum.yaml');
+    await store().loadChat('demo.stratum.yaml');
+    expect(chatCalls.filter((c) => c.method === 'GET')).toHaveLength(1);
+    expect(store().chatByFile['demo.stratum.yaml'].messages).toEqual(msgs);
+    expect(store().chatByFile['demo.stratum.yaml'].messages[1].proposal).toBeTruthy();
+    expect(store().chatUndo).not.toBeNull();
+  });
+
   it('a spec load or a successful save drops the one-level undo', async () => {
     await seedProposal();
     await store().applyChatProposal(1);

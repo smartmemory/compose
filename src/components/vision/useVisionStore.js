@@ -727,11 +727,14 @@ export const useVisionStore = create((set, get) => {
       chatByFile: { ...s.chatByFile, [file]: { messages: [], busy: false, error: null, ...(s.chatByFile[file] || {}), ...patch } },
     })),
 
+    // Fetch a spec's stored history ONCE. The server keeps only a one-line summary of past
+    // proposals, so reloading on every pane switch would wipe a live proposal card (and its
+    // Revert button). After the first load the store is the source of truth.
     loadChat: async (file) => {
-      if (!file) return;
+      if (!file || get().chatByFile[file]?.loaded) return;
       const data = await apiCall(`/api/pipeline/chat?file=${encodeURIComponent(file)}`);
-      if (get().chatByFile[file]?.busy) return;
-      get()._chatPatch(file, { messages: Array.isArray(data?.messages) ? data.messages : [], error: null });
+      if (get().chatByFile[file]?.loaded || get().chatByFile[file]?.busy || !Array.isArray(data?.messages)) return;
+      get()._chatPatch(file, { messages: data.messages, error: null, loaded: true });
     },
 
     sendChat: async (text) => {
@@ -815,7 +818,7 @@ export const useVisionStore = create((set, get) => {
       const file = get().editorSpecFile;
       if (!file) return;
       await wsFetch(`/api/pipeline/chat?file=${encodeURIComponent(file)}`, { method: 'DELETE' });
-      get()._chatPatch(file, { messages: [], error: null, busy: false });
+      get()._chatPatch(file, { messages: [], error: null, busy: false, loaded: true });
       set({ chatUndo: null });
     },
 
