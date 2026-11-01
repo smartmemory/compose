@@ -206,6 +206,12 @@ function intentKeyForVersion(version) {
   return version === 1 ? 'do' : 'intent';
 }
 
+// The dependency key is VERSION-derived too — `after` for TS v1, `depends_on` for
+// v0.3. Mirrors src/lib/pipeline-model.js `depsKeyFor`.
+function depsKeyFor(version) {
+  return version === 1 ? 'after' : 'depends_on';
+}
+
 function denormalizeModelStep(step, version) {
   const out = { id: step.id };
   if (step._extra && typeof step._extra === 'object') {
@@ -221,7 +227,7 @@ function denormalizeModelStep(step, version) {
   if (step.output_contract !== undefined) out.output_contract = step.output_contract;
   if (Array.isArray(step.ensure) && step.ensure.length > 0) out.ensure = [...step.ensure];
   if (step.retries !== undefined) out.retries = step.retries;
-  if (Array.isArray(step.depends_on) && step.depends_on.length > 0) out.depends_on = [...step.depends_on];
+  if (Array.isArray(step.depends_on) && step.depends_on.length > 0) out[depsKeyFor(version)] = [...step.depends_on];
   if (step.on_fail !== undefined) out.on_fail = step.on_fail;
   return out;
 }
@@ -527,6 +533,8 @@ function mergeStepNode(doc, mapNode, step, specWide = false) {
   // VERSION (never the disk node's presence — a v1 step carrying both fields must
   // resolve to `do`, and the stray `intent` is cleaned up below).
   const intentKey = step._intentKey || (intentKeyForVersion(doc.get('version')));
+  // The surfaced `depends_on` is written to its PHYSICAL field (`after` for v1).
+  const depsKey = depsKeyFor(doc.get('version'));
   if (!specWide) {
     // D4: DIFF-DRIVEN, and NEVER delete. A key absent from an incomplete client
     // _extra is preserved (finding 2); a key PRESENT and CHANGED is written back —
@@ -547,7 +555,7 @@ function mergeStepNode(doc, mapNode, step, specWide = false) {
     // Full reconcile of unsurfaced fields. The physical intent key is surfaced
     // (below), so it must be treated as surfaced here too — never deleted as an
     // unknown extra.
-    const surfacedSet = new Set(['id', ...SURFACED_STEP_KEYS, intentKey]);
+    const surfacedSet = new Set(['id', ...SURFACED_STEP_KEYS, intentKey, 'after', 'depends_on']);
     // Add / update changed extra keys (skip unchanged to preserve their comments).
     for (const k of Object.keys(extra)) {
       if (!mapNode.has(k)) {
@@ -571,13 +579,18 @@ function mergeStepNode(doc, mapNode, step, specWide = false) {
   for (const key of SURFACED_STEP_KEYS) {
     const { present, value } = surfacedValue(step, key);
     // C3: the `intent` surfaced key maps to its physical field (`do`/`intent`).
-    const diskKey = key === 'intent' ? intentKey : key;
+    const diskKey = key === 'intent' ? intentKey : key === 'depends_on' ? depsKey : key;
     if (present) mapNode.set(diskKey, doc.createNode(value));
     else if (mapNode.has(diskKey)) mapNode.delete(diskKey);
     // Never leave the stale sibling — e.g. a python-era `intent` on a v1 step.
     if (key === 'intent') {
       const stray = intentKey === 'do' ? 'intent' : 'do';
       if (mapNode.has(stray)) mapNode.delete(stray);
+    }
+    // Same for the dependency key: a node never carries both `after` and `depends_on`.
+    if (key === 'depends_on') {
+      const strayDep = depsKey === 'after' ? 'depends_on' : 'after';
+      if (mapNode.has(strayDep)) mapNode.delete(strayDep);
     }
   }
   return mapNode;

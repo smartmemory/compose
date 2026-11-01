@@ -37,7 +37,7 @@
 // Fields the model surfaces as first-class (everything else lands in _extra).
 const SURFACED_KEYS = new Set([
   'id', 'agent', 'function', 'intent', 'inputs',
-  'output_contract', 'ensure', 'retries', 'depends_on', 'on_fail',
+  'output_contract', 'ensure', 'retries', 'depends_on', 'after', 'on_fail',
 ]);
 
 // Built-in contracts that are always valid as an output_contract, in addition
@@ -85,6 +85,19 @@ function extractFlows(parsedDoc) {
   return flows;
 }
 
+/**
+ * Union of a raw step's `after` and `depends_on` lists (order kept, no dupes).
+ * A step carrying both keys is a spec smell, so name it on the console.
+ */
+function readDeps(raw) {
+  const after = Array.isArray(raw.after) ? raw.after : [];
+  const dep = Array.isArray(raw.depends_on) ? raw.depends_on : [];
+  if (after.length > 0 && dep.length > 0) {
+    console.warn(`pipeline-model: step "${raw.id}" declares both after: and depends_on:, merging them`);
+  }
+  return [...new Set([...after, ...dep])];
+}
+
 /** Normalize one raw step object into the internal shape. */
 function normalizeStep(raw, version) {
   // C3/D2: the step instruction is `do` in TS v1 specs and `intent` in v0.3.
@@ -124,7 +137,10 @@ function normalizeStep(raw, version) {
     output_contract: raw.output_contract,
     ensure: Array.isArray(raw.ensure) ? [...raw.ensure] : [],
     retries: raw.retries,
-    depends_on: Array.isArray(raw.depends_on) ? [...raw.depends_on] : [],
+    // COMP-PIPE-EDIT-EDGES-1: ONE internal dependency list. Stratum v1 spells it
+    // `after:` (its step schema is strict and rejects `depends_on`); v0.3 spells it
+    // `depends_on:`. Read both, write the version's own key (`depsKeyFor`).
+    depends_on: readDeps(raw),
     on_fail: raw.on_fail,
     _extra,
   };
@@ -176,7 +192,12 @@ export function listEditableFlows(parsedDoc) {
 }
 
 /** Serialize one normalized step back to a plain object (merging _extra). */
-function denormalizeStep(step) {
+/** Physical key for the dependency list: Stratum v1 `after`, v0.3 `depends_on`. */
+function depsKeyFor(version) {
+  return version === 1 ? 'after' : 'depends_on';
+}
+
+function denormalizeStep(step, version) {
   const out = {};
   // Start with id so it leads.
   out.id = step.id;
@@ -196,7 +217,11 @@ function denormalizeStep(step) {
   if (step.output_contract !== undefined) out.output_contract = step.output_contract;
   if (Array.isArray(step.ensure) && step.ensure.length > 0) out.ensure = [...step.ensure];
   if (step.retries !== undefined) out.retries = step.retries;
-  if (Array.isArray(step.depends_on) && step.depends_on.length > 0) out.depends_on = [...step.depends_on];
+  // The dependency list goes back under the version's own key and never leaves a
+  // stale sibling behind: `after` is surfaced, so it is not in `_extra` to merge.
+  delete out.after;
+  delete out.depends_on;
+  if (Array.isArray(step.depends_on) && step.depends_on.length > 0) out[depsKeyFor(version)] = [...step.depends_on];
   if (step.on_fail !== undefined) out.on_fail = step.on_fail;
 
   return out;
@@ -219,7 +244,7 @@ export function modelToSpecObject(model) {
     const wfName = doc.workflow.name || 'workflow';
     const flow = byName.get(wfName);
     if (flow) {
-      out.workflow = { ...doc.workflow, steps: flow.steps.map(denormalizeStep) };
+      out.workflow = { ...doc.workflow, steps: flow.steps.map(s => denormalizeStep(s, model.version)) };
     }
   }
 
@@ -234,7 +259,7 @@ export function modelToSpecObject(model) {
     for (const name of Object.keys(docFlows)) {
       const flow = byName.get(name);
       if (flow) {
-        out.flows[name] = { ...docFlows[name], steps: flow.steps.map(denormalizeStep) };
+        out.flows[name] = { ...docFlows[name], steps: flow.steps.map(s => denormalizeStep(s, model.version)) };
         emittedFromModel.add(name);
       } else {
         out.flows[name] = docFlows[name];
@@ -250,7 +275,7 @@ export function modelToSpecObject(model) {
     if (emittedFromModel.has(flow.name)) continue;
     if (docFlows && Object.prototype.hasOwnProperty.call(docFlows, flow.name)) continue;
     out.flows = out.flows || {};
-    out.flows[flow.name] = { steps: flow.steps.map(denormalizeStep) };
+    out.flows[flow.name] = { steps: flow.steps.map(s => denormalizeStep(s, model.version)) };
   }
 
   return out;
