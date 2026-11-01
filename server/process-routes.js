@@ -49,7 +49,7 @@ const DEFAULT_KPI_HISTORY = join(homedir(), 'reg/my/forge/status/kpi-history.jso
  */
 export const DEFAULT_FLEET_ROOTS = {
   forge: '~/reg/my/forge/compose',
-  cadence: '~/reg/my/SmartMemory/cadence',
+  cadence: '~/reg/my/forge/cadence',
   '2.0': '~/reg/my/SmartMemory/smart-memory-core',
   maya: '~/reg/my/SmartMemory/maya',
   trader: '~/reg/my/stock/trader',

@@ -46,9 +46,37 @@
   },
   "codegraph": {
     "repos": [
-      { "name": "compose", "root": "." },
-      { "name": "stratum", "root": "../stratum/ts" }
+      {
+        "name": "compose",
+        "root": "."
+      },
+      {
+        "name": "stratum",
+        "root": "../stratum/ts"
+      }
     ]
   },
-  "wiki": { "enabled": true, "tokenEnv": "WIKI_OWNER_TOKEN" }
+  "wiki": {
+    "enabled": true,
+    "tokenEnv": "WIKI_OWNER_TOKEN"
+  },
+  "fleet": {
+    "projects": [
+      "2.0",
+      "hub",
+      "forge",
+      "wiki",
+      "main",
+      "trader",
+      "maya",
+      "bench",
+      "cadence",
+      "codegen",
+      "mcp",
+      "ops",
+      "setup",
+      "sm20",
+      "web"
+    ]
+  }
 }
