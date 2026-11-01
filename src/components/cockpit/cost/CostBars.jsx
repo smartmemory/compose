@@ -40,7 +40,7 @@ const GRID = 'grid grid-cols-2 sm:grid-cols-4 gap-x-3 gap-y-1.5';
 function Row({ label, title, testId, children }) {
   return (
     <div className="flex items-start gap-2" data-testid={testId}>
-      <span className={cn('w-12 shrink-0 text-[11px] leading-4', MUTED)} title={title}>{label}</span>
+      <span className={cn('w-16 shrink-0 whitespace-nowrap text-[11px] leading-4', MUTED)} title={title}>{label}</span>
       <div className="min-w-0 flex-1">{children}</div>
     </div>
   );
