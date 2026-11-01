@@ -1056,9 +1056,13 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
         store._save();
         return res.status(409).json({ error: `Gate ${req.params.id} has expired and cannot be resolved` });
       }
-      // Idempotent: already-resolved gates return 200
+      // Idempotent: already-resolved gates return 200. `alreadyResolved` and
+      // `resolvedBy` let a caller tell a second answer from the first
+      // (COMP-NOTIFY-GATES-1); the "resolved now" body below carries neither.
       if (gate.status !== 'pending') {
-        return res.status(200).json({ gateId: req.params.id, gateOutcome: gate.outcome });
+        return res.status(200).json({
+          gateId: req.params.id, gateOutcome: gate.outcome, alreadyResolved: true, resolvedBy: gate.resolvedBy ?? null,
+        });
       }
 
       // AD-4: Server only updates gate state. CLI owns lifecycle transitions.

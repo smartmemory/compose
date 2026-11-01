@@ -3781,6 +3781,8 @@ if (cmd === 'build') {
   // compose gate list [--item <id>] [--status pending|all|resolved] [--format text|json]
   // compose gate resolve <gateId> (--approve|--revise|--kill) [--comment <text>] [--reason <text>]
   //   COMP-PARITY-1: CLI gate resolution — wraps GET/POST /api/vision/gates[/:id/resolve]
+  // compose gate answer < AnswerEvent.json
+  //   COMP-NOTIFY-GATES-1: notify answer handler (AnswerEvent on stdin, ProductReply on stdout)
   // compose gates report [--since 24h|7d|1h|<ISO>] [--feature <FC>]
   //                       [--format text|json] [--rubber-stamp-ms <N>]
   //   COMP-OBS-GATELOG: audit gate log report (Decision 5)
@@ -3855,6 +3857,33 @@ if (cmd === 'build') {
         row.rubber_stamp_pct.toFixed(1) + flag
       )
     }
+    process.exit(0)
+  }
+
+  if (gatesSubcmd === 'answer') {
+    // COMP-NOTIFY-GATES-1: the notify client's command handler for source compose.gate.
+    // One contract AnswerEvent on stdin, one ProductReply (with `close` on accepted) on
+    // stdout. Exit 0 whenever a reply was printed; 2 on input that does not parse; 3 on
+    // a transient store/server failure (no reply, so the client keeps its cursor and retries).
+    const chunks = []
+    for await (const c of process.stdin) chunks.push(c)
+    let event
+    try {
+      event = JSON.parse(Buffer.concat(chunks).toString('utf8'))
+      if (!event || typeof event !== 'object' || Array.isArray(event)) throw new Error('not an object')
+    } catch (e) {
+      console.error(`gate answer: stdin is not one AnswerEvent JSON object (${e.message})`)
+      process.exit(2)
+    }
+    const { answerGate } = await import('../lib/notify-gate.js')
+    let reply
+    try {
+      reply = await answerGate(event)
+    } catch (e) {
+      console.error(`gate answer: ${e.message}`)
+      process.exit(3)
+    }
+    process.stdout.write(`${JSON.stringify(reply)}\n`)
     process.exit(0)
   }
 
@@ -3983,6 +4012,7 @@ if (cmd === 'build') {
   console.error('Usage:')
   console.error('  compose gate list [--item <id>] [--status pending|all|resolved] [--format text|json]')
   console.error('  compose gate resolve <gateId> (--approve|--revise|--kill) [--comment <text>] [--reason <text>]')
+  console.error('  compose gate answer < AnswerEvent.json   (notify answer handler: ProductReply on stdout)')
   console.error('  compose gates report [--since 24h] [--feature FC] [--format text|json] [--rubber-stamp-ms N]')
   process.exit(1)
 
