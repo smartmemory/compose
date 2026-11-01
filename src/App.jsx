@@ -1556,7 +1556,6 @@ function AppInner() {
                       wikiTab={wikiTab}
                       wikiDoc={wikiDoc}
                       onOpenDoc={openItemDoc}
-                      onOpenFile={navigateToWiki}
                       onFocusHandled={handleGateFocusHandled}
                       onOpenFile={navigateToWiki}
                       agentErrors={agentErrors}

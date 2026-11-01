@@ -10,6 +10,7 @@ import { withComposeToken } from '../../lib/compose-api.js';
 import { useConfirmWithReason } from '../ui/DialogProvider.jsx';
 import { graphInitialViewport, largestGroupCentre } from './graphInitialViewport.js';
 import { separateLayout } from './graphSeparate.js';
+import { settleAfterLayout } from './graphAfterLayout.js';
 import GroupFilter from './GroupFilter.jsx';
 
 try { cytoscape.use(cytoscapeDagre); } catch (e) { /* already registered */ }
@@ -824,22 +825,14 @@ export default function GraphView({ items, connections, selectedItemId, onSelect
     });
     cyRef.current = cy;
 
-    // Layout persistence: as soon as fcose completes, override known-node
-    // positions with saved ones (no-op for nodes never seen) and capture
-    // any positions for nodes new to the layout file.
-    cy.one('layoutstop', () => {
-      if (savedPositionsLoadedRef.current) applySavedAndCapture(cy);
-      separateLayout(cy);
-      cy.fit(undefined, 30);
-      applyReadableViewport(cy);
+    // The constructor ran fcose synchronously, so a `layoutstop` listener added now would never fire. Put the saved
+    // positions back (and capture new nodes), separate, fit and set the viewport here, on every rebuild.
+    settleAfterLayout(cy, {
+      savedLoaded: savedPositionsLoadedRef.current,
+      applySavedAndCapture,
+      separateLayout,
+      applyReadableViewport,
     });
-
-    // Fit synchronously after layout (no animation) — fcose with animate:false
-    // may emit layoutstop synchronously during init; this fit is the fallback
-    // for engines that don't.
-    separateLayout(cy);
-    cy.fit(undefined, 30);
-    applyReadableViewport(cy);
 
     // Persist user-dragged positions (leaf nodes only).
     cy.on('dragfree', 'node[status]', (evt) => {
