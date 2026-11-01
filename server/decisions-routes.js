@@ -45,7 +45,7 @@ const shared = new Map(); // ledger file -> source cache of parsed entries
  */
 export function ledgerDecisions(file, { now = Date.now, warn = console.warn, info = console.log } = {}) {
   if (!shared.has(file)) {
-    const cache = createSourceCache('decisions ledger', async () => parseLedger(await readFile(file, 'utf8')), { ttlMs: SOURCE_TTL_MS, now, warn, info, logPrefix: LOG });
+    const cache = createSourceCache('decisions ledger', async () => parseLedger(await readFile(file, 'utf8'), { now: now() }), { ttlMs: SOURCE_TTL_MS, now, warn, info, logPrefix: LOG });
     const memo = new WeakMap(); // entries -> {key, rows}
     shared.set(file, {
       get: () => cache.get(),

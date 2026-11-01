@@ -70,6 +70,25 @@ describe('decisions-ledger', () => {
       assert.deepEqual(es.map((e) => e.day), ['2026-10-31', '2026-10-31']);
     }],
     ['a Z time is UTC', () => assert.equal(new Date(parseLedger('- 2026-10-30T09:26Z session_hop: hop')[0].ts).toISOString(), '2026-10-30T09:26:00.000Z')],
+    ['`HH:MM UTC` (the zone as a word) is UTC, dated or not', () => {
+      const es = parseLedger(['- 2026-10-24 19:26 UTC web-main: launched', '- 19:28 UTC web-main: x'].join('\n'));
+      assert.deepEqual([es.map((e) => new Date(e.ts).toISOString()), es.map((e) => e.who)], [['2026-10-24T19:26:00.000Z', '2026-10-24T19:28:00.000Z'], ['web-main', 'web-main']]);
+    }],
+    ['unmarked UTC writers between local ones never run the day ahead of the next dated line (ledger.md:15129-15324 shape)', () => {
+      const es = parseLedger([
+        '- 2026-10-26 00:00 s1-chat: OWNER (night): x', '23:56 inefficiency-flags: missing-stamp', '- 00:12 codegen-main: V1-2 verified',
+        '- 16:25 cadence-main: ADMIT-1 dispatched', '- 00:32 auto-compact ops-main', '- 16:32 s2-coord: FU-1 LANDED', '00:28 inefficiency-flags: m',
+        '- 16:52 ops-main: LANDED', '- 00:55 codegen-main: V1-4 verified', '- 00:38 s2-coord: OWNER (via s1-chat 08:2x): y',
+        '- 2026-10-26 08:43 s1-chat: OWNER: "time to up the"',
+      ].join('\n'));
+      assert.deepEqual(es.filter((e) => /^00:/.test(e.raw.replace(/^- /, ''))).map((e) => e.day), Array(5).fill('2026-10-26'));
+      assert.ok(es.every((e) => e.day <= '2026-10-26'), es.map((e) => e.day).join(' '));
+    }],
+    ['with no dated line after it, `now` bounds an undated time', () => {
+      const now = new Date(2026, 9, 25, 20, 0).getTime() + 6 * 3600e3; // local, so the row holds in any zone
+      const es = parseLedger(['- 2026-10-25 20:00 s1-chat: a', '- 16:25 cadence-main: b', '- 00:32 auto-compact c', '- 16:32 s2-coord: d', '- 00:28 x-main: e'].join('\n'), { now });
+      assert.ok(es.every((e) => e.ts <= now + 3600e3), es.map((e) => new Date(e.ts).toISOString()).join(' '));
+    }],
     ['a line before any date is skipped; a heading with a date sets the day', () => {
       assert.equal(parseLedger('- 10:00 a: x').length, 0);
       assert.equal(parseLedger('## STATE AT STOP (2026-10-06 ~15:10 CST)\n- 15:20 a: x')[0].day, '2026-10-06');
