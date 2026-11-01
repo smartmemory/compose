@@ -72,6 +72,19 @@ export function ItemFiles({ files, onOpenFile }) {
   );
 }
 
+/** A pending gate's artifact (`design.md`, ...) by name; with the feature code and `onOpenFile` it opens that doc
+ *  (`docs/features/<CODE>/<artifact>`) as ItemFiles does (COMP-WIKI-GRAPH-DOC-LINKS-1). */
+export function GateArtifact({ name, featureCode, onOpenFile }) {
+  if (!name) return null;
+  if (!featureCode || !onOpenFile) return <span className="font-mono">{name}</span>;
+  const path = `docs/features/${featureCode}/${name}`;
+  return (
+    <button type="button" title={path} onClick={() => onOpenFile(path)} data-testid="gate-artifact-link" className="font-mono text-accent hover:underline">
+      {name}
+    </button>
+  );
+}
+
 function RelatedItems({ item, connections, items, onSelect, onDeleteConnection }) {
   const itemMap = new Map(items.map(i => [i.id, i]));
   const related = [];
@@ -661,7 +674,7 @@ export default function ItemDetailPanel({ item, items, connections, gates, onUpd
                         </p>
                         {assessment && assessment.exists && (
                           <p className="text-[10px] text-muted-foreground mb-1">
-                            {artifactName && <span className="font-mono">{artifactName}</span>}
+                            <GateArtifact name={artifactName} featureCode={lc?.featureCode} onOpenFile={onOpenFile} />
                             {artifactName && ': '}
                             {Math.round(assessment.completeness * 100)}% complete
                             {' · '}{assessment.wordCount} words

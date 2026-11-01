@@ -158,7 +158,7 @@ export default function WikiView({ featureCode, workspace, frameBase, client, do
         />
         <div className={`flex-1 min-h-0 ${pane === 'full' ? 'flex flex-col' : pane === 'graph' ? 'relative' : 'overflow-auto p-4'}`}>
           {pane === 'feature' && (code
-            ? <FeatureHub featureId={code} workspace={workspace} />
+            ? <FeatureHub featureId={code} workspace={workspace} onNavigate={onNavigate} hrefFor={hrefFor} />
             : <p className="text-sm text-muted-foreground">Select a feature, or type its code above.</p>)}
           {pane === 'search' && (
             <Search query={search.query} workspace={search.workspace} workspaces={[workspace]} onNavigate={onNavigate} hrefFor={hrefFor} />
