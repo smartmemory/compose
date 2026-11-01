@@ -173,17 +173,18 @@ describe('Day front page (COMP-COCKPIT-RIBBON-TOP-1)', () => {
     global.fetch = vi.fn(async () => ok({}));
     render(<DayView onNavigate={() => {}} />);
     await screen.findByTestId('day-ribbon');
-    const tipsNow = () => screen.queryAllByTestId('alert-mark').map((m) => [m.getAttribute('data-tip'), m.textContent]);
-    await waitFor(() => expect(tipsNow().length).toBe(2));
-    const tips = tipsNow();
-    const sec = tips.find(([t]) => t.startsWith('Alert · test row'));
+    // RESETS-COMPACT-1: both rows are lane-less, so they ride the range bar's alert chip (one open, one cleared) with the same tips.
+    const chip = await screen.findByTestId('ribbon-alert-chip');
+    expect(chip.textContent).toBe('⚠ 1 (+1 cleared)');
+    expect(screen.queryAllByTestId('alert-mark')).toHaveLength(0);
+    const lines = chip.getAttribute('title').split('\n');
+    expect(lines).toHaveLength(2);
+    const sec = lines.find((t) => t.startsWith('Alert · test row'));
     // the page reads its own clock a moment later: either minute is the right one
-    expect([hm(now - 1_800_000), hm(now - 1_800_000 + 10_000)].some((t) => sec[0].includes(t))).toBe(true);
-    expect(sec[1]).toBe('⚠');
-    const out = tips.find(([t]) => t.includes('Claude API outage'));
-    expect(out[0]).toContain(hm(now - 3_600_000));
-    expect(out[0]).toContain(`dismissed ${hm(now - 600_000)}`);
-    expect(out[1]).toBe('✓⚠');
+    expect([hm(now - 1_800_000), hm(now - 1_800_000 + 10_000)].some((t) => sec.includes(t))).toBe(true);
+    const out = lines.find((t) => t.includes('Claude API outage'));
+    expect(out).toContain(hm(now - 3_600_000));
+    expect(out).toContain(`dismissed ${hm(now - 600_000)}`);
   }, 30000);
 
   it('pure helpers: source words and the seat percents the idle fold reads (one row table)', () => {

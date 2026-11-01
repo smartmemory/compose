@@ -188,7 +188,8 @@ const ROWS = [
       const onMain = root.querySelector('[data-testid="lane-main"]').querySelectorAll('[data-testid="alert-mark"]');
       expect(onMain.length).toBe(1);
       expect(onMain[0].getAttribute('data-tip')).toBe('Alert · Gate stalled\nsince today 13:00');
-      expect(count(root, 'alert-mark')).toBe(2);
+      // RESETS-COMPACT-1: the lane-less alert (a3) no longer draws in the AHEAD row, the range bar's alert chip carries it.
+      expect(count(root, 'alert-mark')).toBe(1);
       const x = Number(onMain[0].getAttribute('x'));
       expect(x).toBeGreaterThan(92);
       expect(x).toBeLessThan(1188);

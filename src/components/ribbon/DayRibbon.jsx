@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  axisTicks, causePhrase, clock, etaWord, fmtDur, isLive, layoutLanes, seatShort, tipText, toMs, when, windowTitle, xOf,
+  alertTip, axisTicks, causePhrase, clock, etaWord, fmtDur, isLive, layoutLanes, RESET_CHAR_PX, resetTicks, seatShort, tipText, toMs, when, windowTitle, xOf,
 } from './ribbonLayout.js';
 import { CLUSTER_ABOVE_MS, clusterMarks, MIN_DRAG_MS } from './rangeLogic.js';
 
@@ -20,16 +20,6 @@ const clampX = (x) => Math.min(R.X1, Math.max(R.X0, x));
 const SPAN_CLASS = { review: 's-review', owner: 's-owner', quota: 's-quota', gate: 's-gate', unknown: 's-unknown' };
 const CAUSE_TEXT_CLASS = { review: 'w-review', owner: 'w-owner', quota: 'w-quota', gate: 'w-review', unknown: 'idle' };
 const GLYPH = { land: '✓', deploy: '▲', deployFail: '▲', decide: '⚖︎' };
-const CLEARED_WORD = { ack: 'acknowledged', dismiss: 'dismissed', snooze: 'snoozed', resolved: 'resolved' };
-/**
- * NOTIFY-ACTIONS-1: an alert's tip; a cleared one adds ` · acknowledged|dismissed|snoozed|resolved HH:MM`, on the
- * ribbon's own clock (`clock(t, now)`, the window's zone) like the "since" time beside it, never the browser's zone.
- */
-const alertTip = (a, now) => {
-  const base = tipText({ ...a, kind: 'alert', now });
-  return a.cleared ? `${base} · ${CLEARED_WORD[a.cleared.action] ?? a.cleared.action} ${clock(a.cleared.at, now)}` : base;
-};
-
 const CSS = `
 .day-ribbon{--rb-panel:hsl(var(--card,0 0% 100%));--rb-fg:hsl(var(--foreground));--rb-muted:hsl(var(--muted-foreground));--rb-line:hsl(var(--border));
   --rb-grid:hsl(var(--border)/.6);--rb-future:hsl(var(--muted)/.5);--rb-hover:hsl(var(--muted)/.7);--rb-hl:rgba(37,99,201,.22);
@@ -83,6 +73,10 @@ const CSS = `
 .day-ribbon .idle-t{font-size:12px;fill:var(--rb-muted);font-weight:600}
 .day-ribbon .pin-t{font-size:11.5px;fill:var(--rb-muted)} .day-ribbon .pin-t.hot{fill:var(--rb-alert)}
 .day-ribbon .pin-g{font-size:12px;fill:var(--rb-accent)} .day-ribbon .pin-t.hot .pin-g{fill:var(--rb-alert)}
+.day-ribbon .rt-l{stroke:var(--rb-accent);stroke-width:1.5} .day-ribbon .rt-t{fill:var(--rb-muted)} .day-ribbon .rt-t.next{fill:var(--rb-fg)}
+.day-ribbon .rt-gate .rt-l{stroke:var(--rb-alert)} .day-ribbon .rt-gate .rt-t{fill:var(--rb-alert)}
+.day-ribbon .rt-alert .rt-l{stroke:var(--rb-gate)} .day-ribbon .rt-alert .rt-t{fill:var(--rb-gate)}
+.day-ribbon .rt-merged .rt-l{stroke-width:2.5}
 .day-ribbon .legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:11.5px;color:var(--rb-muted)}
 .day-ribbon .legend span{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
 .day-ribbon .legend svg{width:22px;height:9px}
@@ -126,7 +120,7 @@ function currentSpan(lane, nowMs) {
 }
 
 export default function DayRibbon({
-  data, from, to, now, seats = [], alerts = [], idleOpen = false, onIdleToggle, onLaneOpen, onMarkOpen, onPinOpen, onBandOpen,
+  data, from, to, now, seats = [], alerts = [], showResets = true, idleOpen = false, onIdleToggle, onLaneOpen, onMarkOpen, onPinOpen, onBandOpen,
   flashLane = null, onAxisSelect,
 }) {
   const [tip, setTip] = useState(null);
@@ -209,26 +203,16 @@ export default function DayRibbon({
   const lanesTop = R.AX + 6 + R.GH;
   const lanesEnd = y;
 
-  // AHEAD row: pins in the window, off-window pins at the right edge, and alerts with no lane.
-  const aheadItems = [];
-  pins.forEach((p) => {
-    if (toMs(p.at) > toMs(to)) aheadItems.push({ pin: p, off: true });
-    else if (inWindow(p.at)) aheadItems.push({ pin: p, x: X(p.at) });
-  });
-  const orphanAlerts = alerts.filter((a) => !alertLane(a) && a.since && inWindow(a.since));
-  const lineEnds = [];
-  aheadItems.filter((i) => !i.off).sort((a, b) => a.x - b.x).forEach((i) => {
-    let line = lineEnds.findIndex((end) => i.x >= end);
-    if (line < 0) { line = lineEnds.length; lineEnds.push(0); }
-    i.line = line;
-    lineEnds[line] = i.x + 12 + i.pin.label.length * 6.4 + 10;
-  });
-  let offLine = lineEnds.length;
-  aheadItems.filter((i) => i.off).forEach((i) => { i.line = offLine; offLine += 1; });
-  const hasAhead = aheadItems.length > 0 || orphanAlerts.length > 0;
-  const aheadLines = Math.max(1, lineEnds.length + aheadItems.filter((i) => i.off).length);
+  // AHEAD row (RESETS-COMPACT-1): ONE line of reset ticks. Alerts with no lane are not drawn here any more: the range bar's
+  // alert chip carries them (`orphanAlerts` in ribbonLayout.js).
+  const alertSeats = alerts.filter((a) => a.seat && !a.cleared).map((a) => a.seat);
+  const ahead = showResets ? resetTicks(pins, { from, to, now, trackPx: TRACK, alertSeats }) : { ticks: [], off: [] };
+  const offW = (o) => (o.pin.kind === 'expiry' ? o.label.length * RESET_CHAR_PX + 32 : o.label.length * RESET_CHAR_PX + 38);
+  let offX = R.X1;
+  const offDraw = [...ahead.off].reverse().map((o) => { const w = offW(o); offX -= w; return { ...o, x: offX, w }; }).reverse();
+  const hasAhead = ahead.ticks.length > 0 || offDraw.length > 0;
   const aheadY = lanesEnd + 6;
-  const H = hasAhead ? aheadY + 12 + aheadLines * 17 + 8 : lanesEnd + 8;
+  const H = hasAhead ? aheadY + 12 + 17 + 8 : lanesEnd + 8;
 
   const ticks = axisTicks(from, to, TRACK);
 
@@ -441,24 +425,37 @@ export default function DayRibbon({
         {hasAhead && (
           <>
             <text className="grp" x="12" y={aheadY + 14}>AHEAD</text>
-            {aheadItems.map((it, i) => {
-              const p = it.pin;
-              const ly = aheadY + 14 + it.line * 17;
-              const glyph = p.kind === 'seatReset' ? '↻' : '◇';
-              const t = tipText({ ...p, now });
+            {ahead.ticks.map((t, i) => {
+              const ly = aheadY + 14;
+              const x = R.X0 + t.x;
+              const single = t.count === 1 ? t.items[0] : null;
+              const w = t.label.length * RESET_CHAR_PX + 14;
               return (
-                <g key={`p${i}`} className="pin" data-testid={`pin-${p.kind}`} data-tip={t} tabIndex={0} role="button" aria-label={t.replace('\n', ' ')}
-                  onClick={cb(onPinOpen, p)} onKeyDown={activate((e) => onPinOpen && onPinOpen(p, rectOf(e)))}>
-                  <rect className="hit" x={it.off ? R.X1 - 12 - p.label.length * 6.4 - 20 : it.x - 4} y={ly - 13} width={it.off ? p.label.length * 6.4 + 32 : p.label.length * 6.4 + 24} height="17" />
-                  <text className={`pin-t${p.atGate ? ' hot' : ''}`} x={it.off ? R.X1 : f1(it.x + 3)} y={ly} textAnchor={it.off ? 'end' : 'start'}>
-                    <tspan className="pin-g">{glyph}</tspan> {p.label}{it.off ? ' ▸' : ''}
+                <g key={`p${i}`} className={`pin rt rt-${t.tone}${t.count > 1 ? ' rt-merged' : ''}`} data-testid={`pin-${single ? single.kind : 'seatReset'}`} data-tone={t.tone} data-count={t.count} data-tip={t.tip} tabIndex={0} role="button" aria-label={t.tip.replace(/\n/g, ' ')}
+                  onClick={cb(onPinOpen, t.count > 1 ? { kind: 'cluster', at: t.items[0].at, count: t.count, items: t.items } : single)}
+                  onKeyDown={activate((e) => onPinOpen && onPinOpen(t.count > 1 ? { kind: 'cluster', at: t.items[0].at, count: t.count, items: t.items } : single, rectOf(e)))}>
+                  <rect className="hit" x={f1(x - 3)} y={ly - 13} width={f1(w)} height="17" />
+                  <line className="rt-l" x1={f1(x)} x2={f1(x)} y1={ly - 11} y2={ly + 2} />
+                  <text className={`pin-t rt-t${t.full ? ' next' : ''}`} x={f1(x + 3)} y={ly}>
+                    {single && single.kind === 'expiry' ? <tspan className="pin-g">◇ </tspan> : null}{t.label}
                   </text>
                 </g>
               );
             })}
-            {orphanAlerts.map((a, i) => (
-              <text key={`oa${i}`} className={`tk alert${a.cleared ? ' cleared' : ''}`} data-testid="alert-mark" x={f1(X(a.since))} y={aheadY + 14} textAnchor="middle" data-tip={alertTip(a, now)}>{a.cleared ? '✓⚠' : '⚠'}</text>
-            ))}
+            {offDraw.map((o, i) => {
+              const p = o.pin;
+              const ly = aheadY + 14;
+              const t = tipText({ ...p, now });
+              return (
+                <g key={`o${i}`} className="pin" data-testid={`pin-${p.kind}`} data-tip={t} tabIndex={0} role="button" aria-label={t.replace('\n', ' ')}
+                  onClick={cb(onPinOpen, p)} onKeyDown={activate((e) => onPinOpen && onPinOpen(p, rectOf(e)))}>
+                  <rect className="hit" x={f1(o.x - 4)} y={ly - 13} width={f1(o.w + 4)} height="17" />
+                  <text className={`pin-t${p.atGate ? ' hot' : ''}`} x={R.X1} y={ly} textAnchor="end">
+                    <tspan className="pin-g">{p.kind === 'seatReset' ? '↻' : '◇'}</tspan> {o.label} ▸
+                  </text>
+                </g>
+              );
+            })}
           </>
         )}
 

@@ -5,6 +5,7 @@ import { ribbonAlerts } from '../cockpit/notify/notifyState.js';
 import { publishSeats } from '../cockpit/notify/useNotifyState.js';
 import { useCostMeterProps } from '../vision/HomeFleetGlance.jsx';
 import DayRibbon from './DayRibbon.jsx';
+import { alertTip, orphanAlerts } from './ribbonLayout.js';
 import RangeBar from './RangeBar.jsx';
 import { useRibbonWindow } from './useRibbonWindow.js';
 import { useRibbonFeed } from './useRibbonFeed.js';
@@ -34,6 +35,8 @@ export const EVT = {
   focus: 'compose:ribbon-focus',
 };
 export const IDLE_OPEN_KEY = 'compose:ribbonIdleOpen';
+/** RESETS-COMPACT-1: the viewer's choice to hide the AHEAD resets row, kept per browser. */
+export const RESETS_HIDDEN_KEY = 'compose:ribbonResetsHidden';
 const FLASH_CLEAR_MS = 1700;
 const NO_ALERTS = [];
 
@@ -47,6 +50,7 @@ export function dispatchRibbon(type, detail) {
   return !window.dispatchEvent(new CustomEvent(type, { detail, cancelable: true }));
 }
 
+const readResetsHidden = () => { try { return localStorage.getItem(RESETS_HIDDEN_KEY) === '1'; } catch { return false; } };
 const readIdleOpen = () => { try { return sessionStorage.getItem(IDLE_OPEN_KEY) === '1'; } catch { return false; } };
 
 export function sourceErrorLines(sourceErrors) {
@@ -81,6 +85,25 @@ export default function DayView({ onOpenFleet, onNavigate, active = true }) {
     setIdleOpen(open);
     try { sessionStorage.setItem(IDLE_OPEN_KEY, open ? '1' : '0'); } catch { /* storage denied */ }
   }, []);
+  const [resetsHidden, setResetsHidden] = useState(readResetsHidden);
+  const toggleResets = useCallback(() => {
+    setResetsHidden((hidden) => {
+      try { localStorage.setItem(RESETS_HIDDEN_KEY, hidden ? '0' : '1'); } catch { /* storage denied */ }
+      return !hidden;
+    });
+  }, []);
+  // The AHEAD row's lane-less alert triangles live on this chip now; a click opens the header chip's tray (the full list).
+  const alertChip = useMemo(() => {
+    const rows = orphanAlerts(alerts, win.window.from, win.window.to);
+    if (!rows.length) return null;
+    const open = rows.filter((a) => !a.cleared);
+    return {
+      open: open.length,
+      cleared: rows.length - open.length,
+      tip: rows.map((a) => alertTip(a, win.now).replace('\n', ' ')).join('\n'),
+    };
+  }, [alerts, win.window.from, win.window.to, win.now]);
+  const openAlertTray = useCallback(() => { document.querySelector('[data-testid="notify-chip"]')?.click(); }, []);
   const [meterOpen, setMeterOpen] = useState(false);
   // RIBBON-NOW-1: the WHAT counts open "now" lists here; the phone layout drops the ribbon.
   const phone = usePhoneLayout();
@@ -163,6 +186,10 @@ export default function DayView({ onOpenFleet, onNavigate, active = true }) {
         onPreset={win.preset}
         onStep={win.step}
         onNow={win.goNow}
+        resetsHidden={resetsHidden}
+        onResetsToggle={toggleResets}
+        alertChip={alertChip}
+        onAlertChip={openAlertTray}
       />
       <div className="flex-1 min-h-0 flex flex-col gap-1 relative">
         {feed.loading && (
@@ -180,6 +207,7 @@ export default function DayView({ onOpenFleet, onNavigate, active = true }) {
               now={win.now}
               seats={seats}
               alerts={alerts}
+              showResets={!resetsHidden}
               idleOpen={idleOpen}
               onIdleToggle={() => setIdle(!idleOpen)}
               onLaneOpen={openLane}

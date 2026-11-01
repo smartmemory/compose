@@ -8,7 +8,7 @@
  */
 import { asOfClock, clock, etaWord, fmtDur, toMs, when } from '../ribbonLayout.js';
 
-const GLYPH = { land: '✓', deploy: '▲', deployFail: '▲', decide: '⚖︎' };
+const GLYPH = { land: '✓', deploy: '▲', deployFail: '▲', decide: '⚖︎', seatReset: '↻', expiry: '◇' };
 /** A lane that stands for a named initiative offers the way into its Ops view. */
 export const LANE_INITIATIVE = { '2.0': '2.0' };
 
@@ -18,7 +18,7 @@ const LIST_MAX = 70;
 const clamp = (s, n) => (s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s);
 const sentence = (s) => String(s).trim().replace(/[.\s]+$/, '');
 /** What a mark is called: its title, else its text cut short (an owner-queue decision has no title), else its unit. */
-const titleOf = (m) => m.title || (m.text ? clamp(sentence(m.text), NAME_MAX) : '') || m.unit || '(untitled)';
+const titleOf = (m) => m.title || (m.text ? clamp(sentence(m.text), NAME_MAX) : '') || m.label || m.unit || '(untitled)';
 /** The decision text for the body: dropped when the name already shows all of it, cut when long. */
 const detailOf = (m) => (m.text && (m.title || sentence(m.text).length > NAME_MAX) ? `${clamp(sentence(m.text), BODY_MAX)}.` : '');
 
@@ -57,7 +57,7 @@ function markCard(m, ctx) {
 function clusterCard(c, ctx) {
   const items = [...(c.items || [])].sort((a, b) => toMs(b.at) - toMs(a.at));
   return {
-    kind: 'cluster', tone: 'plain', icon: '', title: `${c.count} events`, name: `near ${when(c.at, ctx.now)}`, sub: '', body: '', id: null,
+    kind: 'cluster', tone: 'plain', icon: '', title: `${c.count} ${items.length && items.every((it) => it.kind === 'seatReset') ? 'resets' : 'events'}`, name: `near ${when(c.at, ctx.now)}`, sub: '', body: '', id: null,
     list: items.map((it) => ({ glyph: GLYPH[it.kind] || '', text: clamp(titleOf(it), LIST_MAX), at: clock(it.at, ctx.now), action: { type: 'card', item: it } })),
     links: [],
   };

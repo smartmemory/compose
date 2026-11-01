@@ -294,3 +294,89 @@ export function tipText(item) {
       return '';
   }
 }
+
+// ---- AHEAD row: one line of reset ticks (COMP-COCKPIT-RIBBON-RESETS-COMPACT-1) ----
+
+/** Ticks whose x is closer than this to the first tick of a run merge into one counted tick (a short label "s1" is ~16 px wide). */
+export const RESET_MERGE_PX = 18;
+/** Width of one character of the row's 11.5 px text, as the row's label-fit rule counts it. */
+export const RESET_CHAR_PX = 6.4;
+
+/** "seat2" -> "s2", "codex" -> "cx", anything else as given: the label beside a reset tick. */
+export function resetTag(pin) {
+  const seat = String(pin?.seat || pin?.label || '');
+  if (/^seat\d+$/i.test(seat)) return seat.replace(/^seat/i, 's');
+  if (/^codex/i.test(seat)) return 'cx';
+  return seat;
+}
+
+/** "in 1.3h" / "in 40m" for the next-reset label. */
+const inWord = (ms) => (ms >= HOUR ? `in ${Math.round((ms / HOUR) * 10) / 10}h` : `in ${Math.max(1, Math.round(ms / MIN))}m`);
+
+/** The full label of a seat's next reset: "seat2 resets in 1.3h" (a seat reset only). */
+export const nextResetLabel = (pin, now) => `${pin.seat || pin.label} resets ${inWord(toMs(pin.at) - toMs(now))}`;
+
+const toneOf = (items, alertSeats) => (items.some((p) => p.atGate) ? 'gate' : items.some((p) => alertSeats.includes(p.seat)) ? 'alert' : 'plain');
+
+/**
+ * What the AHEAD row draws. `pins` are the feed's pins; returns `{ticks, off}`.
+ * `ticks` (in the window, left to right): `{x, items, count, label, full, tone, tip}` where `x` is the offset on a track
+ * `trackPx` wide, `items` the pins it stands for (more than one when ticks merged), `label` the words beside it ("s1",
+ * "cx", the next reset's full words, or a count "x3" when merged), `full` true for a seat's next reset, `tone` one of
+ * `plain` / `gate` (at the quota cap) / `alert` (the seat has an open alert in `alertSeats`), `tip` the hover text (a
+ * merged tick lists every reset it holds). `off` are pins past the window's right edge (`[{pin, label}]`).
+ * A seat's NEXT reset (first one after `now`) gets its full label when it has room before the next tick, else its short tag.
+ */
+export function resetTicks(pins, { from, to, now, trackPx, alertSeats = [] }) {
+  const f = toMs(from);
+  const e = toMs(to);
+  const sorted = [...(pins || [])].sort((a, b) => toMs(a.at) - toMs(b.at));
+  const off = sorted.filter((p) => toMs(p.at) > e).map((p) => ({ pin: p, label: p.kind === 'expiry' ? p.label : resetTag(p) }));
+  const inside = sorted.filter((p) => toMs(p.at) >= f && toMs(p.at) <= e);
+  const next = new Set();
+  const seen = new Set();
+  sorted.forEach((p) => {
+    if (p.kind !== 'seatReset' || toMs(p.at) <= toMs(now) || seen.has(p.seat)) return;
+    seen.add(p.seat);
+    next.add(p);
+  });
+  const runs = [];
+  inside.forEach((p) => {
+    const x = xOf(p.at, f, e, trackPx);
+    const last = runs[runs.length - 1];
+    if (last && x - last.x < RESET_MERGE_PX) last.items.push(p);
+    else runs.push({ x, items: [p] });
+  });
+  const ticks = runs.map((r, i) => {
+    const room = (runs[i + 1] ? runs[i + 1].x : trackPx) - r.x - 6;
+    const p = r.items[0];
+    const count = r.items.length;
+    let label;
+    let full = false;
+    if (count > 1) label = `x${count}`;
+    else if (p.kind === 'expiry') label = p.label;
+    else if (next.has(p) && nextResetLabel(p, now).length * RESET_CHAR_PX <= room) { label = nextResetLabel(p, now); full = true; } else label = resetTag(p);
+    const tip = count > 1
+      ? [`${count} resets ${clock(p.at, now)}`, ...r.items.map((q) => `${q.label} ${clock(q.at, now)}`)].join('\n')
+      : tipText({ ...p, now });
+    return { x: r.x, items: r.items, count, label, full, tone: toneOf(r.items, alertSeats), tip };
+  });
+  return { ticks, off };
+}
+
+/** Alerts with no lane whose `since` falls in the window: the ones the AHEAD row used to draw as triangles, now one chip. */
+export function orphanAlerts(alerts, from, to) {
+  const f = toMs(from);
+  const e = toMs(to);
+  return (alerts || []).filter((a) => !(a.lane ?? a.action?.lane ?? null) && a.since && toMs(a.since) >= f && toMs(a.since) <= e);
+}
+
+const CLEARED_WORD = { ack: 'acknowledged', dismiss: 'dismissed', snooze: 'snoozed', resolved: 'resolved' };
+/**
+ * NOTIFY-ACTIONS-1: an alert's tip; a cleared one adds ` · acknowledged|dismissed|snoozed|resolved HH:MM`, on the
+ * ribbon's own clock (`clock(t, now)`, the window's zone) like the "since" time beside it, never the browser's zone.
+ */
+export const alertTip = (a, now) => {
+  const base = tipText({ ...a, kind: 'alert', now });
+  return a.cleared ? `${base} · ${CLEARED_WORD[a.cleared.action] ?? a.cleared.action} ${clock(a.cleared.at, now)}` : base;
+};

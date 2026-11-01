@@ -9,7 +9,7 @@ import { activePreset, fromLocalInput, PRESET_KEYS, PRESET_LABEL, toLocalInput }
 const BTN = 'rounded-md border border-border bg-card px-2 py-1 text-[12px] text-foreground hover:bg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring disabled:cursor-default disabled:text-muted-foreground disabled:hover:bg-card';
 const INPUT = 'rounded-md border border-border bg-card px-1.5 py-1 text-[12px] text-foreground';
 
-export default function RangeBar({ window: w, following, clampedBecause, onRange, onPreset, onStep, onNow }) {
+export default function RangeBar({ window: w, following, clampedBecause, onRange, onPreset, onStep, onNow, resetsHidden = false, onResetsToggle, alertChip = null, onAlertChip }) {
   const [start, setStart] = useState(toLocalInput(w.from));
   const [end, setEnd] = useState(toLocalInput(w.to));
   useEffect(() => { setStart(toLocalInput(w.from)); setEnd(toLocalInput(w.to)); }, [w.from, w.to]);
@@ -48,6 +48,16 @@ export default function RangeBar({ window: w, following, clampedBecause, onRange
           ))}
         </div>
         <button type="button" className={BTN} data-testid="range-now" disabled={following} onClick={onNow}>Now</button>
+        {onResetsToggle && (
+          <button type="button" className={BTN} aria-pressed={!resetsHidden} data-testid="range-resets-toggle" title={resetsHidden ? 'Show the resets row under the lanes' : 'Hide the resets row under the lanes'} onClick={onResetsToggle}>
+            Resets {resetsHidden ? 'off' : 'on'}
+          </button>
+        )}
+        {alertChip && (
+          <button type="button" className={`${BTN} text-[hsl(var(--warning,32_95%_52%))]`} data-testid="ribbon-alert-chip" title={alertChip.tip} aria-label={alertChip.tip.replace(/\n/g, '. ')} onClick={onAlertChip}>
+            ⚠ {alertChip.open}{alertChip.cleared ? ` (+${alertChip.cleared} cleared)` : ''}
+          </button>
+        )}
       </div>
       {clampedBecause && <p className="m-0 text-[11.5px] text-muted-foreground" role="status" data-testid="range-clamp">{clampedBecause}</p>}
     </div>
