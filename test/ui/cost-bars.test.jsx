@@ -113,11 +113,12 @@ describe('Day money block as bars (COMP-COCKPIT-MONEY-COMPACT-1)', () => {
       expect(label.getAttribute('title')).toBe('1 retired seat hidden: Claude Max');
       expect(screen.getByTestId('cost-meter-retired').className).toContain('sr-only');
     }],
-    ['credit, per-seat note and as-of stay on one footer', () => {
+    ['the footer (credit, per-seat note, as-of) is gone: owner 2026-11-01 "remove the last line"', () => {
       meter();
-      expect(t('cost-meter-foot')).toContain('API credit: reading…');
-      expect(t('cost-meter-foot')).toContain('Dollars per seat: not recorded');
-      expect(t('cost-meter-foot')).toMatch(/as of \d\d:\d\d \(0m ago\)/);
+      expect(screen.queryByTestId('cost-meter-foot')).toBeNull();
+      expect(screen.queryByTestId('cost-meter-per-seat-usd')).toBeNull();
+      expect(screen.queryByTestId('cost-meter-api-credit')).toBeNull();
+      expect(screen.queryByTestId('cost-meter-asof')).toBeNull();
     }],
   ];
   it.each(ROW_TABLE)('%s', (_name, run) => { run(); });

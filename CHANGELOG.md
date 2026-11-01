@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- **COMP-COCKPIT-SEATS-FOOT-1: the Day Seats panel drops its footer.** The "Dollars per seat: not recorded", "API credit: ..." and "as of HH:MM" lines under the seat bars are gone (owner 2026-11-01 "remove the last line"). `CostBars.jsx` only; the Usage page meter keeps its lines.
+
 - **COMP-COCKPIT-PROJECT-MODEL-1 (F1b): a link can name its far end by feature code.** In the merged project graph (`server/project-graph.js`) a connection's `fromCode` / `toCode` wins over its local id and resolves to the item shown for that code (the module owner beats the root), so a link between a compose item and a root-only item resolves across stores. A code no member holds still drops the link. Read-only. `test/project-graph.test.js`: 1 new row (root -> module code, module -> root code, unknown code dropped).
 
 - **COMP-COCKPIT-DECISIONS-1 (F2): owner questions are no longer Decisions rows.** `classifyEntry` now drops an `OWNER "..."` line whose quote is a question with no pick, ruling or instruction (outcome `question`): it ends in or holds a `?`, or opens (or a clause opens) with an interrogative. A quote with a pick word, an imperative clause ("fix them", "use cleaned") or a RULING stays a row, `DECISION D-<id>:` lines stay exact, and `can we ...` is read as a request. On the live ledger 6 owner rows go (including `ledger.md:22509` and `:22517`) and one real decision the old `?` rule had dropped comes back (`:19401`, "go whenever it's ready"), so owner 1600 -> 1595; held-out false decisions stay 0/40 and the design's 40 stay at 1 (`test/decisions-ledger.test.js`: 4 new rows, node 89/89 over decisions-ledger, decisions-routes, ribbon-feed).

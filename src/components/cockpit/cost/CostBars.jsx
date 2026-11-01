@@ -7,7 +7,7 @@
  */
 import React, { useState } from 'react';
 import { cn } from '@/lib/utils.js';
-import { fillPct, seatPairs, sessionChip, RETIRED_NOTE, apiCreditText, DOLLARS_PER_SEAT_NOTE } from './costLogic.js';
+import { fillPct, seatPairs, sessionChip, RETIRED_NOTE } from './costLogic.js';
 
 const MUTED = 'text-muted-foreground';
 const WARN = 'text-[hsl(var(--warning))]';
@@ -76,7 +76,7 @@ function Row({ label, title, testId, children }) {
   );
 }
 
-export default function CostBars({ rows, seats, seatsError, pending, spend, spendLoading, ceiling, barPct, credit, asOfLine, onSeatOpen, onMoneyOpen, flashSeat }) {
+export default function CostBars({ rows, seats, seatsError, pending, spend, spendLoading, ceiling, barPct, onSeatOpen, onMoneyOpen, flashSeat }) {
   const [more, setMore] = useState(false);
   const retired = rows.retired;
   const shown = more && rows.hour ? rows.hour.all : rows.hour?.shown ?? [];
@@ -157,12 +157,6 @@ export default function CostBars({ rows, seats, seatsError, pending, spend, spen
           )}
         </div>
       )}
-
-      <div className={cn('flex flex-wrap gap-x-3 text-[11px] leading-4', MUTED)} data-testid="cost-meter-foot">
-        <span data-testid="cost-meter-per-seat-usd">{DOLLARS_PER_SEAT_NOTE}</span>
-        <span data-testid="cost-meter-api-credit">{apiCreditText(credit)}</span>
-        <span data-testid="cost-meter-asof">{asOfLine}</span>
-      </div>
     </>
   );
 }
