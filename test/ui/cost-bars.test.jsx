@@ -34,25 +34,59 @@ describe('Day money block as bars (COMP-COCKPIT-MONEY-COMPACT-1)', () => {
   afterEach(() => cleanup());
 
   const ROW_TABLE = [
-    ['a seat bar reads "s1 70% · 27m" and the 5h-only caption is not repeated per seat', () => {
+    ['each seat is a PAIR: two bars, left = its 5h value, right = its weekly value, each with its own reset, none stacked or shared', () => {
       meter();
-      expect(t('cost-meter-5h-seat1')).toBe('s1 70% · 27m');
+      const pair = screen.getByTestId('cost-meter-seat-seat1');
+      expect(pair.querySelectorAll('[role="progressbar"]').length).toBe(2);
+      const [left, right] = [...pair.querySelectorAll('[role="progressbar"]')];
+      expect([left.getAttribute('data-height'), right.getAttribute('data-height')]).toEqual(['70', '9']);
+      expect(screen.getByTestId('cost-meter-5h-seat1').contains(left)).toBe(true);
+      expect(screen.getByTestId('cost-meter-fable-seat1').contains(right)).toBe(true);
+      expect([t('cost-meter-5h-seat1'), t('cost-meter-fable-seat1')]).toEqual(['70%27m', '9%6d']);
+      expect(pair.textContent.endsWith('s1')).toBe(true);
       expect(screen.getByTestId('cost-meter').textContent.match(/5h-only/g)).toBeNull();
-      expect(screen.getByTestId('cost-meter-seat-seat1').getAttribute('title')).toContain('Team seats are 5h-only');
+      expect(pair.getAttribute('title')).toContain('Team seats are 5h-only');
+      expect(screen.getAllByRole('progressbar', { hidden: true }).filter((b) => b.closest('[data-testid^="cost-meter-seat-"]')).length).toBe(8);
     }],
-    ['a seat at 100% of its window is red, a seat under it is plain', () => {
+    ['bar heights are used % on one 0-100 scale: a Fable bar at 70% of a 70 cap is 70 tall, not full', () => {
       meter();
-      expect([state('cost-meter-seat-seat1'), state('cost-meter-seat-seat2')]).toEqual(['ok', 'full']);
+      const h = (id) => screen.getByTestId(id).querySelector('[role="progressbar"]').getAttribute('data-height');
+      expect([h('cost-meter-5h-seat2'), h('cost-meter-5h-seat4'), h('cost-meter-fable-seat3'), h('cost-meter-fable-seat4')]).toEqual(['100', '17', '70', '53']);
     }],
-    ['fable bars: used of cap and reset on the label, over pace is amber, at the cap is red, under pace is plain', () => {
+    ['the 5h bar is red at the cap and plain under it, and never amber', () => {
       meter();
-      expect([t('cost-meter-fable-seat1'), t('cost-meter-fable-seat3'), t('cost-meter-fable-seat2')]).toEqual(['s1 9%/100% · 6d', 's3 70%/70% · 6d', 's2 29%/100% · 41.2h']);
+      expect([state('cost-meter-5h-seat1'), state('cost-meter-5h-seat2')]).toEqual(['ok', 'full']);
+    }],
+    ['weekly bar: over pace is amber, under pace is plain, at its cap is red, and its pace/cap tick is on the weekly bar only', () => {
+      meter();
       expect([state('cost-meter-fable-seat4'), state('cost-meter-fable-seat2'), state('cost-meter-fable-seat3')]).toEqual(['ok', 'warn', 'full']);
+      expect(screen.getByTestId('cost-meter-fable-seat3-tick').getAttribute('data-tick')).toBe('70');
+      expect(screen.queryByTestId('cost-meter-fable-seat1-tick')).toBeNull();
+      expect(screen.queryByTestId('cost-meter-5h-seat3-tick')).toBeNull();
+      expect(screen.getByTestId('cost-meter-fable-seat3').getAttribute('title')).toContain('pace line 70%');
     }],
-    ['codex is one small bar reading "7/13 pts"', () => {
+    ['a pace_pct from the reader wins over the cap for the tick position', () => {
+      const withPace = SEATS.map((s) => (s.id === 'seat4' ? { ...s, fable: { ...s.fable, pace_pct: 40 } } : s));
+      meter({ seats: withPace });
+      expect(screen.getByTestId('cost-meter-fable-seat4-tick').getAttribute('data-tick')).toBe('40');
+    }],
+    ['reset labels sit under each bar: 5h 27m / weekly 6d on one seat, 1.5h / 41.2h on another', () => {
       meter();
-      expect(t('cost-meter-codex')).toBe('Codex7/13 pts');
-      expect(state('cost-meter-codex')).toBe('ok');
+      expect([t('cost-meter-5h-seat1').endsWith('27m'), t('cost-meter-fable-seat1').endsWith('6d'), t('cost-meter-5h-seat2').endsWith('1.5h'), t('cost-meter-fable-seat2').endsWith('41.2h')]).toEqual([true, true, true, true]);
+    }],
+    ['Codex is its own pair: a missing 5h or 7d reading is an "n/a" empty track, and the points stay on the hover', () => {
+      meter();
+      expect(screen.getByTestId('cost-meter-codex').querySelectorAll('[role="progressbar"]').length).toBe(2);
+      expect([t('cost-meter-5h-codex'), t('cost-meter-7d-codex')]).toEqual(['n/a\u00a0', 'n/a\u00a0']);
+      expect(screen.getByTestId('cost-meter-5h-codex').querySelector('[role="progressbar"]').getAttribute('data-state')).toBe('empty');
+      expect(screen.getByTestId('cost-meter-codex').getAttribute('title')).toContain('7/13 pts today');
+    }],
+    ['Codex with both readings draws them, and a non-ok state turns the 7d bar amber', () => {
+      const codex = { id: 'codex', label: 'Codex prolite', five_h: { used_pct: 40, resets_at: at(120) }, seven_d: { used_pct: 80, resets_at: at(3 * 1440) }, today_pts: 7, codex_daily: { cap_pct: 13, state: 'warn', off: false } };
+      meter({ seats: [...SEATS.slice(0, 5), codex] });
+      expect([t('cost-meter-5h-codex'), t('cost-meter-7d-codex')]).toEqual(['40%2.0h', '80%3d']);
+      expect(screen.getByTestId('cost-meter-7d-codex').querySelector('[role="progressbar"]').getAttribute('data-state')).toBe('warn');
+      expect(screen.getByTestId('cost-meter-codex').getAttribute('title')).toContain('(warn)');
     }],
     ['the dollars line keeps its summary and bar together, and a warning turns the bar amber', () => {
       meter({ spend: spend(true) });
@@ -74,7 +108,7 @@ describe('Day money block as bars (COMP-COCKPIT-MONEY-COMPACT-1)', () => {
     }],
     ['the retired seat is a hover on the Seats label, not a visible line', () => {
       meter();
-      const label = screen.getByText(/Seats 5h/);
+      const label = screen.getByText(/^Seats/);
       expect(label.getAttribute('title')).toBe('1 retired seat hidden: Claude Max');
       expect(screen.getByTestId('cost-meter-retired').className).toContain('sr-only');
     }],

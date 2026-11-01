@@ -75,6 +75,7 @@ export function meterRows(seats, spend, now) {
     text: s.fable.used_pct === null ? 'no reading' : fmtPct(s.fable.used_pct),
     n: num(s.fable.used_pct),
     capN: num(s.fable.cap_pct),
+    paceN: num(s.fable.pace_pct),
     reset: resetIn(s.fable.resets_at, now),
     cap: s.fable.cap_pct === null ? null : fmtPct(s.fable.cap_pct),
     over: s.fable.over_cap === true,
@@ -85,6 +86,9 @@ export function meterRows(seats, spend, now) {
     cap: codexRow.codex_daily.cap_pct,
     state: codexRow.codex_daily.off ? 'cap off' : codexRow.codex_daily.state ?? '—',
     off: codexRow.codex_daily.off === true,
+    // F2: the Codex row's own windows, when the reader carries them (null n renders the "n/a" track).
+    five: { n: num(codexRow.five_h?.used_pct), reset: resetIn(codexRow.five_h?.resets_at, now) },
+    seven: { n: num(codexRow.seven_d?.used_pct), reset: resetIn(codexRow.seven_d?.resets_at, now) },
   } : null;
   const hour = spend && Array.isArray(spend.spend?.rows) ? { ...cut(spend.spend.rows, LAST_HOUR_SHOWN), all: spend.spend.rows } : null;
   return { seats: seatLines, fable, codex, retired: { count: retired.length, names: retired.map((s) => s.label) }, hour };
@@ -107,4 +111,21 @@ export function fillPct(n, of = 100) {
 export function sessionChip(row) {
   const m = /^\$\s*([\d,.]+)\s+(.+)$/.exec(String(row).trim());
   return m ? `${m[2]} $${m[1]}` : String(row).trim();
+}
+
+/**
+ * COMP-COCKPIT-MONEY-COMPACT-1 F2: one pair per seat, left = 5h used %, right = Fable weekly used %, both on the same 0-100 height
+ * scale. `fable` rows join their seat by id. The weekly tick sits at the pace line (`pace_pct`) or, when the reader prints none, at a
+ * cap below 100. Pure; the view only draws what this returns.
+ */
+export function seatPairs(rows) {
+  const fableBy = new Map(rows.fable.map((f) => [f.id, f]));
+  return rows.seats.map((s) => {
+    const f = fableBy.get(s.id) ?? null;
+    return {
+      id: s.id, label: s.label, name: shortSeat(s.label), seven: s.seven,
+      five: { n: s.five.n, pct: s.five.pct, reset: s.five.reset },
+      week: f ? { n: f.n, pct: f.text, reset: f.reset, over: f.over, cap: f.cap, capN: f.capN, tick: f.paceN ?? (f.capN !== null && f.capN < 100 ? f.capN : null) } : null,
+    };
+  });
 }
