@@ -11,6 +11,7 @@ import { useConfirmWithReason } from '../ui/DialogProvider.jsx';
 import { graphInitialViewport, largestGroupCentre } from './graphInitialViewport.js';
 import { separateLayout } from './graphSeparate.js';
 import { settleAfterLayout } from './graphAfterLayout.js';
+import { seedPositions, STABLE_FCOSE } from './graphStableLayout.js';
 import GroupFilter from './GroupFilter.jsx';
 
 try { cytoscape.use(cytoscapeDagre); } catch (e) { /* already registered */ }
@@ -802,10 +803,13 @@ export default function GraphView({ items, connections, selectedItemId, onSelect
 
     const cy = cytoscape({
       container: containerRef.current,
-      elements,
+      // Same card set, same layout: hashed starting positions plus randomize:false (applies to every GraphView; the
+      // workspace graph's saved positions are put back over it by settleAfterLayout).
+      elements: seedPositions(elements),
       style: stylesheet,
       layout: {
         name: 'fcose',
+        ...STABLE_FCOSE,
         quality: 'proof',
         animate: false,
         fit: false,
