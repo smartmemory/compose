@@ -10,6 +10,10 @@
  * between modules, the one with `<features>/<CODE>/` on disk wins, then config order. The loser is dropped and its
  * edges are re-pointed to the winner. Root-store `track` items titled like a configured module are dropped too:
  * `modules[]` replaces them.
+ *
+ * Cross-store links (F1b): a connection may name an end by feature code (`fromCode` / `toCode`) when that end lives in
+ * another member's store. The code wins over the local id and resolves to the item shown for it (the module owner by the
+ * precedence above). A code that no member holds drops the connection, as an unresolvable id does.
  */
 import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { isAbsolute, join, resolve, sep } from 'node:path';
@@ -102,8 +106,9 @@ export function buildProjectGraph(project, { lane = null } = {}) {
   const seen = new Set();
   for (const m of loaded) {
     for (const c of m.connections) {
-      const fromId = idMap.get(`${m.name}:${c.fromId}`);
-      const toId = idMap.get(`${m.name}:${c.toId}`);
+      const end = (code, id) => (typeof code === 'string' && code ? shownByCode.get(code) : idMap.get(`${m.name}:${id}`));
+      const fromId = end(c.fromCode, c.fromId);
+      const toId = end(c.toCode, c.toId);
       if (!fromId || !toId || fromId === toId) continue;
       const key = `${fromId}|${toId}|${c.type}`;
       if (seen.has(key)) continue;

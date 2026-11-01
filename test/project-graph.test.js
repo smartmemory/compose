@@ -12,7 +12,7 @@ import { cpSync, mkdtempSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { makeWorld } from './helpers/project-world.js';
+import { item, makeWorld } from './helpers/project-world.js';
 import { readProjects } from '../server/project-model.js';
 import { buildProjectGraph, readProjectDoc } from '../server/project-graph.js';
 import { attachProcessRoutes, resolveProcessSources } from '../server/process-routes.js';
@@ -61,6 +61,21 @@ const ROWS = [
     assert.ok(ids.some(([f, t]) => f === 'forge:r1' && t === 'compose:c1'), 'root edge ROOT-1 -> SHARED-1 lands on the compose copy');
     assert.ok(ids.some(([f, t, ty]) => f === 'stratum:x1' && t === 'compose:c3' && ty === 'blocks'), 'compose ENG-5 edge lands on the stratum copy');
     assert.ok(g.connections.some((c) => c.type === 'informs'), 'informs edges survive the merge (GRAPH-EDGES dashed style)');
+  }],
+  ['a link names its far end by feature code: root -> module-only code, module -> root-only code, unknown code dropped', (w) => {
+    w.store(w.forge, {
+      items: [item('r1', 'ROOT-1'), { id: 't1', type: 'track', title: 'compose', status: 'in_progress' }],
+      connections: [{ id: 'rx1', fromId: 'r1', toId: 'c3', toCode: 'COMP-2', type: 'informs' }, { id: 'rx2', fromId: 'r1', toId: 'zz', toCode: 'NOPE-9', type: 'informs' }],
+    });
+    w.store(w.compose, {
+      items: [item('c3', 'COMP-2')],
+      connections: [{ id: 'cx1', fromId: 'c3', toId: 'zz', toCode: 'ROOT-1', type: 'informs' }],
+    });
+    const g = buildProjectGraph(forgeOf(w));
+    const ids = g.connections.map((c) => `${c.fromId}>${c.toId}`);
+    assert.ok(ids.includes('forge:r1>compose:c3'), 'root link to a code only compose holds lands on the compose item');
+    assert.ok(ids.includes('compose:c3>forge:r1'), 'compose link to a root-only code lands on the root item');
+    assert.equal(g.connections.length, 2, 'the NOPE-9 link is dropped');
   }],
   ['a root track titled like a module is dropped; a module with no store contributes nothing', (w) => {
     const g = buildProjectGraph(forgeOf(w));
