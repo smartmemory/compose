@@ -11,6 +11,7 @@ import { useConfirmWithReason } from '../ui/DialogProvider.jsx';
 import { graphInitialViewport, largestGroupCentre } from './graphInitialViewport.js';
 import { separateLayout } from './graphSeparate.js';
 import { settleAfterLayout } from './graphAfterLayout.js';
+import { sortElements, withSeededRandom } from './graphStableLayout.js';
 import GroupFilter from './GroupFilter.jsx';
 
 try { cytoscape.use(cytoscapeDagre); } catch (e) { /* already registered */ }
@@ -800,9 +801,12 @@ export default function GraphView({ items, connections, selectedItemId, onSelect
 
     if (cyRef.current) { cyRef.current.destroy(); cyRef.current = null; }
 
-    const cy = cytoscape({
+    // COMP-GRAPH-STABLE-LAYOUT-1: same card set, same layout. fcose draws all its random numbers inside this constructor,
+    // so a seeded Math.random (restored on return) plus a fixed element order makes the full randomized layout repeat.
+    // Applies to every GraphView; the workspace graph's saved positions still go back over it in settleAfterLayout.
+    const cy = withSeededRandom(() => cytoscape({
       container: containerRef.current,
-      elements,
+      elements: sortElements(elements),
       style: stylesheet,
       layout: {
         name: 'fcose',
@@ -822,7 +826,7 @@ export default function GraphView({ items, connections, selectedItemId, onSelect
         tilingPaddingHorizontal: 12,
       },
       minZoom: 0.1, maxZoom: 4, wheelSensitivity: 0.3, boxSelectionEnabled: false,
-    });
+    }));
     cyRef.current = cy;
 
     // The constructor ran fcose synchronously, so a `layoutstop` listener added now would never fire. Put the saved

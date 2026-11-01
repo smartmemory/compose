@@ -75,7 +75,9 @@ describe('GraphView wiring', () => {
   });
 
   test('settleAfterLayout is called right after the cytoscape constructor, with the saved-position pieces', () => {
-    const after = SRC.slice(SRC.indexOf('const cy = cytoscape({'));
+    const at = SRC.indexOf('cytoscape({'); // also matches the seeded wrapper, withSeededRandom(() => cytoscape({
+    assert.ok(at >= 0, 'GraphView constructs cytoscape');
+    const after = SRC.slice(at);
     const m = after.match(/cyRef\.current = cy;\s*(?:\/\/[^\n]*\s*)*settleAfterLayout\(cy, \{([\s\S]*?)\}\);/);
     assert.ok(m, 'settleAfterLayout(cy, {...}) follows cyRef.current = cy');
     for (const k of ['savedLoaded: savedPositionsLoadedRef.current', 'applySavedAndCapture', 'separateLayout', 'applyReadableViewport']) {
