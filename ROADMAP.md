@@ -1670,7 +1670,7 @@ OWNER DECISION D-0018 (2026-11-02, ops ledger `c798bfe19d52`): Stratum, Cadence 
 | 306b | COMP-SUBAPP-HOST-WORKSPACE-1 | Add the current workspace to the 306a host contract and pass it through to the three rooms. Depends on 306a and 283-286 (COMP-WORKSPACE-VISION, -SESSIONS, -AGENT-SVR, -FILES; all COMPLETE as of 2026-11-02, so only 306a gates it). | PLANNED |
 | 307 | COMP-SUBAPP-ATTENTION-1 | Stratum GatesInbox rows and Compose's own pending gates publish into the cockpit inbox the way Cadence rows already do. One ranked list in the attention sidebar; each row opens the right room. Depends on 306a. | PLANNED |
 | 308 | COMP-SUBAPP-CONTEXT-1 | The context panel shows, for the selected feature, its roadmap item, wiki hub, last Stratum run and Cadence unit, using the three existing data clients. Depends on 306a. | PLANNED |
-| 309 | COMP-SUBAPP-STRAT-AUTHOR-1 | Mount the Stratum FlowBuilder as a "New pipeline" pane, and DagView + StepDrawer in run detail (existing exports, never mounted in Compose). Save through the Stratum data client. Depends on 306a. | PLANNED |
+| 309 | COMP-SUBAPP-STRAT-AUTHOR-1 | Mount the Stratum FlowBuilder as a "New pipeline" pane, and DagView + StepDrawer in run detail (existing exports, never mounted in Compose). Save through the Stratum data client. Depends on 306a. | COMPLETE |
 | 310 | COMP-SUBAPP-CAD-AUTHOR-1 | Mount the Cadence chain/schedule/limit editor (CADENCE-UI-AUTHOR-1) in CadenceView. Fleet vs Cadence ownership of Sessions/Jobs/Daemon: Fleet is Cadence-fed (settled by D-0019, built in 311). Depends on CADENCE-UI-AUTHOR-1 and 306a. | PLANNED |
 | 311 | COMP-SUBAPP-VERB-ROOMS-1 | OWNER DECISION D-0019 (2026-11-02, ops ledger `8261acf06043`): the cockpit organizes by verb, not by product. Retire the Stratum, Cadence and Wiki product tabs once their bricks are placed in the verb rooms: Roadmap gets Cadence ChainDags beside the graph; Build gets Stratum RunsList/RunDetail/DagView, the FlowBuilder pane (309) and the Cadence editor (310); Review gets the one gate inbox (307); Fleet becomes Cadence-fed (SeatStrip, UnitBelt, LiveLanes, Jobs/Daemon/Sessions) and Compose's own FleetView/FleetPanels merge into it; Library gets the WikiView panes. Product identity survives as a source badge on each row, an "open in <app>" link on detail screens, and a by-source filter in Fleet and Review. Depends on 306a, 307, 309, 310. | PLANNED |
 
@@ -1699,10 +1699,10 @@ OWNER DECISION D-0018 (2026-11-02, ops ledger `c798bfe19d52`): Stratum, Cadence 
 - [ ] A source with no data shows an explicit empty state naming the source, never a blank
 
 **309 COMP-SUBAPP-STRAT-AUTHOR-1: acceptance**
-- [ ] `@smartmemory/stratum-ui/builder` `FlowBuilder` (`stratum/ui/src/builder/FlowBuilder.jsx`, existing) mounted as a "New pipeline" pane in `StratumView.jsx`
+- [x] `@smartmemory/stratum-ui/builder` `FlowBuilder` (`stratum/ui/src/builder/FlowBuilder.jsx`, existing) mounted as a "New pipeline" pane in `StratumView.jsx` (compose d63d80a6, pane `src/components/cockpit/StratumBuilderPane.jsx`; post-land review H0 M1 L4, `smart-memory-ops/units/COMP-SUBAPP-STRAT-AUTHOR-1-REVIEW/report.md`)
 - [x] `DagView` + `StepDrawer` (`stratum/ui/src/index.ts` exports, existing) mounted in Stratum run detail (already true, no code: `RunDetail` renders both, `stratum/ui/src/components/RunDetail.tsx:87,91`; live 2026-11-02 on the restarted cockpit, a run opened, step `research` selected, `step-drawer` open, console errors 0; shot `smart-memory-ops/units/COMP-SUBAPP-STRAT-AUTHOR-1/shots/2-run-detail-step-drawer.png`)
-- [ ] A saved pipeline goes through the Stratum data client (`src/lib/clients/stratum.js`, existing) and reopens unchanged
-- [ ] `src/lib/stratum-ui-stub.js` (existing) covers the new exports so the gate builds without the package
+- [x] A saved pipeline goes through the Stratum data client (`src/lib/clients/stratum.js`, existing) and reopens unchanged (route `server/stratum-spec-routes.js`, node 23/23; review M1 reserved-name shadowing fixed in COMP-SUBAPP-STRAT-AUTHOR-FU-1)
+- [x] `src/lib/stratum-ui-stub.js` (existing) covers the new exports so the gate builds without the package (builder exports stubbed in `src/lib/stratum-ui-builder-stub.js` (new); stub build re-run by the review: passed)
 
 **310 COMP-SUBAPP-CAD-AUTHOR-1: acceptance**
 - [ ] The CADENCE-UI-AUTHOR-1 editor mounted in `src/components/cockpit/CadenceView.jsx` (existing)
