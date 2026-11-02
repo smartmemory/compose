@@ -4,3 +4,4 @@ export const DataClientProvider = ({ children }) => children;
 export const RunsList = () => null;
 export const RunDetail = () => null;
 export const GatesInbox = () => null;
+export const NavProvider = ({ children }) => children; // COMP-UI-LINKS-1

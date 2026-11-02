@@ -97,6 +97,7 @@ import { computeBuildStateMap, computeAgentOverlay } from './components/vision/g
 import { withComposeToken } from './lib/compose-api.js';
 import { wsFetch, getAuthMode } from './lib/wsFetch.js';
 import { buildSubappHost, attentionSink, opsLaneOf } from './components/cockpit/subappHost.js';
+import { requestRoomFocus } from './components/cockpit/roomFocus.js';
 import { useWorkspace } from './contexts/WorkspaceContext.jsx';
 
 /*
@@ -1239,6 +1240,32 @@ function AppInner() {
     }
   }, [gates, items]);
 
+  // (navigateToWiki is declared here, ahead of navigationValue, which hands it to rooms as `openFile`; comment above its old spot)
+  const [wikiDoc, setWikiDoc] = useState(null);
+  const navigateToWiki = useCallback((path) => {
+    setWikiDoc(typeof path === 'string' && path ? { path } : null);
+    handleViewChange('wiki');
+  }, [handleViewChange]);
+  useEffect(() => { if (activeView !== 'wiki') setWikiDoc(null); }, [activeView]);
+
+  // COMP-UI-LINKS-1: a cross-room jump (Fleet → a Cadence unit, a room → a Fleet session, a Stratum run → its step). The focus is
+  // filed in roomFocus.js and read by the room when it mounts; 'fleet' is the Sessions tab's Fleet pane.
+  const openRoom = useCallback((room, focus) => {
+    requestRoomFocus(room, focus);
+    if (room === 'fleet') handleOpenFleet();
+    else handleViewChange(room);
+  }, [handleOpenFleet, handleViewChange]);
+
+  // COMP-UI-LINKS-1: a Stratum gate (run id = flow id, step) → the Compose gate for that flow step, pending first. False when
+  // Compose holds no gate for it, so the caller can fall back to Stratum's own Gates pane.
+  const openFlowGate = useCallback((runId, stepId) => {
+    const match = gates.filter((g) => g.flowId === runId && (!stepId || g.stepId === stepId));
+    const gate = match.find((g) => g.status === 'pending') ?? match[match.length - 1];
+    if (!gate) return false;
+    openGate(gate.id);
+    return true;
+  }, [gates, openGate]);
+
   // COMP-COCKPIT-8: navigation context value consumed by EntityLink.
   const navigationValue = useMemo(() => ({
     openItem: handleSelect,
@@ -1246,7 +1273,10 @@ function AppInner() {
     openView: handleViewChange,
     openFeature,
     canNavigate,
-  }), [handleSelect, openGate, handleViewChange, openFeature, canNavigate]);
+    openRoom,
+    openFlowGate,
+    openFile: navigateToWiki,
+  }), [handleSelect, openGate, handleViewChange, openFeature, canNavigate, openRoom, openFlowGate, navigateToWiki]);
 
   const handleCreateConnection = useCallback(async (data) => {
     return createConnection(data);
@@ -1307,12 +1337,6 @@ function AppInner() {
   // (WikiView matches the path to a wiki note: the feature hub's list, then COMP-WIKI-DOC-PATH-LINKS-1's path lookup for any
   // other repo path); without one, or when neither finds the file, the feature hub stays open.
   // `wikiDoc` is a new object per request so the same doc can be asked for twice, and it is dropped once the view leaves the wiki.
-  const [wikiDoc, setWikiDoc] = useState(null);
-  const navigateToWiki = useCallback((path) => {
-    setWikiDoc(typeof path === 'string' && path ? { path } : null);
-    handleViewChange('wiki');
-  }, [handleViewChange]);
-  useEffect(() => { if (activeView !== 'wiki') setWikiDoc(null); }, [activeView]);
   // Double-click on a tree row or graph node. handleSelect toggles, and the two clicks before a dblclick select then deselect,
   // so this sets the selection outright (the wiki view reads the selected item's feature).
   const openItemDoc = useCallback((id) => {

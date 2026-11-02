@@ -24,6 +24,11 @@ const CADENCE_EMPTY = {
   review: { generatedAt: at, reviewMaxH: 24, inReview: [], inReviewByLane: {}, ungrouped: { count: 0, oldestLanded: null }, errors: [] },
   outage: { state: 'ok' },
   diary: { generatedAt: at, entries: [], errors: [] },
+  // COMP-UI-LINKS-1: the Fleet pane is built from Cadence parts, which read these too
+  sessions: { generatedAt: at, scannedAt: null, counts: { busy: 0, idle: 0, unknown: 0 }, sessions: [], errors: [] },
+  jobs: { generatedAt: at, capped: false, skipped: 0, counts: { alive: 0, stalled: 0, 'dead-open': 0, unknown: 0, done: 0 }, jobs: [], errors: [] },
+  gates: { generatedAt: at, gates: [], engines: [], queue: { mode: null, waiting: [] }, lastLaunch: { label: null, ageS: null }, errors: [] },
+  vitals: { generatedAt: at, scannedAt: null, disk: null, spend: null, today: null, ledger: null, errors: [] },
 };
 function stubFetch() {
   wsFetch.mockImplementation(async (url) => {
@@ -35,7 +40,7 @@ function stubFetch() {
     }
     if (String(url) === '/api/project') return ok({ name: 'compose', targetRoot: '/p/forge' });
     // Valid empty bodies: `{}` crashes CadenceView and StratumView into their error boundary (review L1).
-    if (/^\/api\/cadence-ui\/(belt|chains|seats|attention|live|review|outage|diary)/.test(String(url))) return ok(CADENCE_EMPTY[String(url).split('/')[3].split('?')[0]]);
+    if (/^\/api\/cadence-ui\/(belt|chains|seats|attention|live|review|outage|diary|sessions|jobs|gates|vitals)/.test(String(url))) return ok(CADENCE_EMPTY[String(url).split('/')[3].split('?')[0]]);
     if (String(url).startsWith('/api/stratum-ui/')) return ok([]);
     return ok({});
   });

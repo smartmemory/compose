@@ -57,8 +57,14 @@ async function startServer(env, { cadence = true } = {}) {
   return { stop: () => { child.stdin.end(); child.kill(); }, base: `http://127.0.0.1:${port}`, cadence: withCadence === '1' };
 }
 
-function pointFetchAt(base) {
-  vi.stubGlobal('fetch', (url, opts) => realFetch(new URL(String(url), base), opts));
+const NO_CADENCE = () => Promise.resolve(new Response(JSON.stringify({ available: false }), { status: 404, headers: { 'content-type': 'application/json' } }));
+
+// COMP-UI-LINKS-1: these pin the no-Cadence build's Fleet (the cards from GET /api/fleet), so Cadence availability answers no. With
+// Cadence available the pane is built from Cadence's parts instead (comp-ui-links.test.jsx).
+function pointFetchAt(base, route = () => null) {
+  vi.stubGlobal('fetch', (url, opts) => (String(url).includes('/api/cadence-ui/available')
+    ? NO_CADENCE()
+    : route(String(url)) ?? realFetch(new URL(String(url), base), opts)));
 }
 
 describe('Fleet UI on the real route (fixture readers)', () => {
@@ -104,9 +110,7 @@ describe('Fleet UI on the real route (fixture readers)', () => {
       glossary: {},
     };
     resetUnitIndex();
-    vi.stubGlobal('fetch', (url, opts) => (String(url).startsWith('/api/units/index')
-      ? Promise.resolve({ ok: true, json: async () => index })
-      : realFetch(new URL(String(url), srv.base), opts)));
+    pointFetchAt(srv.base, (url) => (url.startsWith('/api/units/index') ? Promise.resolve({ ok: true, json: async () => index }) : null));
     let pane = 'sessions';
     const { rerender } = render(<SessionsView sessions={[]} pane={pane} onPaneChange={(p) => { pane = p; }} />);
     fireEvent.click(await screen.findByTestId('sessions-pane-fleet'));

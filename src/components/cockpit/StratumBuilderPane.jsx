@@ -1,7 +1,20 @@
-import { useCallback, useEffect, useState } from 'react';
+import { Component, useCallback, useEffect, useState } from 'react';
 import { FlowBuilder } from '@smartmemory/stratum-ui/builder';
 
 const NAME = /^[a-z0-9][a-z0-9-]{0,63}$/;
+
+// COMP-UI-LINKS-1: FlowBuilder throws while rendering a document it cannot import, and the cockpit's main view has no panel boundary
+// (only App's safe mode), so a run spec the builder cannot read would take the whole page down. This shows the error instead and
+// clears when another document is opened.
+class BuilderBoundary extends Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(error) { return { error }; }
+  componentDidUpdate(prev) { if (prev.doc !== this.props.doc && this.state.error) this.setState({ error: null }); }
+  render() {
+    if (!this.state.error) return this.props.children;
+    return <div role="alert" data-testid="builder-load-error" className="p-3 text-xs text-red-400">The builder cannot open this spec: {this.state.error.message}</div>;
+  }
+}
 
 /**
  * Stratum tab "New pipeline" pane (COMP-SUBAPP-STRAT-AUTHOR-1): `FlowBuilder` from
@@ -11,7 +24,9 @@ const NAME = /^[a-z0-9][a-z0-9-]{0,63}$/;
  * file, invalid spec) is shown as the server wrote it. Rendered inside StratumView's DataClientProvider,
  * so FlowBuilder's Validate and Plan reach the same client.
  */
-export default function StratumBuilderPane({ client }) {
+// COMP-UI-LINKS-1: `openRun` ({runId, stepId, at}) opens that run's own spec (`client.getRunSpec`, a read) at that step: the
+// Stratum drawer's "builder" link and a run's flow name land here.
+export default function StratumBuilderPane({ client, openRun = null }) {
   const canSave = typeof client?.saveSpec === 'function';
   const canOpen = typeof client?.listSpecs === 'function' && typeof client?.readSpec === 'function';
   const [spec, setSpec] = useState(null); // the latest document FlowBuilder exported, or the one opened
@@ -30,6 +45,22 @@ export default function StratumBuilderPane({ client }) {
   }, [client, canOpen]);
 
   useEffect(() => { refresh(); }, [refresh]);
+
+  const [runOpened, setRunOpened] = useState({ key: 0, stepId: null });
+  useEffect(() => {
+    if (!openRun?.runId) return undefined;
+    let live = true;
+    const read = typeof client?.getRunSpec === 'function' ? client.getRunSpec(openRun.runId) : Promise.reject(new Error('this host cannot read a run spec'));
+    read.then((doc) => {
+      if (!live) return;
+      if (!doc) { setStatus({ tone: 'error', text: `Run ${openRun.runId} has no spec on disk` }); return; }
+      setOpened(doc);
+      setSpec(doc);
+      setRunOpened({ key: openRun.at, stepId: openRun.stepId ?? null });
+      setStatus({ tone: 'ok', text: `Opened run ${openRun.runId}'s spec${openRun.stepId ? ` at ${openRun.stepId}` : ''} (save to keep a copy)` });
+    }, (error) => { if (live) setStatus({ tone: 'error', text: error.message }); });
+    return () => { live = false; };
+  }, [client, openRun]);
 
   const save = async () => {
     const result = await client.saveSpec(name, spec);
@@ -109,7 +140,9 @@ export default function StratumBuilderPane({ client }) {
         </div>
       )}
       <div className="flex-1 min-h-0 flex">
-        <FlowBuilder initialSpec={opened} onChange={setSpec} />
+        <BuilderBoundary doc={opened}>
+          <FlowBuilder key={runOpened.key} initialSpec={opened} initialStepId={runOpened.stepId ?? undefined} onChange={setSpec} />
+        </BuilderBoundary>
       </div>
     </div>
   );

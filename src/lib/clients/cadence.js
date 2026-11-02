@@ -27,6 +27,11 @@ export function createCadenceDataClient() {
     getOutage: () => getJson('/outage'), // COMP-COCKPIT-NOTIFY-CHIP-1: outage_watch's state, for the header chip
     getLive: () => getJson('/live'), // cadence 93222be4 (CADENCE-UI-LIVE-1): the Live pane's lane rows
     getReview: () => getJson('/review'), // cadence be74428 (CADENCE-UI-REVIEW-GATE-1): attention screen's review strip
+    // COMP-UI-LINKS-1: the Fleet room is built from Cadence parts; these are the handler's existing read routes (vitals is cadence 6bdfc58)
+    getSessions: () => getJson('/sessions'),
+    getJobs: () => getJson('/jobs'),
+    getGates: () => getJson('/gates'),
+    getVitals: () => getJson('/vitals'),
     getDiary(query = {}) {
       const params = new URLSearchParams();
       if (query.family) params.set('family', query.family);

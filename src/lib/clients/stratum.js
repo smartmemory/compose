@@ -52,6 +52,13 @@ export function createStratumDataClient() {
       return res.json();
     },
     listGates: () => getJson('/gates'),
+    // COMP-UI-LINKS-1: the builder deep link (drawer "builder", flow name) opens a run's own spec (stratum STRAT-UI-LINKS-1 route, a read)
+    async getRunSpec(runId) {
+      const res = await wsFetch(`${BASE}/runs/${enc(runId)}/spec`, { headers: { accept: 'application/json' } });
+      if (res.status === 404) return null;
+      if (!res.ok) throw new Error(`run ${runId} spec: HTTP ${res.status}`);
+      return res.json();
+    },
     async resolveGate({ runId, stepId, action, note, gateToken }) {
       const res = await wsFetch(`${BASE}/gates/${enc(runId)}/${enc(stepId)}/${action}`, {
         method: 'POST',
