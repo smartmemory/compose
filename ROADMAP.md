@@ -1700,7 +1700,7 @@ OWNER DECISION D-0018 (2026-11-02, ops ledger `c798bfe19d52`): Stratum, Cadence 
 
 **309 COMP-SUBAPP-STRAT-AUTHOR-1: acceptance**
 - [ ] `@smartmemory/stratum-ui/builder` `FlowBuilder` (`stratum/ui/src/builder/FlowBuilder.jsx`, existing) mounted as a "New pipeline" pane in `StratumView.jsx`
-- [ ] `DagView` + `StepDrawer` (`stratum/ui/src/index.ts` exports, existing) mounted in Stratum run detail
+- [x] `DagView` + `StepDrawer` (`stratum/ui/src/index.ts` exports, existing) mounted in Stratum run detail (already true, no code: `RunDetail` renders both, `stratum/ui/src/components/RunDetail.tsx:87,91`; live 2026-11-02 on the restarted cockpit, a run opened, step `research` selected, `step-drawer` open, console errors 0; shot `smart-memory-ops/units/COMP-SUBAPP-STRAT-AUTHOR-1/shots/2-run-detail-step-drawer.png`)
 - [ ] A saved pipeline goes through the Stratum data client (`src/lib/clients/stratum.js`, existing) and reopens unchanged
 - [ ] `src/lib/stratum-ui-stub.js` (existing) covers the new exports so the gate builds without the package
 
