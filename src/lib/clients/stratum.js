@@ -85,7 +85,7 @@ export function createStratumDataClient() {
       const body = await res.json().catch(() => undefined);
       return body && 'ok' in body
         ? body
-        : { ok: false, code: `HTTP_${res.status}`, message: `save failed: HTTP ${res.status}` };
+        : { ok: false, code: `HTTP_${res.status}`, message: body?.error ?? body?.message ?? `save failed: HTTP ${res.status}` };
     },
   };
 }

@@ -13,6 +13,9 @@
  * replaced (409). A save is judged by the engine's own `validateSpec` (`ts/dist/ir/validate.js`)
  * first (422 with its errors) and lands through a temp file: a new name by link() (fails if the name
  * appeared meanwhile), an overwrite by rename(). No engine: save is refused (501), list/read still work.
+ * A NEW name that a build would resolve to a shipped pipeline (bundled, preset, or an init-provisioned
+ * name in a workspace without its own copy) is refused (409 RESERVED_NAME): a file under `pipelines/`
+ * wins over those in `resolveTemplatePath`, so saving it would silently change what `compose build` runs.
  *
  * Mounted AFTER the workspace middleware so `req.workspace.root` names the request's workspace.
  * Skipped in remote mode, like the rest of `/api/stratum-ui` (no Compose auth gate on it).
@@ -20,11 +23,13 @@
 import { existsSync, realpathSync } from 'node:fs';
 import { link, lstat, mkdir, open, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { randomBytes } from 'node:crypto';
 import YAML from 'yaml';
 import { getTargetRoot } from './project-root.js';
+import { resolveTemplatePath } from '../lib/build.js';
+import { INIT_PROVISIONED_SPECS } from '../lib/pipeline-compat.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -80,7 +85,8 @@ async function ownership(file) {
 export function attachStratumSpecRoutes(app, { remote = false, engineDist = resolveStratumEngineDist(), rootFor } = {}) {
   if (remote) return false;
   const validator = engineDist ? loadValidator(engineDist) : null;
-  const dirFor = (req) => join(rootFor ? rootFor(req) : (req.workspace?.root ?? getTargetRoot()), 'pipelines');
+  const rootOf = (req) => (rootFor ? rootFor(req) : (req.workspace?.root ?? getTargetRoot()));
+  const dirFor = (req) => join(rootOf(req), 'pipelines');
   const refuse = (res, status, code, message, extra = {}) => res.status(status).json({ ok: false, code, message, ...extra });
   // Express 4 does not catch a rejected async handler: answer it instead of leaving the request hanging.
   const safe = (fn) => (req, res) => fn(req, res).catch((error) => {
@@ -130,6 +136,20 @@ export function attachStratumSpecRoutes(app, { remote = false, engineDist = reso
     const path = join(dir, `${name}${SUFFIX}`);
     const owner = await ownership(path);
     if (owner === 'foreign') return refuse(res, 409, 'NOT_BUILDER_FILE', `${name}${SUFFIX} exists and was not written by the pipeline builder; pick another name`);
+
+    if (owner === 'absent') {
+      // Ask the resolver builds use (never a copy of its name list): a path outside this workspace's pipelines/ is a shipped pipeline.
+      const resolved = resolveTemplatePath(name, rootOf(req));
+      const shipped = resolve(resolved).startsWith(`${resolve(dir)}${sep}`)
+        ? null
+        : { kind: basename(dirname(resolved)) === 'presets' ? 'preset' : 'bundled', at: resolved };
+      const init = INIT_PROVISIONED_SPECS.includes(name) ? { kind: 'init-provisioned', at: `pipelines/${name}${SUFFIX}` } : null;
+      const owned = shipped ?? init;
+      if (owned) {
+        const message = `${name} is the ${owned.kind} pipeline at ${owned.at}; pick another name`;
+        return refuse(res, 409, 'RESERVED_NAME', message, { error: message });
+      }
+    }
 
     await mkdir(dir, { recursive: true });
     const tmp = join(dir, `.${name}${SUFFIX}.${process.pid}.${randomBytes(4).toString('hex')}.tmp`);

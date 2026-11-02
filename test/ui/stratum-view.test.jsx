@@ -118,6 +118,49 @@ describe('Stratum New pipeline pane', () => {
     expect(screen.getByTestId('builder-save-name').value).toBe('kept');
   });
 
+  const clientWith = (saveSpec) => ({ ...base(), validateSpec: vi.fn(async () => ({ status: 'valid' })), saveSpec });
+
+  it.skipIf(!linked)('L4: Save is enabled for a new pipeline before its first edit, and sends a fresh document', async () => {
+    const client = clientWith(vi.fn(async (name) => ({ ok: true, name, created: true })));
+    render(<StratumView client={client} />);
+    await openPane();
+    expect(screen.getByTestId('builder-save').disabled).toBe(true); // no name yet
+    fireEvent.change(screen.getByTestId('builder-save-name'), { target: { value: 'fresh' } });
+    expect(screen.getByTestId('builder-save').disabled).toBe(false);
+    fireEvent.click(screen.getByTestId('builder-save'));
+    await waitFor(() => expect(client.saveSpec).toHaveBeenCalledTimes(1));
+    expect(client.saveSpec.mock.calls[0][0]).toBe('fresh');
+    expect(client.saveSpec.mock.calls[0][1]).toMatchObject({ version: 1, flows: { entry: 'main' } });
+  });
+
+  it.skipIf(!linked)('L3: Save right after an edit sends the edited spec, not the one before it', async () => {
+    const client = clientWith(vi.fn(async (name) => ({ ok: true, name, created: true })));
+    render(<StratumView client={client} />);
+    await openPane();
+    fireEvent.change(screen.getByTestId('builder-save-name'), { target: { value: 'quick' } });
+    fireEvent.click(screen.getByRole('button', { name: 'New' }));
+    fireEvent.click(screen.getByRole('button', { name: 'add set step' })); // an edit: FlowBuilder exports it 400 ms later
+    fireEvent.click(screen.getByTestId('builder-save')); // well inside the 400 ms debounce
+    await waitFor(() => expect(client.saveSpec).toHaveBeenCalledTimes(1), { timeout: 3000 });
+    const steps = client.saveSpec.mock.calls[0][1].flows.main.steps;
+    expect(steps.length).toBeGreaterThan(0);
+  });
+
+  it.skipIf(!linked)('L2: a rejected saveSpec shows "save failed: <message>" and leaves no unhandled rejection', async () => {
+    const unhandled = vi.fn();
+    process.on('unhandledRejection', unhandled);
+    try {
+      const client = clientWith(vi.fn(async () => { throw new Error('Failed to fetch'); }));
+      render(<StratumView client={client} />);
+      await openPane();
+      fireEvent.change(screen.getByTestId('builder-save-name'), { target: { value: 'down' } });
+      fireEvent.click(screen.getByTestId('builder-save'));
+      expect((await screen.findByRole('alert')).textContent).toBe('save failed: Failed to fetch');
+      await new Promise((r) => setTimeout(r, 50));
+      expect(unhandled).not.toHaveBeenCalled();
+    } finally { process.off('unhandledRejection', unhandled); }
+  });
+
   it.skipIf(!linked)('hides Save and Open when the client lacks those methods, and still renders the builder', async () => {
     render(<StratumView client={base()} />);
     await openPane();
@@ -143,6 +186,12 @@ describe('Compose stratum DataClient builder methods', () => {
     expect(await client.readSpec('nope')).toBeNull();
     const refused = await client.saveSpec('bad', {});
     expect(refused).toMatchObject({ ok: false, code: 'INVALID', message: 'the engine rejected the spec (1 error)' });
+    // L1: a refusal without an `ok` key (workspace middleware 400, Express 413) shows its own text, not "HTTP <status>"
+    vi.stubGlobal('fetch', vi.fn(async (url) => (String(url).includes('/specs/ws')
+      ? { ok: false, status: 400, json: async () => ({ error: 'Unknown workspaceId: nope-xyz', code: 'X' }) }
+      : { ok: false, status: 502, json: async () => { throw new Error('not json'); } })));
+    expect(await createStratumDataClient().saveSpec('ws', {})).toMatchObject({ ok: false, message: 'Unknown workspaceId: nope-xyz' });
+    expect(await createStratumDataClient().saveSpec('gone', {})).toMatchObject({ ok: false, message: 'save failed: HTTP 502' });
     expect(calls).toEqual([
       ['/api/stratum-ui/validate', 'POST'], ['/api/stratum-ui/plan', 'POST'], ['/api/stratum-ui/specs/nope', 'GET'], ['/api/stratum-ui/specs/bad', 'POST'],
     ]);

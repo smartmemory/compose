@@ -112,6 +112,37 @@ describe('stratum spec routes', { skip: !engineDist && 'no built Stratum engine'
     });
   });
 
+  it('refuses a NEW name a shipped pipeline owns (bundled, preset, init-provisioned) with 409 RESERVED_NAME, writing nothing', async () => {
+    const fresh = mkdtempSync(join(scratch, 'stratum-spec-reserved-'));
+    try {
+      await withApp(fresh, async (base) => {
+        for (const [name, kind] of [['research', 'bundled'], ['team-feature', 'preset'], ['build', 'init-provisioned']]) {
+          const res = await post(`${base}/${name}`, { spec: validSpec() });
+          assert.equal(res.status, 409, name);
+          const body = await res.json();
+          assert.equal(body.code, 'RESERVED_NAME', name);
+          assert.match(body.message, new RegExp(`^${name} is the ${kind} pipeline at .*; pick another name$`), name);
+          assert.equal(body.error, body.message);
+        }
+        assert.throws(() => readdirSync(join(fresh, 'pipelines')), /ENOENT/); // nothing created, not even the folder
+        assert.equal((await post(`${base}/my-own-flow`, { spec: validSpec() })).status, 201); // an unowned name still saves
+      });
+    } finally { rmSync(fresh, { recursive: true, force: true }); }
+  });
+
+  it('a marker file already under pipelines/ with a reserved name keeps saving', async () => {
+    const fresh = mkdtempSync(join(scratch, 'stratum-spec-reserved-'));
+    try {
+      mkdirSync(join(fresh, 'pipelines'));
+      writeFileSync(join(fresh, 'pipelines', 'research.stratum.yaml'), `${MARKER}\nversion: 1\n`);
+      await withApp(fresh, async (base) => {
+        const res = await post(`${base}/research`, { spec: validSpec() });
+        assert.equal(res.status, 200);
+        assert.deepEqual(await res.json(), { ok: true, name: 'research', created: false });
+      });
+    } finally { rmSync(fresh, { recursive: true, force: true }); }
+  });
+
   it('refuses an invalid spec with 422 and the engine errors, writing nothing', async () => {
     await withApp(root, async (base) => {
       const bad = validSpec();

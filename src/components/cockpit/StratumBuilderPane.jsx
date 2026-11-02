@@ -1,7 +1,12 @@
-import { Component, useCallback, useEffect, useState } from 'react';
-import { FlowBuilder } from '@smartmemory/stratum-ui/builder';
+import { Component, useCallback, useEffect, useRef, useState } from 'react';
+import { FlowBuilder, buildExport, emptySpec, parseImport } from '@smartmemory/stratum-ui/builder';
 
 const NAME = /^[a-z0-9][a-z0-9-]{0,63}$/;
+// FlowBuilder hands its document out through `onChange` 400 ms after an edit (VALIDATE_DEBOUNCE_MS in the package) and has no flush
+// handle, so Save waits out that window after the last interaction before it reads the document.
+const EXPORT_DEBOUNCE_MS = 400;
+const SETTLE_MS = EXPORT_DEBOUNCE_MS + 100;
+const INTERACTIONS = ['pointerdown', 'pointerup', 'click', 'keydown', 'input', 'change'];
 
 // COMP-UI-LINKS-1: FlowBuilder throws while rendering a document it cannot import, and the cockpit's main view has no panel boundary
 // (only App's safe mode), so a run spec the builder cannot read would take the whole page down. This shows the error instead and
@@ -29,11 +34,14 @@ class BuilderBoundary extends Component {
 export default function StratumBuilderPane({ client, openRun = null }) {
   const canSave = typeof client?.saveSpec === 'function';
   const canOpen = typeof client?.listSpecs === 'function' && typeof client?.readSpec === 'function';
-  const [spec, setSpec] = useState(null); // the latest document FlowBuilder exported, or the one opened
   const [opened, setOpened] = useState(undefined); // FlowBuilder's initialSpec: a new object only on Open
   const [name, setName] = useState('');
   const [saved, setSaved] = useState([]);
   const [status, setStatus] = useState(null); // { tone: 'ok'|'error', text, errors? }
+  const specRef = useRef(null); // always the latest document, for Save to read after the debounce settles
+  const lastTouch = useRef(0); // when the user last interacted with the builder
+  const onBuilderChange = useCallback((doc) => { specRef.current = doc; }, []); // the latest document FlowBuilder exported, or the one opened
+  const setDocument = (doc) => { specRef.current = doc; };
 
   const refresh = useCallback(async () => {
     if (!canOpen) return;
@@ -55,7 +63,7 @@ export default function StratumBuilderPane({ client, openRun = null }) {
       if (!live) return;
       if (!doc) { setStatus({ tone: 'error', text: `Run ${openRun.runId} has no spec on disk` }); return; }
       setOpened(doc);
-      setSpec(doc);
+      setDocument(doc);
       setRunOpened({ key: openRun.at, stepId: openRun.stepId ?? null });
       setStatus({ tone: 'ok', text: `Opened run ${openRun.runId}'s spec${openRun.stepId ? ` at ${openRun.stepId}` : ''} (save to keep a copy)` });
     }, (error) => { if (live) setStatus({ tone: 'error', text: error.message }); });
@@ -63,7 +71,18 @@ export default function StratumBuilderPane({ client, openRun = null }) {
   }, [client, openRun]);
 
   const save = async () => {
-    const result = await client.saveSpec(name, spec);
+    try {
+      const wait = lastTouch.current + SETTLE_MS - Date.now();
+      if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+      // A pane the user never edited exports what a fresh FlowBuilder starts from.
+      const doc = specRef.current ?? buildExport(parseImport(emptySpec()));
+      await finishSave(await client.saveSpec(name, doc));
+    } catch (error) {
+      setStatus({ tone: 'error', text: `save failed: ${error.message}` });
+    }
+  };
+
+  const finishSave = async (result) => {
     if (result.ok) {
       setStatus({ tone: 'ok', text: `${result.created ? 'Saved' : 'Updated'} ${result.name} (pipelines/${result.name}.stratum.yaml)` });
       refresh();
@@ -77,7 +96,7 @@ export default function StratumBuilderPane({ client, openRun = null }) {
       const doc = await client.readSpec(which);
       if (!doc) return setStatus({ tone: 'error', text: `${which} is no longer saved` });
       setOpened(doc);
-      setSpec(doc);
+      setDocument(doc);
       setName(which);
       setStatus({ tone: 'ok', text: `Opened ${which}` });
     } catch (error) {
@@ -86,6 +105,7 @@ export default function StratumBuilderPane({ client, openRun = null }) {
   };
 
   const nameOk = NAME.test(name);
+  const touchHandlers = Object.fromEntries(INTERACTIONS.map((type) => [`on${type[0].toUpperCase()}${type.slice(1)}Capture`, () => { lastTouch.current = Date.now(); }]));
   return (
     <div className="dark h-full flex flex-col min-h-0 bg-background text-foreground" data-testid="stratum-builder-pane">
       {(canSave || canOpen) && (
@@ -104,8 +124,8 @@ export default function StratumBuilderPane({ client, openRun = null }) {
                 type="button"
                 data-testid="builder-save"
                 className="h-7 rounded border border-border px-3 hover:bg-accent disabled:opacity-50"
-                disabled={!spec || !nameOk}
-                title={!spec ? 'Make an edit first' : nameOk ? `Save to pipelines/${name}.stratum.yaml` : 'Lowercase letters, digits and dashes'}
+                disabled={!nameOk}
+                title={nameOk ? `Save to pipelines/${name}.stratum.yaml` : 'Lowercase letters, digits and dashes'}
                 onClick={save}
               >
                 Save
@@ -139,9 +159,9 @@ export default function StratumBuilderPane({ client, openRun = null }) {
           )}
         </div>
       )}
-      <div className="flex-1 min-h-0 flex">
+      <div className="flex-1 min-h-0 flex" {...touchHandlers}>
         <BuilderBoundary doc={opened}>
-          <FlowBuilder key={runOpened.key} initialSpec={opened} initialStepId={runOpened.stepId ?? undefined} onChange={setSpec} />
+          <FlowBuilder key={runOpened.key} initialSpec={opened} initialStepId={runOpened.stepId ?? undefined} onChange={onBuilderChange} />
         </BuilderBoundary>
       </div>
     </div>
