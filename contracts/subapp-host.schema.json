@@ -1,0 +1,58 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://compose.smartmemory.dev/contracts/subapp-host.schema.json",
+  "title": "subapp-host",
+  "version": "1.0.0",
+  "description": "The one object a host app hands every mounted sub-app (Stratum, Cadence, the wiki), through the package's own data provider: `<DataClientProvider host>` (@smartmemory/stratum-ui, @cadence/ui) and `<WikiDataProvider host>` (@wiki/components); each package reads it with `useHost()`, null when it runs standalone. Three parts: what the user has selected, how the rooms are authenticated, and where they publish attention rows. Compose builds it in one place (`src/components/cockpit/subappHost.js` `buildSubappHost`). No workspace field: COMP-SUBAPP-HOST-WORKSPACE-1 (row 306b) adds it.",
+  "_source": "ROADMAP.md row 306a COMP-SUBAPP-HOST-1 (OWNER DECISION D-0018)",
+  "_roadmap": "COMP-SUBAPP-HOST-1",
+  "type": "object",
+  "required": ["selection", "auth", "attention"],
+  "additionalProperties": false,
+  "properties": {
+    "selection": { "$ref": "#/definitions/selection" },
+    "auth": { "$ref": "#/definitions/auth" },
+    "attention": {
+      "description": "The attention sink: a function `(source, rows) => void`. `source` names the publisher (`stratum`, `compose-gates`, ...); `rows` is that publisher's whole current list of inbox rows (each `#/definitions/inboxRow`) and replaces its last one, so an empty list clears it. JSON Schema has no function type: a validator sees a function as no JSON type at all, which is what `not` below checks (data of any JSON type is refused). Row 307 (COMP-SUBAPP-ATTENTION-1) wires publishers and the inbox to it.",
+      "x-callable": "(source: string, rows: InboxRow[]) => void",
+      "not": { "type": ["string", "number", "boolean", "null", "array", "object"] }
+    }
+  },
+  "definitions": {
+    "selection": {
+      "description": "What the user has selected in the host. Every field optional; an empty object means nothing is selected and every room shows everything. Rooms filter by the fields they understand: Stratum runs by `featureCode`; the Cadence belt by `unit`, else `featureCode` (units named after the feature), narrowed by `lane`; the wiki opens `featureCode`'s hub.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "featureCode": { "type": "string", "minLength": 1, "description": "The selected roadmap feature (Compose: the selected item's feature code, else the explicitly focused feature)." },
+        "lane": { "type": "string", "minLength": 1, "description": "The selected fleet lane (Compose: the open project graph's lane)." },
+        "unit": { "type": "string", "minLength": 1, "description": "The selected Cadence unit id. No Compose surface selects one yet; a host that does sets it." }
+      }
+    },
+    "auth": {
+      "description": "What the rooms need to call their data client: nothing they hold themselves. Every call goes through the DataClient the host built, which carries the credential: Compose's three clients (`src/lib/clients/{stratum,cadence,wiki}.js`) send through `wsFetch`, which adds `x-compose-token` in `cockpit` mode and a fresh `Authorization: Bearer` access JWT in `mobile-paired` mode; the wiki's own token never leaves Compose's `/api/wiki` proxy. So this carries no token, only the mode, for a room that wants to say which it is under.",
+      "type": "object",
+      "required": ["mode", "credentials"],
+      "additionalProperties": false,
+      "properties": {
+        "mode": { "enum": ["cockpit", "mobile-paired"], "description": "`wsFetch`'s auth mode (`getAuthMode()`, src/lib/wsFetch.js)." },
+        "credentials": { "const": "data-client", "description": "Where the credential lives: in the host's DataClient, never in the room." }
+      }
+    },
+    "inboxRow": {
+      "description": "One row of the cockpit inbox, the type every source adapter in `src/components/cockpit/notify/notifyLogic.js` produces (header: `{key, kind, severity, title, detail, since, sourceLabel, action}`; e.g. `attentionAdapter`). Extra fields an adapter adds (`seat`, `lane`, `wall`) are allowed.",
+      "type": "object",
+      "required": ["key", "kind", "severity", "title", "sourceLabel"],
+      "properties": {
+        "key": { "type": "string", "minLength": 1, "description": "Stable id; the notify state clears and answers rows by it." },
+        "kind": { "type": "string", "minLength": 1 },
+        "severity": { "enum": ["critical", "warn"], "description": "notifyLogic.js SEVERITY_RANK." },
+        "title": { "type": "string", "minLength": 1 },
+        "detail": { "type": ["string", "null"] },
+        "since": { "type": ["number", "null"], "description": "Age in seconds, null when unknown." },
+        "sourceLabel": { "type": "string", "minLength": 1, "description": "The source's name in the tray (`cadence attention`)." },
+        "action": { "type": ["string", "null"], "description": "The cockpit view a click opens (`cadence`, `fleet`, `inbox`)." }
+      }
+    }
+  }
+}

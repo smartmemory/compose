@@ -3,6 +3,7 @@ import { WikiDataProvider, FeatureHub, Search, Decisions, Sources, AreaDocs, Led
 import './wiki-tab.css';
 import { createWikiDataClient } from '../../lib/clients/wiki.js';
 import PaneSwitcher, { usePaneMemory } from './PaneSwitcher.jsx';
+import { useHostScope } from './HostScopeChip.jsx';
 
 // COMP-COCKPIT-TAB-DEPTH-1: the eight panes sit in a pane switcher, not a tab row. "Open full wiki" is the `full` pane.
 const PANES = [
@@ -71,14 +72,18 @@ const GRAPH_ASPECT_HINT = 'grouping by feature aspect is not built yet';
  * http://127.0.0.1:4001 and :5195 frame it). Navigation is this component's state; the screens never route.
  * `client` is injectable for tests. `docOpen` ({path}, a new object per request) opens that repo doc as a wiki note (the hub's
  * list, else the wiki's path lookup); a doc neither finds leaves the feature hub open, with a console WARNING naming the path.
+ * COMP-SUBAPP-HOST-1: `host` (contracts/subapp-host.schema.json) goes into the provider; its selected feature wins over
+ * `featureCode` (the session's, a display fallback) and opens that feature's hub. The chip's × goes back to Search, unscoped.
  */
-export default function WikiView({ featureCode, workspace, frameBase, client, docOpen }) {
+export default function WikiView({ featureCode: fallbackCode, host, workspace, frameBase, client, docOpen }) {
   const dataClient = useMemo(() => client ?? createWikiDataClient(), [client]);
-  const [code, setCode] = useState(featureCode ?? '');
-  const [draft, setDraft] = useState(featureCode ?? '');
+  const scoped = useHostScope(host, 'wiki');
+  const featureCode = scoped.scope ? (scoped.cleared ? '' : scoped.scope.value) : (fallbackCode ?? '');
+  const [code, setCode] = useState(featureCode);
+  const [draft, setDraft] = useState(featureCode);
   // COMP-COCKPIT-WIKI-TAB-ORDER-1: open on Search, the widest view; a caller deep-linking a feature (featureCode) still lands on its hub.
   const [pane, setPane] = usePaneMemory('wiki', featureCode ? 'feature' : 'search', PANE_KEYS, !!featureCode);
-  const [search, setSearch] = useState({ query: featureCode ?? '', workspace: undefined });
+  const [search, setSearch] = useState({ query: featureCode, workspace: undefined });
   const [framePath, setFramePath] = useState(null);
   const [area, setArea] = useState('');
   const [areaDraft, setAreaDraft] = useState('');
@@ -86,13 +91,18 @@ export default function WikiView({ featureCode, workspace, frameBase, client, do
   const [graphParams, setGraphParamsState] = useState(graphParamsRef.current);
   const colorMode = useHtmlColorMode();
 
-  // A new selected feature replaces the code and prefills Search with it.
+  // A new selected feature replaces the code and prefills Search with it; after mount it also opens that feature's hub
+  // (COMP-SUBAPP-HOST-1), and the chip's clear empties both and goes back to Search.
+  const mounted = useRef(false);
   useEffect(() => {
-    if (!featureCode) return;
+    const first = !mounted.current;
+    mounted.current = true;
+    if (!featureCode && !scoped.cleared) return;
     setCode(featureCode);
     setDraft(featureCode);
     setSearch({ query: featureCode, workspace: undefined });
-  }, [featureCode]);
+    if (!first) setPane(featureCode ? 'feature' : 'search');
+  }, [featureCode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const docPath = docOpen?.path;
@@ -154,7 +164,7 @@ export default function WikiView({ featureCode, workspace, frameBase, client, do
   const frameable = typeof window === 'undefined' || window.location.hostname === '127.0.0.1';
 
   return (
-    <WikiDataProvider client={dataClient}>
+    <WikiDataProvider client={dataClient} host={scoped.host}>
       <div className="wiki-tab h-full flex flex-col min-h-0" data-testid="wiki-view">
         <PaneSwitcher
           panes={PANES}
@@ -172,6 +182,7 @@ export default function WikiView({ featureCode, workspace, frameBase, client, do
                   onChange={(e) => setDraft(e.target.value)}
                 />
               </form>
+              {scoped.chip}
               <span className="ml-auto text-xs text-muted-foreground">{workspace}</span>
             </>
           )}

@@ -95,7 +95,8 @@ import SettingsModal from './components/vision/shared/SettingsModal.jsx';
 import GateNotificationBar from './components/vision/shared/GateNotificationBar.jsx';
 import { computeBuildStateMap, computeAgentOverlay } from './components/vision/graphOpsOverlays.js';
 import { withComposeToken } from './lib/compose-api.js';
-import { wsFetch } from './lib/wsFetch.js';
+import { wsFetch, getAuthMode } from './lib/wsFetch.js';
+import { buildSubappHost, attentionSink } from './components/cockpit/subappHost.js';
 import { useWorkspace } from './contexts/WorkspaceContext.jsx';
 
 /*
@@ -283,6 +284,8 @@ function CockpitView({
   reachableViewKeys,
   // COMP-COCKPIT-PROJECT-MODEL-1: the open project graph ({project, lane} | null) and the project model
   projectFocus, projectModel,
+  // COMP-SUBAPP-HOST-1: the host object for the mounted sub-apps (subappHost.js)
+  subappHost,
 }) {
   switch (activeView) {
     case 'day':
@@ -418,14 +421,14 @@ function CockpitView({
     case 'process':
       return <ProcessView />;
     case 'stratum':
-      return <StratumView />;
+      return <StratumView host={subappHost} />;
     case 'cadence':
-      return <CadenceView />;
+      return <CadenceView host={subappHost} />;
     case 'wiki': {
       // The selected item's feature wins over the session's (COMPOSE-WIKI-TAB-1).
       const item = selectedItemId ? items.find(i => i.id === selectedItemId) : null;
       const code = item?.featureCode || item?.feature_code || item?.lifecycle?.featureCode || featureCode || '';
-      return <WikiView featureCode={code} workspace={wikiTab?.workspace} frameBase={wikiTab?.frameBase} docOpen={wikiDoc} />;
+      return <WikiView featureCode={code} host={subappHost} workspace={wikiTab?.workspace} frameBase={wikiTab?.frameBase} docOpen={wikiDoc} />;
     }
     case 'qa-scope':
       return <QaScopeView featureCode={featureCode} />;
@@ -691,6 +694,11 @@ function AppInner() {
   // COMP-COCKPIT-PROJECT-MODEL-1: a lane or project link opens that project's merged graph (a read, never a switch).
   const projectFocus = useProjectFocus();
   const { model: projectModel } = useProjectModel();
+  // COMP-SUBAPP-HOST-1: the one host object the Stratum, Cadence and Wiki rooms receive (contracts/subapp-host.schema.json).
+  const selectedItem = useMemo(() => (selectedItemId ? items.find((i) => i.id === selectedItemId) ?? null : null), [items, selectedItemId]);
+  const subappHost = useMemo(() => buildSubappHost({
+    selectedItem, focusedFeature, lane: projectFocus?.lane, authMode: getAuthMode(), attention: attentionSink.publish,
+  }), [selectedItem, focusedFeature, projectFocus?.lane]);
 
   const handleProjectSwitch = useCallback(async (newPath) => {
     try {
@@ -1568,6 +1576,7 @@ function AppInner() {
                       reachableViewKeys={reachableViews(VIEW_KEYS, availability)}
                       projectFocus={projectFocus}
                       projectModel={projectModel}
+                      subappHost={subappHost}
                     />
                     )}
                   </PanelErrorBoundary>

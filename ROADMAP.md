@@ -1675,10 +1675,10 @@ OWNER DECISION D-0018 (2026-11-02, ops ledger `c798bfe19d52`): Stratum, Cadence 
 | 311 | COMP-SUBAPP-VERB-ROOMS-1 | OWNER DECISION D-0019 (2026-11-02, ops ledger `8261acf06043`): the cockpit organizes by verb, not by product. Retire the Stratum, Cadence and Wiki product tabs once their bricks are placed in the verb rooms: Roadmap gets Cadence ChainDags beside the graph; Build gets Stratum RunsList/RunDetail/DagView, the FlowBuilder pane (309) and the Cadence editor (310); Review gets the one gate inbox (307); Fleet becomes Cadence-fed (SeatStrip, UnitBelt, LiveLanes, Jobs/Daemon/Sessions) and Compose's own FleetView/FleetPanels merge into it; Library gets the WikiView panes. Product identity survives as a source badge on each row, an "open in <app>" link on detail screens, and a by-source filter in Fleet and Review. Depends on 306a, 307, 309, 310. | PLANNED |
 
 **306a COMP-SUBAPP-HOST-1: acceptance**
-- [ ] One host contract file defines selection (feature code, lane, unit), auth and attention sink (no workspace field yet): `contracts/subapp-host.schema.json` (new)
-- [ ] `src/components/cockpit/StratumView.jsx` (existing) and `src/components/cockpit/CadenceView.jsx` (existing) pass the host into their package `DataClientProvider`
-- [ ] `src/components/cockpit/WikiView.jsx` (existing) passes the host into `WikiDataProvider`
-- [ ] Each room filters to the selection when one is set, and shows everything when none is set
+- [x] One host contract file defines selection (feature code, lane, unit), auth and attention sink (no workspace field yet): `contracts/subapp-host.schema.json` (new) (compose `contracts/subapp-host.schema.json`; `test/subapp-host.test.js:21`, node 8/8: Compose's host validates, a workspace field, a token in auth and a data value as the sink are refused)
+- [x] `src/components/cockpit/StratumView.jsx` (existing) and `src/components/cockpit/CadenceView.jsx` (existing) pass the host into their package `DataClientProvider` (`DataClientProvider host`, read by `useHost()`: stratum e1ca769, cadence a72a07d; `test/ui/subapp-host.test.jsx:37`, `:75`)
+- [x] `src/components/cockpit/WikiView.jsx` (existing) passes the host into `WikiDataProvider` (`WikiDataProvider host`, read by `useHost()`: wiki 82bc1c2; `test/ui/subapp-host.test.jsx:106`)
+- [x] Each room filters to the selection when one is set, and shows everything when none is set (Stratum runs by feature, the Cadence Board by unit / feature / lane, the wiki opens the feature's hub; a "filtered to" chip with a one-click clear per room; `test/ui/subapp-host.test.jsx:37,47,75,83,106,119`, vitest 6/6)
 - [ ] Done = select a feature in Roadmap, switch to Stratum, only that feature's runs show (golden flow on the live cockpit)
 
 **306b COMP-SUBAPP-HOST-WORKSPACE-1: acceptance**
