@@ -75,7 +75,7 @@ if (process.env.ROUTE_BASELINE_TRACE) {
     const { TS_MCP_BIN, TS_CLI_BIN } = await import('./stratum-test-bin.js');
     const cases = [
       ['bundled-build', 'test/build-team-fable-astra.test.js', 'off real preset wave'],
-      ['carry', 'test/integration/build-wave-golden.test.js', 'two carried waves'],
+      ['carry', 'test/integration/build-wave-golden-core.test.js', 'two carried waves'],
       ['gsd-input', 'test/gsd-stuck-resume-golden.test.js', 'same-file edit loop|skips completed T01'],
     ];
     for (const [name, test, pattern] of cases) {
