@@ -1723,12 +1723,13 @@ OWNER DECISION D-0018 (2026-11-02, ops ledger `c798bfe19d52`): Stratum, Cadence 
 
 ## COMP-PROJECT: Project model v2 (groups and dependency graph) — PLANNED
 
-OWNER DECISION D-0023 (2026-11-02, ops ledger `9b7b85599264`): a folder is a project, with virtual groupings to sort its repos, and a PyCharm-style dependency graph among its sub-folders, repos and modules. Builds on the existing project model (COMP-COCKPIT-PROJECT-MODEL-1: `server/project-model.js:2-13` reads `<root>/.compose/compose.json` `project: {name, label, lanes, modules}`), never a second registry. Sequenced after the COMP-SUBAPP cycle (306a-311) unless a lane slot is free; neither row may delay it. 313 depends on 312 (nodes are colored and filtered by group).
+OWNER DECISION D-0023 (2026-11-02, ops ledger `9b7b85599264`): a folder is a project, with virtual groupings to sort its repos, and a PyCharm-style dependency graph among its sub-folders, repos and modules. Builds on the existing project model (COMP-COCKPIT-PROJECT-MODEL-1: `server/project-model.js:2-13` reads `<root>/.compose/compose.json` `project: {name, label, lanes, modules}`), never a second registry. Sequenced after the COMP-SUBAPP cycle (306a-311) unless a lane slot is free; neither row may delay it. 313 depends on 312 (nodes are colored and filtered by group); 314 depends on 312 and 313.
 
 | # | Feature | Description | Status |
 |---|---------|-------------|--------|
 | 312 | COMP-PROJECT-GROUPS-1 | Virtual groups in the project manifest: `project.groups` maps a group name to repo/module names; a repo in no group shows under "ungrouped"; no per-group store. Project home shows groups as collapsible rows; Roadmap, Fleet and Sessions filter by group. The `project` block gets a contract file (today it is documented only in a code comment). A `group` column in `SmartMemory/WORKSPACE.md` and `forge/ANATOMY.md`. Seed groups in the acceptance list (owner saw the SmartMemory table, not yet confirmed final). | PLANNED |
 | 313 | COMP-PROJECT-GRAPH-1 | Dependency graph among a project's sub-folders, repos and modules, extracted deterministically (no LLM): pyproject/uv workspace deps and `[tool.uv.sources]`, package.json deps on sibling packages, Python/JS imports of sibling packages, docker-compose `depends_on`/`image:` refs, CI workflow checkouts of sibling repos, symlinks (`cadence -> forge`). Each edge carries its evidence (file:line). Rendered on the project home with the group filter, nodes colored by group, cycles highlighted; reuse the roadmap-graph render where it fits (`server/project-graph.js` merges feature graphs, not repo dependencies). Also served as JSON for the wiki and Cadence. Depends on 312. | PLANNED |
+| 314 | COMP-PROJECT-FEATURE-REPOS-1 | Owner addendum (2026-11-02 14:0x, "features need to be related to projects, repos, modules do they not?"): each feature keeps its owning module (its folder's store, as `server/project-graph.js` stamps `module` today) and gains `repos: [...]` DERIVED, never typed: from its units' repo lists in `smart-memory-ops/units/<ID>/` and from commits and CHANGELOG entries that cite the feature code (reuse the `lib/xref-*.js` code parsing where it fits). Group follows from the owning module. The 313 repo graph overlays feature edges (feature -> repos it touches) so "what does 2.0 touch" is a filter. Feature detail shows owner module, touched repos and group. Same graph contract as 313. Depends on 312 and 313. | PLANNED |
 
 **312 COMP-PROJECT-GROUPS-1: acceptance**
 - [ ] `contracts/project-manifest.schema.json` (new) defines the existing `project` block (`name`, `label`, `lanes`, `modules`) plus `groups` (name to member names); `server/project-model.js` (existing) validates against it and reports an unknown member visibly
@@ -1744,3 +1745,9 @@ OWNER DECISION D-0023 (2026-11-02, ops ledger `9b7b85599264`): a folder is a pro
 - [ ] A read-only route serves a project's graph as JSON (for the wiki and Cadence)
 - [ ] Project home renders the graph with the group filter, nodes colored by group, cycles highlighted, each edge's evidence on hover/click
 - [ ] Done = the SmartMemory project's graph shows the service -> core and service -> common edges with file:line evidence, and any cycle it finds is highlighted
+
+**314 COMP-PROJECT-FEATURE-REPOS-1: acceptance**
+- [ ] `contracts/project-dep-graph.schema.json` (313) gains feature nodes (code, owner module, group) and feature -> repo edges, each with its evidence (unit file or commit sha / CHANGELOG file:line)
+- [ ] A deterministic deriver reads unit repo lists and feature-code citations in commits and CHANGELOGs; no field is hand-typed, and a feature with no evidence shows "no repos found", never an empty silent list
+- [ ] The graph has a feature filter: picking a feature (or a release tag such as 2.0) highlights the repos it touches
+- [ ] Item detail (`src/components/vision/ItemDetailPanel.jsx`, existing) shows owner module, touched repos and group
