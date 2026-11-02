@@ -1720,3 +1720,27 @@ OWNER DECISION D-0018 (2026-11-02, ops ledger `c798bfe19d52`): Stratum, Cadence 
 - [ ] Each row carries a source badge; detail screens carry an "open in <app>" link; Fleet and Review have a by-source filter
 - [ ] `StratumView.jsx`, `CadenceView.jsx`, `WikiView.jsx` (existing) deleted or reduced to the placed bricks
 - [ ] Standalone Stratum, Cadence and wiki shells untouched
+
+## COMP-PROJECT: Project model v2 (groups and dependency graph) — PLANNED
+
+OWNER DECISION D-0023 (2026-11-02, ops ledger `9b7b85599264`): a folder is a project, with virtual groupings to sort its repos, and a PyCharm-style dependency graph among its sub-folders, repos and modules. Builds on the existing project model (COMP-COCKPIT-PROJECT-MODEL-1: `server/project-model.js:2-13` reads `<root>/.compose/compose.json` `project: {name, label, lanes, modules}`), never a second registry. Sequenced after the COMP-SUBAPP cycle (306a-311) unless a lane slot is free; neither row may delay it. 313 depends on 312 (nodes are colored and filtered by group).
+
+| # | Feature | Description | Status |
+|---|---------|-------------|--------|
+| 312 | COMP-PROJECT-GROUPS-1 | Virtual groups in the project manifest: `project.groups` maps a group name to repo/module names; a repo in no group shows under "ungrouped"; no per-group store. Project home shows groups as collapsible rows; Roadmap, Fleet and Sessions filter by group. The `project` block gets a contract file (today it is documented only in a code comment). A `group` column in `SmartMemory/WORKSPACE.md` and `forge/ANATOMY.md`. Seed groups in the acceptance list (owner saw the SmartMemory table, not yet confirmed final). | PLANNED |
+| 313 | COMP-PROJECT-GRAPH-1 | Dependency graph among a project's sub-folders, repos and modules, extracted deterministically (no LLM): pyproject/uv workspace deps and `[tool.uv.sources]`, package.json deps on sibling packages, Python/JS imports of sibling packages, docker-compose `depends_on`/`image:` refs, CI workflow checkouts of sibling repos, symlinks (`cadence -> forge`). Each edge carries its evidence (file:line). Rendered on the project home with the group filter, nodes colored by group, cycles highlighted; reuse the roadmap-graph render where it fits (`server/project-graph.js` merges feature graphs, not repo dependencies). Also served as JSON for the wiki and Cadence. Depends on 312. | PLANNED |
+
+**312 COMP-PROJECT-GROUPS-1: acceptance**
+- [ ] `contracts/project-manifest.schema.json` (new) defines the existing `project` block (`name`, `label`, `lanes`, `modules`) plus `groups` (name to member names); `server/project-model.js` (existing) validates against it and reports an unknown member visibly
+- [ ] `server/project-model.js` (existing) returns each project's groups with an "ungrouped" bucket for members in no group
+- [ ] Project home (`src/components/vision/ProjectsHome.jsx`, existing) shows groups as collapsible rows
+- [ ] Roadmap, Fleet and Sessions views filter by group
+- [ ] `SmartMemory/WORKSPACE.md` and `forge/ANATOMY.md` (existing) carry a `group` column matching the manifests
+- [ ] Seeded (SmartMemory, owner to confirm): Platform = core, common, service, client, sdk-js, mcp, worker, connectors, graph, capture; Apps = studio, web, admin, viewer, insights, hub, smartmemory-hub, adapt-ui; Products = maya, video, comply, monitor; Integrations = cc-skills, obsidian; Quality = e2e, benchmarks, agent-security-evals; Ops and docs = ops, infra, docs, wiki, design-system; Frozen = hub-base44, wiki-base44, gtm, slides, video-editor, test. Forge: cockpit = compose; execution = stratum, cadence; knowledge = wiki (once moved)
+
+**313 COMP-PROJECT-GRAPH-1: acceptance**
+- [ ] `contracts/project-dep-graph.schema.json` (new): nodes (member, group, path), edges (from, to, kind, evidence `file:line`)
+- [ ] Deterministic extractors, one per edge kind (pyproject/uv, package.json, imports, docker-compose, CI checkouts, symlinks), each with a test on a fixture project
+- [ ] A read-only route serves a project's graph as JSON (for the wiki and Cadence)
+- [ ] Project home renders the graph with the group filter, nodes colored by group, cycles highlighted, each edge's evidence on hover/click
+- [ ] Done = the SmartMemory project's graph shows the service -> core and service -> common edges with file:line evidence, and any cycle it finds is highlighted
