@@ -698,8 +698,8 @@ function AppInner() {
   // COMP-SUBAPP-HOST-1: the one host object the Stratum, Cadence and Wiki rooms receive (contracts/subapp-host.schema.json).
   const selectedItem = useMemo(() => (selectedItemId ? items.find((i) => i.id === selectedItemId) ?? null : null), [items, selectedItemId]);
   const subappHost = useMemo(() => buildSubappHost({
-    selectedItem, focusedFeature, lane: opsLaneOf(projectModel, projectFocus?.lane), authMode: getAuthMode(), attention: attentionSink.publish,
-  }), [selectedItem, focusedFeature, projectFocus?.lane, projectModel]);
+    selectedItem, focusedFeature, lane: opsLaneOf(projectModel, projectFocus?.lane, projectFocus?.project), authMode: getAuthMode(), attention: attentionSink.publish,
+  }), [selectedItem, focusedFeature, projectFocus?.lane, projectFocus?.project, projectModel]);
 
   const handleProjectSwitch = useCallback(async (newPath) => {
     try {

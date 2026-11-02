@@ -153,7 +153,6 @@ describe.skipIf(!stratumLinked)('Stratum room links', () => {
     const { unmount } = render(withNav(nav, <StratumView client={c} />));
     fireEvent.click(await screen.findByTitle('feature FEAT-1'));
     expect(nav.openFeature).toHaveBeenCalledWith('FEAT-1');
-    expect(c.listRuns.mock.calls[0][0]?.filter ?? DEFAULT_RUNS_FILTER).toBe(DEFAULT_RUNS_FILTER);
     unmount();
 
     const none = navValue({ canNavigate: vi.fn(() => false) });
@@ -161,6 +160,19 @@ describe.skipIf(!stratumLinked)('Stratum room links', () => {
     const chip = await screen.findByTitle('feature FEAT-1');
     expect(chip.tagName).not.toBe('BUTTON');
     expect(chip.tagName).not.toBe('A');
+  });
+
+  it('a runs request with a filter selects that tab, and one with none returns to the default (the host owns the filter prop)', async () => {
+    const c = client();
+    render(withNav(navValue(), <StratumView client={c} />));
+    await screen.findByText(/flow-r1/);
+    const selectedTab = () => screen.getAllByRole('tab').filter((t) => t.getAttribute('aria-selected') === 'true' && t.getAttribute('aria-label') !== null).map((t) => t.getAttribute('aria-label'));
+    expect(DEFAULT_RUNS_FILTER).toBe('recent');
+    expect(selectedTab()).toEqual(['active, last 7 d']);
+    act(() => requestRoomFocus('stratum', { kind: 'runs', filter: 'failed' }));
+    await waitFor(() => expect(selectedTab()).toEqual(['failed']));
+    act(() => requestRoomFocus('stratum', { kind: 'runs' }));
+    await waitFor(() => expect(selectedTab()).toEqual(['active, last 7 d']));
   });
 
   it('a gate jump opens the Compose gate when Compose holds one, else Stratum\'s Gates pane', async () => {

@@ -97,6 +97,22 @@ describe('per-room selection (COMP-SUBAPP-HOST-1-FU-1)', () => {
     assert.equal(opsLaneOf(null, 'main'), 'main');
     assert.equal(opsLaneOf({ configured: false }, 'main'), 'main');
   });
+
+  test('two projects sharing a lane id: the focused project picks its own ops lane; no project keeps first-match and warns', () => {
+    const shared = { configured: true, projects: [{ id: 'a' }, { id: 'b' }], laneIndex: { 'a-ops': { project: 'a', laneIds: ['main'] }, 'b-ops': { project: 'b', laneIds: ['main', 'extra'] } } };
+    const warnings = [];
+    const warn = (m) => warnings.push(m);
+    assert.equal(opsLaneOf(shared, 'main', 'b', warn), 'b-ops');
+    assert.equal(opsLaneOf(shared, 'main', 'a', warn), 'a-ops');
+    assert.deepEqual(warnings, []);
+    assert.equal(opsLaneOf(shared, 'main', null, warn), 'a-ops');
+    assert.equal(warnings.length, 1);
+    assert.match(warnings[0], /"main" is owned by 2 projects \(a, b\)/);
+    assert.equal(opsLaneOf(shared, 'main', 'c', warn), 'a-ops');
+    assert.equal(warnings.length, 2);
+    assert.equal(opsLaneOf(shared, 'extra', 'a', warn), 'b-ops');
+    assert.equal(warnings.length, 2);
+  });
 });
 
 describe('attention sink', () => {

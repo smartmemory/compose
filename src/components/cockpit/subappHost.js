@@ -43,16 +43,23 @@ export function buildSubappHost({ selectedItem, focusedFeature, lane, unit, auth
 /**
  * The ops lane Cadence's belt knows for a host lane (the project model's lane id: `compose`, `ops:forge`, `choir`, or a
  * SmartMemory lane), or null when it has none (then Cadence gets no lane filter). With no configured model the legacy
- * lanes already are ops lanes, so the lane passes through.
+ * lanes already are ops lanes, so the lane passes through. Two projects can each own a lane id: with `project` (the focused
+ * project's name) the id resolves inside that project first. With no project, or none of its ops lanes holding the id, the
+ * first owner across projects wins as before, and an id more than one project owns logs a WARNING naming them.
  */
-export function opsLaneOf(model, lane) {
+export function opsLaneOf(model, lane, project = null, warn = (m) => console.warn(m)) {
   const id = str(lane);
   if (!id) return null;
   if (!(model?.configured === true && Array.isArray(model.projects))) return id;
   if (id.startsWith('ops:')) return str(id.slice(4));
   const index = model.laneIndex ?? {};
-  const owner = Object.keys(index).find((ops) => index[ops]?.laneIds?.includes(id));
-  return owner ?? (index[id] ? id : null);
+  const owners = Object.keys(index).filter((ops) => index[ops]?.laneIds?.includes(id));
+  const focused = str(project);
+  const inProject = focused ? owners.filter((ops) => index[ops]?.project === focused) : [];
+  if (inProject.length) return inProject[0];
+  const projects = [...new Set(owners.map((ops) => index[ops]?.project))];
+  if (projects.length > 1) warn(`opsLaneOf: lane "${id}" is owned by ${projects.length} projects (${projects.join(', ')}) and no focused project holds it, using ${owners[0]} from ${projects[0]}`);
+  return owners[0] ?? (index[id] ? id : null);
 }
 
 /** `selection` narrowed to the fields `room` filters by, so what its provider gets is exactly what its chip names. */
