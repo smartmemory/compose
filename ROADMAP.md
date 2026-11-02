@@ -1662,23 +1662,29 @@ and pipeline machinery — no new lifecycle model. COMP-PARITY-1 ships first (un
 
 ## COMP-SUBAPP: Sub-apps mounted in Compose — PLANNED
 
-OWNER DECISION D-0018 (2026-11-02, ops ledger `c798bfe19d52`): Stratum, Cadence and the wiki stay standalone AND mount in Compose. Order is the row order below (306-311, then FORGE-DS-1). 311 is OWNER DECISION D-0019 (ops ledger `8261acf06043`). Choir: no row (owner: parked for now). Cross-links: CADENCE-UI-AUTHOR-1 (F50, `cadence/docs/ROADMAP.md`), FORGE-DS-1 (`forge/ROADMAP.md`).
+OWNER DECISION D-0018 (2026-11-02, ops ledger `c798bfe19d52`): Stratum, Cadence and the wiki stay standalone AND mount in Compose. Order is the row order below (306a-311, then FORGE-DS-1; 306b waits on 283-286 and runs when they land). 311 is OWNER DECISION D-0019 (ops ledger `8261acf06043`). Choir: no row (owner: parked for now). Cross-links: CADENCE-UI-AUTHOR-1 (F50, `cadence/docs/ROADMAP.md`), FORGE-DS-1 (`forge/ROADMAP.md`).
 
 | # | Feature | Description | Status |
 |---|---------|-------------|--------|
-| 306 | COMP-SUBAPP-HOST-1 | One host contract every mounted sub-app receives: current workspace, selected item (feature code, lane, unit), auth, an attention sink. The cockpit views pass it into each package's data provider; the rooms filter to the selection. Depends on 283-286 (COMP-WORKSPACE-VISION, -SESSIONS, -AGENT-SVR, -FILES). | PLANNED |
-| 307 | COMP-SUBAPP-ATTENTION-1 | Stratum GatesInbox rows and Compose's own pending gates publish into the cockpit inbox the way Cadence rows already do. One ranked list in the attention sidebar; each row opens the right room. Depends on 306. | PLANNED |
-| 308 | COMP-SUBAPP-CONTEXT-1 | The context panel shows, for the selected feature, its roadmap item, wiki hub, last Stratum run and Cadence unit, using the three existing data clients. Depends on 306. | PLANNED |
-| 309 | COMP-SUBAPP-STRAT-AUTHOR-1 | Mount the Stratum FlowBuilder as a "New pipeline" pane, and DagView + StepDrawer in run detail (existing exports, never mounted in Compose). Save through the Stratum data client. Depends on 306. | PLANNED |
-| 310 | COMP-SUBAPP-CAD-AUTHOR-1 | Mount the Cadence chain/schedule/limit editor (CADENCE-UI-AUTHOR-1) in CadenceView. Fleet vs Cadence ownership of Sessions/Jobs/Daemon: Fleet is Cadence-fed (settled by D-0019, built in 311). Depends on CADENCE-UI-AUTHOR-1 and 306. | PLANNED |
-| 311 | COMP-SUBAPP-VERB-ROOMS-1 | OWNER DECISION D-0019 (2026-11-02, ops ledger `8261acf06043`): the cockpit organizes by verb, not by product. Retire the Stratum, Cadence and Wiki product tabs once their bricks are placed in the verb rooms: Roadmap gets Cadence ChainDags beside the graph; Build gets Stratum RunsList/RunDetail/DagView, the FlowBuilder pane (309) and the Cadence editor (310); Review gets the one gate inbox (307); Fleet becomes Cadence-fed (SeatStrip, UnitBelt, LiveLanes, Jobs/Daemon/Sessions) and Compose's own FleetView/FleetPanels merge into it; Library gets the WikiView panes. Product identity survives as a source badge on each row, an "open in <app>" link on detail screens, and a by-source filter in Fleet and Review. Depends on 306, 307, 309, 310. | PLANNED |
+| 306a | COMP-SUBAPP-HOST-1 | One host contract every mounted sub-app receives: selected item (feature code, lane, unit), auth, an attention sink. The cockpit views pass it into each package's data provider; the rooms filter to the selection. No workspace plumbing (that is 306b). No dependency. Split from 306 on 2026-11-02 (s1-chat) so the COMP-SUBAPP rows can start without 283-286. | PLANNED |
+| 306b | COMP-SUBAPP-HOST-WORKSPACE-1 | Add the current workspace to the 306a host contract and pass it through to the three rooms. Depends on 306a and 283-286 (COMP-WORKSPACE-VISION, -SESSIONS, -AGENT-SVR, -FILES). | PLANNED |
+| 307 | COMP-SUBAPP-ATTENTION-1 | Stratum GatesInbox rows and Compose's own pending gates publish into the cockpit inbox the way Cadence rows already do. One ranked list in the attention sidebar; each row opens the right room. Depends on 306a. | PLANNED |
+| 308 | COMP-SUBAPP-CONTEXT-1 | The context panel shows, for the selected feature, its roadmap item, wiki hub, last Stratum run and Cadence unit, using the three existing data clients. Depends on 306a. | PLANNED |
+| 309 | COMP-SUBAPP-STRAT-AUTHOR-1 | Mount the Stratum FlowBuilder as a "New pipeline" pane, and DagView + StepDrawer in run detail (existing exports, never mounted in Compose). Save through the Stratum data client. Depends on 306a. | PLANNED |
+| 310 | COMP-SUBAPP-CAD-AUTHOR-1 | Mount the Cadence chain/schedule/limit editor (CADENCE-UI-AUTHOR-1) in CadenceView. Fleet vs Cadence ownership of Sessions/Jobs/Daemon: Fleet is Cadence-fed (settled by D-0019, built in 311). Depends on CADENCE-UI-AUTHOR-1 and 306a. | PLANNED |
+| 311 | COMP-SUBAPP-VERB-ROOMS-1 | OWNER DECISION D-0019 (2026-11-02, ops ledger `8261acf06043`): the cockpit organizes by verb, not by product. Retire the Stratum, Cadence and Wiki product tabs once their bricks are placed in the verb rooms: Roadmap gets Cadence ChainDags beside the graph; Build gets Stratum RunsList/RunDetail/DagView, the FlowBuilder pane (309) and the Cadence editor (310); Review gets the one gate inbox (307); Fleet becomes Cadence-fed (SeatStrip, UnitBelt, LiveLanes, Jobs/Daemon/Sessions) and Compose's own FleetView/FleetPanels merge into it; Library gets the WikiView panes. Product identity survives as a source badge on each row, an "open in <app>" link on detail screens, and a by-source filter in Fleet and Review. Depends on 306a, 307, 309, 310. | PLANNED |
 
-**306 COMP-SUBAPP-HOST-1: acceptance**
-- [ ] One host contract file defines workspace, selection (feature code, lane, unit), auth and attention sink: `contracts/subapp-host.schema.json` (new)
+**306a COMP-SUBAPP-HOST-1: acceptance**
+- [ ] One host contract file defines selection (feature code, lane, unit), auth and attention sink (no workspace field yet): `contracts/subapp-host.schema.json` (new)
 - [ ] `src/components/cockpit/StratumView.jsx` (existing) and `src/components/cockpit/CadenceView.jsx` (existing) pass the host into their package `DataClientProvider`
 - [ ] `src/components/cockpit/WikiView.jsx` (existing) passes the host into `WikiDataProvider`
 - [ ] Each room filters to the selection when one is set, and shows everything when none is set
 - [ ] Done = select a feature in Roadmap, switch to Stratum, only that feature's runs show (golden flow on the live cockpit)
+
+**306b COMP-SUBAPP-HOST-WORKSPACE-1: acceptance**
+- [ ] `contracts/subapp-host.schema.json` (306a) gains the current workspace
+- [ ] `StratumView.jsx`, `CadenceView.jsx`, `WikiView.jsx` (existing) pass the workspace from the Compose workspace provider (COMP-WORKSPACE-HTTP, existing) into the host
+- [ ] Switching workspace in the cockpit re-scopes all three rooms
 
 **307 COMP-SUBAPP-ATTENTION-1: acceptance**
 - [ ] Stratum `GatesInbox` rows (`stratum/ui/src/components/GatesInbox.tsx`, existing) publish through the host attention sink
