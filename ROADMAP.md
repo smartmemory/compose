@@ -1666,7 +1666,7 @@ OWNER DECISION D-0018 (2026-11-02, ops ledger `c798bfe19d52`): Stratum, Cadence 
 
 | # | Feature | Description | Status |
 |---|---------|-------------|--------|
-| 306a | COMP-SUBAPP-HOST-1 | One host contract every mounted sub-app receives: selected item (feature code, lane, unit), auth, an attention sink. The cockpit views pass it into each package's data provider; the rooms filter to the selection. No workspace plumbing (that is 306b). No dependency. Split from 306 on 2026-11-02 (s1-chat) so the COMP-SUBAPP rows can start without 283-286. | PLANNED |
+| 306a | COMP-SUBAPP-HOST-1 | One host contract every mounted sub-app receives: selected item (feature code, lane, unit), auth, an attention sink. The cockpit views pass it into each package's data provider; the rooms filter to the selection. No workspace plumbing (that is 306b). No dependency. Split from 306 on 2026-11-02 (s1-chat) so the COMP-SUBAPP rows can start without 283-286. | COMPLETE |
 | 306b | COMP-SUBAPP-HOST-WORKSPACE-1 | Add the current workspace to the 306a host contract and pass it through to the three rooms. Depends on 306a and 283-286 (COMP-WORKSPACE-VISION, -SESSIONS, -AGENT-SVR, -FILES; all COMPLETE as of 2026-11-02, so only 306a gates it). | PLANNED |
 | 307 | COMP-SUBAPP-ATTENTION-1 | Stratum GatesInbox rows and Compose's own pending gates publish into the cockpit inbox the way Cadence rows already do. One ranked list in the attention sidebar; each row opens the right room. Depends on 306a. | PLANNED |
 | 308 | COMP-SUBAPP-CONTEXT-1 | The context panel shows, for the selected feature, its roadmap item, wiki hub, last Stratum run and Cadence unit, using the three existing data clients. Depends on 306a. | PLANNED |
@@ -1679,7 +1679,7 @@ OWNER DECISION D-0018 (2026-11-02, ops ledger `c798bfe19d52`): Stratum, Cadence 
 - [x] `src/components/cockpit/StratumView.jsx` (existing) and `src/components/cockpit/CadenceView.jsx` (existing) pass the host into their package `DataClientProvider` (`DataClientProvider host`, read by `useHost()`: stratum e1ca769, cadence a72a07d; `test/ui/subapp-host.test.jsx:37`, `:75`)
 - [x] `src/components/cockpit/WikiView.jsx` (existing) passes the host into `WikiDataProvider` (`WikiDataProvider host`, read by `useHost()`: wiki 82bc1c2; `test/ui/subapp-host.test.jsx:106`)
 - [x] Each room filters to the selection when one is set, and shows everything when none is set (Stratum runs by feature, the Cadence Board by unit / feature / lane, the wiki opens the feature's hub; a "filtered to" chip with a one-click clear per room; `test/ui/subapp-host.test.jsx:37,47,75,83,106,119`, vitest 6/6)
-- [ ] Done = select a feature in Roadmap, switch to Stratum, only that feature's runs show (golden flow on the live cockpit)
+- [x] Done = select a feature in Roadmap, switch to Stratum, only that feature's runs show (golden flow on the live cockpit) (2026-11-02, live cockpit :5195 after restart on compose 3def991b, Playwright system Chrome 1440x900 dark: COMP-TUI-4 selected in Roadmap Tree; Stratum showed 5 of 5 runs, every one COMP-TUI-4's per `GET /api/stratum-ui/runs`; the chip's clear showed all 515; Cadence Board and Wiki hub scoped to it; console errors 0; shots in `smart-memory-ops/units/COMP-SUBAPP-HOST-1/shots/`)
 
 **306b COMP-SUBAPP-HOST-WORKSPACE-1: acceptance**
 - [ ] `contracts/subapp-host.schema.json` (306a) gains the current workspace
