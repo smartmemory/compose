@@ -1657,3 +1657,48 @@ and pipeline machinery — no new lifecycle model. COMP-PARITY-1 ships first (un
 | # | Feature | Description | Status |
 |---|---------|-------------|--------|
 | 1 | COMP-OBS-STATS-1 | Usage statistics view (slice 1): cockpit Usage tab over the dispatch ledger (collectDispatchMetrics day buckets + build-history join): KPI tiles with three-state cost provenance, period comparison, day-bucketed stacked SVG chart, by-model table with an Unknown row | COMPLETE |
+
+---
+
+## COMP-SUBAPP: Sub-apps mounted in Compose — PLANNED
+
+OWNER DECISION D-0018 (2026-11-02, ops ledger `c798bfe19d52`): Stratum, Cadence and the wiki stay standalone AND mount in Compose. Order is the row order below. Choir: no row (owner: parked for now). Cross-links: CADENCE-UI-AUTHOR-1 (F50, `cadence/docs/ROADMAP.md`), FORGE-DS-1 (`forge/ROADMAP.md`).
+
+| # | Feature | Description | Status |
+|---|---------|-------------|--------|
+| 306 | COMP-SUBAPP-HOST-1 | One host contract every mounted sub-app receives: current workspace, selected item (feature code, lane, unit), auth, an attention sink. The cockpit views pass it into each package's data provider; the rooms filter to the selection. Depends on 283-286 (COMP-WORKSPACE-VISION, -SESSIONS, -AGENT-SVR, -FILES). | PLANNED |
+| 307 | COMP-SUBAPP-ATTENTION-1 | Stratum GatesInbox rows and Compose's own pending gates publish into the cockpit inbox the way Cadence rows already do. One ranked list in the attention sidebar; each row opens the right room. Depends on 306. | PLANNED |
+| 308 | COMP-SUBAPP-CONTEXT-1 | The context panel shows, for the selected feature, its roadmap item, wiki hub, last Stratum run and Cadence unit, using the three existing data clients. Depends on 306. | PLANNED |
+| 309 | COMP-SUBAPP-STRAT-AUTHOR-1 | Mount the Stratum FlowBuilder as a "New pipeline" pane, and DagView + StepDrawer in run detail (existing exports, never mounted in Compose). Save through the Stratum data client. Depends on 306. | PLANNED |
+| 310 | COMP-SUBAPP-CAD-AUTHOR-1 | Mount the Cadence chain/schedule/limit editor (CADENCE-UI-AUTHOR-1) in CadenceView, and settle Fleet vs Cadence ownership of Sessions/Jobs/Daemon (one owner; the pick is noted in this row). Depends on CADENCE-UI-AUTHOR-1 and 306. | PLANNED |
+
+**306 COMP-SUBAPP-HOST-1: acceptance**
+- [ ] One host contract file defines workspace, selection (feature code, lane, unit), auth and attention sink: `contracts/subapp-host.schema.json` (new)
+- [ ] `src/components/cockpit/StratumView.jsx` (existing) and `src/components/cockpit/CadenceView.jsx` (existing) pass the host into their package `DataClientProvider`
+- [ ] `src/components/cockpit/WikiView.jsx` (existing) passes the host into `WikiDataProvider`
+- [ ] Each room filters to the selection when one is set, and shows everything when none is set
+- [ ] Done = select a feature in Roadmap, switch to Stratum, only that feature's runs show (golden flow on the live cockpit)
+
+**307 COMP-SUBAPP-ATTENTION-1: acceptance**
+- [ ] Stratum `GatesInbox` rows (`stratum/ui/src/components/GatesInbox.tsx`, existing) publish through the host attention sink
+- [ ] Compose pending gates (`src/components/vision/DashboardView.jsx` `PendingGates`, existing) publish through the same sink
+- [ ] Both arrive as typed rows next to Cadence's `attentionAdapter` rows in `src/components/cockpit/notify/notifyLogic.js` (existing)
+- [ ] `src/components/vision/AttentionQueueSidebar.jsx` (existing) shows one ranked list across all three sources
+- [ ] Each row opens its room (Stratum gate, Compose gate, Cadence unit)
+
+**308 COMP-SUBAPP-CONTEXT-1: acceptance**
+- [ ] `src/components/cockpit/ContextPanel.jsx` (existing) shows, for the selected feature: roadmap item, wiki hub, last Stratum run, Cadence unit
+- [ ] Data comes only from `src/lib/clients/stratum.js`, `cadence.js`, `wiki.js` (existing); no new fetch paths
+- [ ] A source with no data shows an explicit empty state naming the source, never a blank
+
+**309 COMP-SUBAPP-STRAT-AUTHOR-1: acceptance**
+- [ ] `@smartmemory/stratum-ui/builder` `FlowBuilder` (`stratum/ui/src/builder/FlowBuilder.jsx`, existing) mounted as a "New pipeline" pane in `StratumView.jsx`
+- [ ] `DagView` + `StepDrawer` (`stratum/ui/src/index.ts` exports, existing) mounted in Stratum run detail
+- [ ] A saved pipeline goes through the Stratum data client (`src/lib/clients/stratum.js`, existing) and reopens unchanged
+- [ ] `src/lib/stratum-ui-stub.js` (existing) covers the new exports so the gate builds without the package
+
+**310 COMP-SUBAPP-CAD-AUTHOR-1: acceptance**
+- [ ] The CADENCE-UI-AUTHOR-1 editor mounted in `src/components/cockpit/CadenceView.jsx` (existing)
+- [ ] `src/lib/cadence-ui-stub.js` (existing) covers the new exports
+- [ ] Fleet (`src/components/cockpit/FleetView.jsx`, existing) vs Cadence ownership of Sessions/Jobs/Daemon decided, one owner, the pick written into this row
+- [ ] The non-owner surface links to the owner instead of rendering its own copy
