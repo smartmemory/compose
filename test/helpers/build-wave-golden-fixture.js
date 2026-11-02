@@ -32,6 +32,7 @@ import { makeFakeCodexProject } from './fake-codex-project.js';
 import { git } from './consumer-wave-fixture.js';
 import { assertOutsideRealRepo } from './git-sandbox.js';
 import { pollUntil } from './poll-until.js';
+import { readFlowSnapshot } from '../../lib/flow-state.js';
 
 export const ROUTING_INPUTS = ['route_mode', 'routing_start', 'routing_root', 'routing_plan_intent', 'routing_continuation'];
 export const CODE = 'D3-GOLDEN-1';
@@ -455,4 +456,33 @@ export function assertShadowGoldenInput(actual, frozenInput) {
   assert.match(actual.routing_plan_intent, /^[0-9a-f-]{36}$/);
   assert.deepEqual(actual, { ...frozenInput, route_mode: 'shadow', routing_start: actual.routing_start,
     routing_root: start.rootDigest, routing_plan_intent: actual.routing_plan_intent });
+}
+
+// Shared by the build-wave-golden-*.test.js files (split from one file, COMP-TEST-BWG-SPLIT-1).
+export const GOLDEN_MODELS = { CORE: tier('codex', 'critical').model, BROKEN: tier('codex', 'standard').model, FAST: tier('codex', 'fast').model,
+  DEFAULT: tier('codex', 'critical').model, REPAIR: tier('codex', 'critical').model };
+export async function fixtureFor(t, scenario, options) {
+  const fixture = await makeWaveGoldenProject(scenario, options);
+  t.after(() => fixture.cleanup());
+  return fixture;
+}
+export const workers = calls => calls.filter(c => c.lane !== 'review');
+export async function recordedReceipts(f, flowId) {
+  const journal = await readGoldenJournal(f);
+  const previousRoot = process.env.STRATUM_STATE_ROOT;
+  process.env.STRATUM_STATE_ROOT = f.stateRoot;
+  try {
+    return readFlowSnapshot(flowId, { revisionDigest: journal.revisionDigest }).receipts;
+  } finally {
+    if (previousRoot === undefined) delete process.env.STRATUM_STATE_ROOT;
+    else process.env.STRATUM_STATE_ROOT = previousRoot;
+  }
+}
+export function assertShip(f, journal) {
+  const head = git(f.workspace, ['rev-parse', 'HEAD']);
+  assert.equal(git(f.workspace, ['rev-parse', 'HEAD^']), f.base, 'ship parent is pinned base');
+  assert.equal(git(f.workspace, ['rev-list', '--count', `${f.base}..HEAD`]), '1', 'one ship commit');
+  const ancestry = git(f.workspace, ['rev-list', 'HEAD']).split('\n');
+  for (const cp of journal.wave.checkpoints) assert.ok(!ancestry.includes(cp.commit), 'no wave commits in ship ancestry');
+  assert.equal(git(f.workspace, ['rev-parse', `${head}^{tree}`]), journal.wave.checkpoints.at(-1).tree);
 }
