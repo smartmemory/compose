@@ -11,7 +11,7 @@ import { itemFeatureCode } from './focusedFeature.js';
 /** The selection fields each room filters by, in the order its chip names them. */
 export const ROOM_SCOPE = {
   stratum: ['featureCode'],
-  cadence: ['unit', 'featureCode', 'lane'],
+  cadence: ['unit', 'lane'],
   wiki: ['featureCode'],
 };
 
@@ -38,6 +38,31 @@ export function buildSubappHost({ selectedItem, focusedFeature, lane, unit, auth
     auth: { mode: authMode === 'mobile-paired' ? 'mobile-paired' : 'cockpit', credentials: 'data-client' },
     attention,
   };
+}
+
+/**
+ * The ops lane Cadence's belt knows for a host lane (the project model's lane id: `compose`, `ops:forge`, `choir`, or a
+ * SmartMemory lane), or null when it has none (then Cadence gets no lane filter). With no configured model the legacy
+ * lanes already are ops lanes, so the lane passes through.
+ */
+export function opsLaneOf(model, lane) {
+  const id = str(lane);
+  if (!id) return null;
+  if (!(model?.configured === true && Array.isArray(model.projects))) return id;
+  if (id.startsWith('ops:')) return str(id.slice(4));
+  const index = model.laneIndex ?? {};
+  const owner = Object.keys(index).find((ops) => index[ops]?.laneIds?.includes(id));
+  return owner ?? (index[id] ? id : null);
+}
+
+/** `selection` narrowed to the fields `room` filters by, so what its provider gets is exactly what its chip names. */
+export function roomSelection(selection, room) {
+  const sel = {};
+  for (const key of ROOM_SCOPE[room] ?? []) {
+    const value = str(selection?.[key]);
+    if (value) sel[key] = value;
+  }
+  return sel;
 }
 
 /** The first selection field `room` filters by, as `{key, value}`, or null when the selection holds none of them. */

@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import Ajv from 'ajv';
 
-import { buildSubappHost, selectionOf, roomScope, scopeLabel, withoutSelection, createAttentionSink } from '../src/components/cockpit/subappHost.js';
+import { buildSubappHost, selectionOf, roomScope, scopeLabel, withoutSelection, roomSelection, opsLaneOf, createAttentionSink } from '../src/components/cockpit/subappHost.js';
 import { attentionAdapter, reviewAdapter } from '../src/components/cockpit/notify/notifyLogic.js';
 
 const schema = JSON.parse(readFileSync(new URL('../contracts/subapp-host.schema.json', import.meta.url), 'utf8'));
@@ -72,6 +72,30 @@ describe('selection', () => {
     assert.equal(scopeLabel(roomScope(sel, 'wiki')), 'filtered to F-1');
     assert.equal(scopeLabel({ key: 'lane', value: 'ops' }), 'filtered to lane ops');
     assert.deepEqual(withoutSelection({ selection: sel, auth: 1 }), { selection: {}, auth: 1 });
+  });
+});
+
+describe('per-room selection (COMP-SUBAPP-HOST-1-FU-1)', () => {
+  const sel = { featureCode: 'F-1', lane: 'ops', unit: 'U-1' };
+  const model = { configured: true, projects: [{ id: 'forge' }], laneIndex: { forge: { project: 'forge', laneIds: ['compose', 'stratum'] }, choir: { project: 'choir', laneIds: ['choir'] }, main: { project: 'sm', laneIds: ['main'] } } };
+
+  test('Cadence gets no featureCode (belt units never match one); Stratum and Wiki still get it', () => {
+    assert.deepEqual(roomSelection(sel, 'cadence'), { unit: 'U-1', lane: 'ops' });
+    assert.deepEqual(roomSelection({ featureCode: 'F-1' }, 'cadence'), {});
+    assert.deepEqual(roomSelection(sel, 'stratum'), { featureCode: 'F-1' });
+    assert.deepEqual(roomSelection(sel, 'wiki'), { featureCode: 'F-1' });
+    assert.equal(roomScope(roomSelection({ featureCode: 'F-1' }, 'cadence'), 'cadence'), null);
+  });
+
+  test('a host lane maps to the ops lane through the project model; an unmapped lane gives none', () => {
+    assert.equal(opsLaneOf(model, 'compose'), 'forge');
+    assert.equal(opsLaneOf(model, 'ops:forge'), 'forge');
+    assert.equal(opsLaneOf(model, 'choir'), 'choir');
+    assert.equal(opsLaneOf(model, 'main'), 'main');
+    assert.equal(opsLaneOf(model, 'nowhere'), null);
+    assert.equal(opsLaneOf(model, undefined), null);
+    assert.equal(opsLaneOf(null, 'main'), 'main');
+    assert.equal(opsLaneOf({ configured: false }, 'main'), 'main');
   });
 });
 

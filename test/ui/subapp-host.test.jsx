@@ -61,7 +61,7 @@ const unit = (id, lane = 'ops') => ({
   since: at, blocker: null, blockers: [], decision: null, dependsOn: [], sha: null,
 });
 const cadenceClient = () => ({
-  getBelt: vi.fn(async () => ({ generatedAt: at, units: [unit('COMP-TUI-4'), unit('COMP-TUI-4-FIX'), unit('OTHER-1')], lanes: ['ops'], landedWindowH: 24, offBelt: 0, readiness: null, errors: [] })),
+  getBelt: vi.fn(async () => ({ generatedAt: at, units: [unit('COMP-TUI-4'), unit('COMP-TUI-4-FIX'), unit('OTHER-1', 'main')], lanes: ['ops', 'main'], landedWindowH: 24, offBelt: 0, readiness: null, errors: [] })),
   getSeats: vi.fn(async () => ({ generatedAt: at, source: 'cadence', seats: [], recommendation: null, unassignedJobs: [], errors: [] })),
   getChains: vi.fn(async () => ({ generatedAt: at, chains: [], errors: [] })),
   getLive: vi.fn(async () => ({ generatedAt: at, lanes: [], errors: [] })),
@@ -72,12 +72,18 @@ const cadenceClient = () => ({
 const unitIds = (c) => [...c.querySelectorAll('[data-unit]')].map((el) => el.getAttribute('data-unit')).sort();
 
 describe.skipIf(!cadenceLinked)('Cadence room scoped by the host', () => {
-  it("the Board shows the selected feature's units with a chip; the chip's x shows every unit", async () => {
-    const { container } = render(<CadenceView client={cadenceClient()} host={host('COMP-TUI-4')} />);
+  it("the Board shows the selected lane's units with a chip; the chip's x shows every unit", async () => {
+    const { container } = render(<CadenceView client={cadenceClient()} host={buildSubappHost({ lane: 'ops' })} />);
     await waitFor(() => expect(unitIds(container)).toEqual(['COMP-TUI-4', 'COMP-TUI-4-FIX']));
-    expect(screen.getByTestId('host-scope-chip').textContent).toContain('filtered to COMP-TUI-4');
+    expect(screen.getByTestId('host-scope-chip').textContent).toContain('filtered to lane ops');
     fireEvent.click(screen.getByRole('button', { name: 'Clear the filter' }));
     await waitFor(() => expect(unitIds(container)).toEqual(['COMP-TUI-4', 'COMP-TUI-4-FIX', 'OTHER-1']));
+  });
+
+  it('selecting a feature leaves the Board unfiltered with no chip (belt units are not named after features)', async () => {
+    const { container } = render(<CadenceView client={cadenceClient()} host={host('COMP-TUI-4')} />);
+    await waitFor(() => expect(unitIds(container)).toHaveLength(3));
+    expect(screen.queryByTestId('host-scope-chip')).toBeNull();
   });
 
   it('a selected unit shows that unit alone; no host shows every unit and no chip', async () => {
@@ -88,6 +94,22 @@ describe.skipIf(!cadenceLinked)('Cadence room scoped by the host', () => {
     const all = render(<CadenceView client={cadenceClient()} />);
     await waitFor(() => expect(unitIds(all.container)).toHaveLength(3));
     expect(screen.queryByTestId('host-scope-chip')).toBeNull();
+  });
+});
+
+// ---- Chip
+describe.skipIf(!stratumLinked)('a re-selected feature shows its filter again', () => {
+  it('clear X, select Y, select X: the chip is shown, not the restore button', async () => {
+    const { container, rerender } = render(<StratumView client={stratumClient()} host={host('COMP-TUI-4')} />);
+    await waitFor(() => expect(runIds(container)).toEqual(['r1']));
+    fireEvent.click(screen.getByRole('button', { name: 'Clear the filter' }));
+    await waitFor(() => expect(runIds(container)).toHaveLength(3));
+    rerender(<StratumView client={stratumClient()} host={host('OTHER-1')} />);
+    await waitFor(() => expect(runIds(container)).toEqual(['r2']));
+    rerender(<StratumView client={stratumClient()} host={host('COMP-TUI-4')} />);
+    await waitFor(() => expect(runIds(container)).toEqual(['r1']));
+    expect(screen.getByTestId('host-scope-chip')).toBeTruthy();
+    expect(screen.queryByTestId('host-scope-restore')).toBeNull();
   });
 });
 
@@ -113,6 +135,19 @@ describe.skipIf(!wikiLinked)('Wiki room scoped by the host', () => {
     await waitFor(() => expect(screen.getByRole('tab', { name: 'Search' }).getAttribute('aria-selected')).toBe('true'));
     expect(screen.getByLabelText('Feature code').value).toBe('');
     fireEvent.click(screen.getByTestId('host-scope-restore'));
+    await waitFor(() => expect(screen.getByRole('tab', { name: 'Feature' }).getAttribute('aria-selected')).toBe('true'));
+  });
+
+  it("a session's feature change with no host selection only prefills Search; a host selection change opens the hub", async () => {
+    const client = wikiClient();
+    const props = { client, workspace: 'wiki-eng', frameBase: 'http://127.0.0.1:8791' };
+    const { rerender } = render(<WikiView {...props} featureCode="SESSION-1" host={host(null)} />);
+    fireEvent.click(await screen.findByRole('tab', { name: 'Decisions' }));
+    await waitFor(() => expect(screen.getByRole('tab', { name: 'Decisions' }).getAttribute('aria-selected')).toBe('true'));
+    rerender(<WikiView {...props} featureCode="SESSION-2" host={host(null)} />);
+    await waitFor(() => expect(screen.getByLabelText('Feature code').value).toBe('SESSION-2'));
+    expect(screen.getByRole('tab', { name: 'Decisions' }).getAttribute('aria-selected')).toBe('true');
+    rerender(<WikiView {...props} featureCode="SESSION-2" host={host('COMP-TUI-4')} />);
     await waitFor(() => expect(screen.getByRole('tab', { name: 'Feature' }).getAttribute('aria-selected')).toBe('true'));
   });
 

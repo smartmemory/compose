@@ -92,7 +92,7 @@ export default function WikiView({ featureCode: fallbackCode, host, workspace, f
   const colorMode = useHtmlColorMode();
 
   // A new selected feature replaces the code and prefills Search with it; after mount it also opens that feature's hub
-  // (COMP-SUBAPP-HOST-1), and the chip's clear empties both and goes back to Search.
+  // when the HOST scope moved (COMP-SUBAPP-HOST-1; a session's feature change only prefills Search), and the chip's clear empties both and goes back to Search.
   const mounted = useRef(false);
   useEffect(() => {
     const first = !mounted.current;
@@ -101,7 +101,7 @@ export default function WikiView({ featureCode: fallbackCode, host, workspace, f
     setCode(featureCode);
     setDraft(featureCode);
     setSearch({ query: featureCode, workspace: undefined });
-    if (!first) setPane(featureCode ? 'feature' : 'search');
+    if (!first && (scoped.scope || scoped.cleared)) setPane(featureCode ? 'feature' : 'search');
   }, [featureCode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {

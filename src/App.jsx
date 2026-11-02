@@ -96,7 +96,7 @@ import GateNotificationBar from './components/vision/shared/GateNotificationBar.
 import { computeBuildStateMap, computeAgentOverlay } from './components/vision/graphOpsOverlays.js';
 import { withComposeToken } from './lib/compose-api.js';
 import { wsFetch, getAuthMode } from './lib/wsFetch.js';
-import { buildSubappHost, attentionSink } from './components/cockpit/subappHost.js';
+import { buildSubappHost, attentionSink, opsLaneOf } from './components/cockpit/subappHost.js';
 import { useWorkspace } from './contexts/WorkspaceContext.jsx';
 
 /*
@@ -697,8 +697,8 @@ function AppInner() {
   // COMP-SUBAPP-HOST-1: the one host object the Stratum, Cadence and Wiki rooms receive (contracts/subapp-host.schema.json).
   const selectedItem = useMemo(() => (selectedItemId ? items.find((i) => i.id === selectedItemId) ?? null : null), [items, selectedItemId]);
   const subappHost = useMemo(() => buildSubappHost({
-    selectedItem, focusedFeature, lane: projectFocus?.lane, authMode: getAuthMode(), attention: attentionSink.publish,
-  }), [selectedItem, focusedFeature, projectFocus?.lane]);
+    selectedItem, focusedFeature, lane: opsLaneOf(projectModel, projectFocus?.lane), authMode: getAuthMode(), attention: attentionSink.publish,
+  }), [selectedItem, focusedFeature, projectFocus?.lane, projectModel]);
 
   const handleProjectSwitch = useCallback(async (newPath) => {
     try {

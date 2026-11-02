@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { roomScope, scopeLabel, withoutSelection } from './subappHost.js';
+import { useEffect, useMemo, useState } from 'react';
+import { roomScope, roomSelection, scopeLabel, withoutSelection } from './subappHost.js';
 
 /**
  * COMP-SUBAPP-HOST-1: a room's view of the host. `scope` is the selection field the room filters by (null: nothing to
@@ -7,11 +7,17 @@ import { roomScope, scopeLabel, withoutSelection } from './subappHost.js';
  * selection shows the filter again. `host` is what the room's provider gets: the host, or the host with nothing selected.
  */
 export function useHostScope(host, room) {
-  const scope = roomScope(host?.selection, room);
+  const selection = useMemo(() => roomSelection(host?.selection, room), [host?.selection, room]);
+  const scope = roomScope(selection, room);
   const key = scope ? `${scope.key}:${scope.value}` : null;
   const [clearedKey, setClearedKey] = useState(null);
+  // A changed selection shows its filter again, so a re-selected feature is not still cleared.
+  useEffect(() => { setClearedKey((k) => (k === key ? k : null)); }, [key]);
   const cleared = key !== null && clearedKey === key;
-  const scoped = useMemo(() => (cleared ? withoutSelection(host) : host), [host, cleared]);
+  const scoped = useMemo(() => {
+    if (!host) return host;
+    return cleared ? withoutSelection(host) : { ...host, selection };
+  }, [host, selection, cleared]);
   return {
     scope,
     cleared,
