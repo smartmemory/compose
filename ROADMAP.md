@@ -1751,3 +1751,28 @@ OWNER DECISION D-0023 (2026-11-02, ops ledger `9b7b85599264`): a folder is a pro
 - [ ] A deterministic deriver reads unit repo lists and feature-code citations in commits and CHANGELOGs; no field is hand-typed, and a feature with no evidence shows "no repos found", never an empty silent list
 - [ ] The graph has a feature filter: picking a feature (or a release tag such as 2.0) highlights the repos it touches
 - [ ] Item detail (`src/components/vision/ItemDetailPanel.jsx`, existing) shows owner module, touched repos and group
+
+## FORGE-WIKI: the wiki moves to forge and becomes project-independent — PLANNED
+
+OWNER DECISION D-0024 (2026-11-02, ops ledger `66c3049a018b`): the wiki moves to `forge/wiki`, Shape 1 of `smart-memory-ops/units/WIKI-TO-FORGE-1/inventory.md` (full move, GitHub rename to `wiki`), then the first project-config extraction. forge-main owns both (D-0022 lane), with the handover from wiki-main. Order: 315 then 316. 315 runs only when no job has a wiki worktree open: after 306a and WIKI-UI-LINKS-1 land (both edit the wiki), before 306b.
+
+| # | Feature | Description | Status |
+|---|---------|-------------|--------|
+| 315 | WIKI-TO-FORGE-1 | Move `SmartMemory/smart-memory-wiki` to `forge/wiki` with a plain `mv` (never a re-clone: 56 local branches, worktrees, untracked `.claude/`), rename the GitHub repo to `smartmemory/wiki` as smartmem-dev, repair worktrees, rebuild the venv and UI deps, reinstall the Mac wiki in the same unit (downtime minutes), and sweep the 32 reference sites in 9 repos (inventory section 6, 24 steps). One shared "where does repo X live" helper in the ops scripts (SmartMemory first, then forge) fixes inventory #30-#33 for compose and stratum too. hel1 untouched, no data migration, Docker image and `~/.config/smartmemory-wiki` names unchanged, historical ledger and unit records untouched. | PLANNED |
+| 316 | WIKI-PROJECT-1 | First config-extraction unit (inventory section 8, end): the wiki reads a project's `.compose/compose.json` for name, label, repos and paths (A1), a `wiki` key in the same manifest holds the instance profile (A2), feature seeds come from Compose `feature.json` (A6), enricher input paths come from the manifest (A7), the Mac install takes an instance name, the UI title comes from the project label (A15). The rest of section 8 (A3, A4, A9-A12, H15, H23) is deferred until a second project needs it. Depends on 315. | PLANNED |
+
+**315 WIKI-TO-FORGE-1: acceptance**
+- [ ] Preconditions probed before step 1 (a false one stops the move): a Mac note id is unchanged before and after a path move (inventory section 2: ids believed scoped by `source_id` + repo-relative path, unverified); Compose's project check flags the dead `SmartMemory/.compose/compose.json` module path (inventory #21, unverified)
+- [ ] `~/reg/my/forge/wiki` is the checkout, moved with `mv`; every local branch and worktree survives (`git branch | wc -l` and `git worktree list` equal before and after)
+- [ ] GitHub repo is `smartmemory/wiki`; the push URL starts with `git@github-smartmem-dev:smartmemory/`
+- [ ] The Mac wiki answers on 8791 from the new path, and the bridge answers on 8792
+- [ ] `wiki-components-link.js` (existing) finds `forge/wiki`; the Compose Wiki tab loads from it
+- [ ] An ops-scripts repo-path helper (new) is used by `sync_main_checkouts.py`, `remote_job.py`, `batch_review.py`, `worktree_sweep.py`, `stamp_sweep.py` and `codex_attr.py` (existing), with tests covering a SmartMemory repo, a forge repo and the wiki
+- [ ] `forge/.compose/compose.json` lists module `wiki`; `SmartMemory/.compose/compose.json` and `WORKSPACE.md` no longer do
+- [ ] A hel1 deploy dry run from the new path is clean; hel1 is not otherwise touched
+
+**316 WIKI-PROJECT-1: acceptance**
+- [ ] Preconditions (inventory section 8): a Mac instance with a non-SmartMemory config, its own reserved port and Mongo database serves `/health` and a search; it writes nothing to SmartMemory stores; `config/page_slots.yaml` and `contracts/screen_map.yaml` carry no SmartMemory specifics
+- [ ] `wiki/spine/project.py` (new) reads the project manifest; for SmartMemory, generated plus extra sources equal today's 33 Mac sources (diff test)
+- [ ] The manifest `wiki` key has a contract; hand-written `config/wiki.{mac,us1}.yaml` keep working
+- [ ] Done = a forge instance (`--project ~/reg/my/forge`) shows compose, stratum and cadence docs and the compose feature folders with status from `feature.json`; a missing manifest path logs a WARNING (no silent empty hub)
