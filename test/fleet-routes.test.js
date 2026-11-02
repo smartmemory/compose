@@ -196,6 +196,7 @@ describe('POST /api/fleet/owner-answer (golden flow, real owner_queue.py, scratc
       PATH: process.env.PATH, HOME: process.env.HOME, SM_OWNER_QUEUE: queue, SMS_COUNT: count,
       COMPOSE_FLEET_PYTHON: 'python3', COMPOSE_FLEET_SM_STATUS: sm, COMPOSE_FLEET_OWNER_QUEUE: OWNER_QUEUE,
       COMPOSE_FLEET_STRATUM_BIN: join(FIX, 'stratum.mjs'), COMPOSE_FLEET_CADENCE_SHADOW: join(FIX, 'shadow.jsonl'), OPS_COMMIT_ON_WRITE: '0',
+      OWNER_QUEUE_OUTBOX: dir, OWNER_QUEUE_NOTIFIER: '/usr/bin/true',
     };
     const prevToken = process.env.COMPOSE_API_TOKEN;
     process.env.COMPOSE_API_TOKEN = TOKEN;
