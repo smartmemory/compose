@@ -1662,7 +1662,7 @@ and pipeline machinery — no new lifecycle model. COMP-PARITY-1 ships first (un
 
 ## COMP-SUBAPP: Sub-apps mounted in Compose — PLANNED
 
-OWNER DECISION D-0018 (2026-11-02, ops ledger `c798bfe19d52`): Stratum, Cadence and the wiki stay standalone AND mount in Compose. Order is the row order below. Choir: no row (owner: parked for now). Cross-links: CADENCE-UI-AUTHOR-1 (F50, `cadence/docs/ROADMAP.md`), FORGE-DS-1 (`forge/ROADMAP.md`).
+OWNER DECISION D-0018 (2026-11-02, ops ledger `c798bfe19d52`): Stratum, Cadence and the wiki stay standalone AND mount in Compose. Order is the row order below (306-311, then FORGE-DS-1). 311 is OWNER DECISION D-0019 (ops ledger `8261acf06043`). Choir: no row (owner: parked for now). Cross-links: CADENCE-UI-AUTHOR-1 (F50, `cadence/docs/ROADMAP.md`), FORGE-DS-1 (`forge/ROADMAP.md`).
 
 | # | Feature | Description | Status |
 |---|---------|-------------|--------|
@@ -1670,7 +1670,8 @@ OWNER DECISION D-0018 (2026-11-02, ops ledger `c798bfe19d52`): Stratum, Cadence 
 | 307 | COMP-SUBAPP-ATTENTION-1 | Stratum GatesInbox rows and Compose's own pending gates publish into the cockpit inbox the way Cadence rows already do. One ranked list in the attention sidebar; each row opens the right room. Depends on 306. | PLANNED |
 | 308 | COMP-SUBAPP-CONTEXT-1 | The context panel shows, for the selected feature, its roadmap item, wiki hub, last Stratum run and Cadence unit, using the three existing data clients. Depends on 306. | PLANNED |
 | 309 | COMP-SUBAPP-STRAT-AUTHOR-1 | Mount the Stratum FlowBuilder as a "New pipeline" pane, and DagView + StepDrawer in run detail (existing exports, never mounted in Compose). Save through the Stratum data client. Depends on 306. | PLANNED |
-| 310 | COMP-SUBAPP-CAD-AUTHOR-1 | Mount the Cadence chain/schedule/limit editor (CADENCE-UI-AUTHOR-1) in CadenceView, and settle Fleet vs Cadence ownership of Sessions/Jobs/Daemon (one owner; the pick is noted in this row). Depends on CADENCE-UI-AUTHOR-1 and 306. | PLANNED |
+| 310 | COMP-SUBAPP-CAD-AUTHOR-1 | Mount the Cadence chain/schedule/limit editor (CADENCE-UI-AUTHOR-1) in CadenceView. Fleet vs Cadence ownership of Sessions/Jobs/Daemon: Fleet is Cadence-fed (settled by D-0019, built in 311). Depends on CADENCE-UI-AUTHOR-1 and 306. | PLANNED |
+| 311 | COMP-SUBAPP-VERB-ROOMS-1 | OWNER DECISION D-0019 (2026-11-02, ops ledger `8261acf06043`): the cockpit organizes by verb, not by product. Retire the Stratum, Cadence and Wiki product tabs once their bricks are placed in the verb rooms: Roadmap gets Cadence ChainDags beside the graph; Build gets Stratum RunsList/RunDetail/DagView, the FlowBuilder pane (309) and the Cadence editor (310); Review gets the one gate inbox (307); Fleet becomes Cadence-fed (SeatStrip, UnitBelt, LiveLanes, Jobs/Daemon/Sessions) and Compose's own FleetView/FleetPanels merge into it; Library gets the WikiView panes. Product identity survives as a source badge on each row, an "open in <app>" link on detail screens, and a by-source filter in Fleet and Review. Depends on 306, 307, 309, 310. | PLANNED |
 
 **306 COMP-SUBAPP-HOST-1: acceptance**
 - [ ] One host contract file defines workspace, selection (feature code, lane, unit), auth and attention sink: `contracts/subapp-host.schema.json` (new)
@@ -1700,5 +1701,16 @@ OWNER DECISION D-0018 (2026-11-02, ops ledger `c798bfe19d52`): Stratum, Cadence 
 **310 COMP-SUBAPP-CAD-AUTHOR-1: acceptance**
 - [ ] The CADENCE-UI-AUTHOR-1 editor mounted in `src/components/cockpit/CadenceView.jsx` (existing)
 - [ ] `src/lib/cadence-ui-stub.js` (existing) covers the new exports
-- [ ] Fleet (`src/components/cockpit/FleetView.jsx`, existing) vs Cadence ownership of Sessions/Jobs/Daemon decided, one owner, the pick written into this row
-- [ ] The non-owner surface links to the owner instead of rendering its own copy
+- [ ] Fleet is Cadence-fed (D-0019): Sessions/Jobs/Daemon render from the Cadence data client in Fleet; the Fleet merge itself is built in 311
+
+**311 COMP-SUBAPP-VERB-ROOMS-1: acceptance**
+- [ ] No product name in `src/components/cockpit/ViewTabs.jsx` (existing)
+- [ ] Roadmap shows Cadence `ChainDags` (`cadence/ui/src/components/ChainDags.tsx`, existing) beside the graph
+- [ ] Build shows Stratum `RunsList`, `RunDetail`, `DagView` (`stratum/ui/src/index.ts` exports, existing), the FlowBuilder pane (309) and the Cadence editor (310)
+- [ ] Review shows the one gate inbox (307)
+- [ ] Fleet is Cadence-fed: `SeatStrip`, `UnitBelt`, `LiveLanes` (`cadence/ui/src/components/`, existing) plus Jobs/Daemon/Sessions; `src/components/cockpit/FleetView.jsx` and `FleetPanels.jsx` (existing) merged into it
+- [ ] Library shows the `WikiView.jsx` (existing) panes
+- [ ] Every pane the three product rooms show today is reachable from a verb room
+- [ ] Each row carries a source badge; detail screens carry an "open in <app>" link; Fleet and Review have a by-source filter
+- [ ] `StratumView.jsx`, `CadenceView.jsx`, `WikiView.jsx` (existing) deleted or reduced to the placed bricks
+- [ ] Standalone Stratum, Cadence and wiki shells untouched
