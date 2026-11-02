@@ -1,7 +1,10 @@
+import { stratumUiBuilderContent } from './lib/stratum-ui-link.js'
+
 /** @type {import('tailwindcss').Config} */
 export default {
   darkMode: ["class"],
-  content: ['./index.html', './src/**/*.{js,jsx}'],
+  // COMP-SUBAPP-STRAT-AUTHOR-1: the Stratum flow builder's Tailwind classes compile here (it ships none), when linked.
+  content: ['./index.html', './src/**/*.{js,jsx}', ...stratumUiBuilderContent()],
   theme: {
     extend: {
       borderRadius: {

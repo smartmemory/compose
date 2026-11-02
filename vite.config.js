@@ -24,6 +24,8 @@ export default defineConfig({
     alias: [
       { find: '@', replacement: path.resolve(__dirname, './src') },
       { find: /^@smartmemory\/stratum-ui\/styles\.css$/, replacement: stratumUi ? stratumUi.styles : path.resolve(__dirname, './src/lib/stratum-ui-stub.css') },
+      // COMP-SUBAPP-STRAT-AUTHOR-1: the builder entry (FlowBuilder), same rule; its own stub when absent.
+      { find: /^@smartmemory\/stratum-ui\/builder$/, replacement: stratumUi?.builder ?? path.resolve(__dirname, './src/lib/stratum-ui-builder-stub.js') },
       { find: /^@smartmemory\/stratum-ui$/, replacement: stratumUi ? stratumUi.entry : path.resolve(__dirname, './src/lib/stratum-ui-stub.js') },
       { find: '@cadence/ui/styles.css', replacement: cadenceUi ? path.join(cadenceUi, 'src/styles.css') : path.resolve(__dirname, './src/lib/cadence-ui-stub.css') },
       { find: /^@cadence\/ui$/, replacement: cadenceUi ? path.join(cadenceUi, 'src/index.ts') : path.resolve(__dirname, './src/lib/cadence-ui-stub.js') },

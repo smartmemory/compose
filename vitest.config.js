@@ -18,6 +18,7 @@ export default defineConfig({
     alias: [
       { find: '@', replacement: fileURLToPath(new URL('./src', import.meta.url)) },
       { find: /^@smartmemory\/stratum-ui\/styles\.css$/, replacement: stratumUi ? stratumUi.styles : fileURLToPath(new URL('./src/lib/stratum-ui-stub.css', import.meta.url)) },
+      { find: /^@smartmemory\/stratum-ui\/builder$/, replacement: stratumUi?.builder ?? fileURLToPath(new URL('./src/lib/stratum-ui-builder-stub.js', import.meta.url)) },
       { find: /^@smartmemory\/stratum-ui$/, replacement: stratumUi ? stratumUi.entry : fileURLToPath(new URL('./src/lib/stratum-ui-stub.js', import.meta.url)) },
       { find: '@cadence/ui/styles.css', replacement: cadenceUi ? path.join(cadenceUi, 'src/styles.css') : fileURLToPath(new URL('./src/lib/cadence-ui-stub.css', import.meta.url)) },
       { find: /^@cadence\/ui$/, replacement: cadenceUi ? path.join(cadenceUi, 'src/index.ts') : fileURLToPath(new URL('./src/lib/cadence-ui-stub.js', import.meta.url)) },

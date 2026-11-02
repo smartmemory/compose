@@ -3,12 +3,14 @@ import { DataClientProvider, RunsList, RunDetail, GatesInbox } from '@smartmemor
 import '@smartmemory/stratum-ui/styles.css';
 import { createStratumDataClient } from '../../lib/clients/stratum.js';
 import PaneSwitcher, { usePaneMemory } from './PaneSwitcher.jsx';
+import StratumBuilderPane from './StratumBuilderPane.jsx';
 
 // COMP-COCKPIT-TAB-DEPTH-1 (M2 fallback): `RunsList` takes no filter prop (stratum-ui RunsListProps: onOpenRun, pollMs), so Gates stays its own pane.
-const PANES = [{ key: 'runs', label: 'Runs' }, { key: 'gates', label: 'Gates' }];
+// COMP-SUBAPP-STRAT-AUTHOR-1: "New pipeline" is the Stratum flow builder with Save / Open (StratumBuilderPane).
+const PANES = [{ key: 'runs', label: 'Runs' }, { key: 'gates', label: 'Gates' }, { key: 'builder', label: 'New pipeline' }];
 
 /**
- * Stratum tab (COMPOSE-STRAT-TAB-1): runs list, a run's DAG, and the gates inbox from `@smartmemory/stratum-ui`,
+ * Stratum tab (COMPOSE-STRAT-TAB-1): runs list, a run's DAG, the gates inbox and the flow builder from `@smartmemory/stratum-ui`,
  * fed by Compose's DataClient. The screens never fetch and never route: navigation is this
  * component's state, the same seam the standalone shell fills with hash routes.
  * `client` is injectable for tests.
@@ -30,6 +32,7 @@ export default function StratumView({ client }) {
             <RunDetail runId={runId} onBack={() => openPane('runs')} onOpenGates={() => openPane('gates')} />
           )}
           {!runId && tab === 'gates' && <GatesInbox onOpenRun={openRun} />}
+          {!runId && tab === 'builder' && <StratumBuilderPane client={dataClient} />}
         </div>
       </div>
     </DataClientProvider>

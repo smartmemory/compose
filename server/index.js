@@ -21,7 +21,8 @@ import { attachProcessRoutes } from './process-routes.js';
 import { attachUnitIndexRoutes } from './unit-index-routes.js';
 import { attachRibbonRoutes } from './ribbon-routes.js';
 import { attachDecisionsRoutes } from './decisions-routes.js';
-import { attachStratumUiRoutes } from './stratum-ui-routes.js';
+import { attachStratumUiRoutes, stratumUiAvailable } from './stratum-ui-routes.js';
+import { attachStratumSpecRoutes } from './stratum-spec-routes.js';
 import { attachCadenceUiRoutes } from './cadence-ui-routes.js';
 import { attachWikiRoutes } from './wiki-routes.js';
 
@@ -187,6 +188,8 @@ const _agentPort = parseInt(process.env.AGENT_PORT || '4002', 10);
 
 attachWorkspaceRoutes(app);
 app.use(createWorkspaceMiddleware({ resolveKnownWorkspace: (id) => workspaces.resolveKnownWorkspace(id) }));
+// COMP-SUBAPP-STRAT-AUTHOR-1: the flow builder's Save / Open writes the request's workspace, so it sits after resolution.
+if (stratumUiAvailable()) attachStratumSpecRoutes(app, { remote: remoteMode });
 
 // `remote` lets clients (desktop cockpit served through a tunnel) detect
 // remote mode at boot and switch their WS/SSE URLs to token-carrying form.

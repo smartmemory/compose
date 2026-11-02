@@ -76,3 +76,75 @@ describe('Stratum pane memory (review L2)', () => {
     resetPaneMemory();
   });
 });
+
+// COMP-SUBAPP-STRAT-AUTHOR-1: the "New pipeline" pane is FlowBuilder plus Save / Open over the client's optional methods.
+describe('Stratum New pipeline pane', () => {
+  const started = Date.now();
+  const base = () => ({ listRuns: vi.fn(async () => []), getRun: vi.fn(async () => null), listGates: vi.fn(async () => []), resolveGate: vi.fn() });
+  const openPane = async () => {
+    const { resetPaneMemory } = await import('../../src/components/cockpit/PaneSwitcher.jsx');
+    resetPaneMemory();
+    fireEvent.click(screen.getByRole('tab', { name: 'New pipeline' }));
+    return screen.findByTestId('stratum-builder-pane');
+  };
+  afterEach(() => console.log(`# stratum builder pane wall ${Date.now() - started} ms`));
+
+  it.skipIf(!linked)('saves through the client, shows the refusal text, and opens a saved spec', async () => {
+    const saved = { version: 1, flows: { entry: 'main', main: { input: {}, steps: [{ id: 'set_1', set: {}, out: '' }] } } };
+    const client = {
+      ...base(),
+      validateSpec: vi.fn(async () => ({ status: 'valid' })),
+      listSpecs: vi.fn(async () => [{ name: 'kept', updatedAt: '2026-11-02T00:00:00Z' }]),
+      readSpec: vi.fn(async () => saved),
+      saveSpec: vi.fn(async () => ({ ok: false, code: 'NOT_BUILDER_FILE', message: 'build.stratum.yaml exists and was not written by the pipeline builder; pick another name' })),
+    };
+    render(<StratumView client={client} />);
+    await openPane();
+    await waitFor(() => expect(client.listSpecs).toHaveBeenCalled());
+    const save = screen.getByTestId('builder-save');
+    expect(save.disabled).toBe(true); // no spec yet
+    fireEvent.click(screen.getByRole('button', { name: 'New' })); // FlowBuilder hands the empty spec out via onChange (debounced)
+    fireEvent.change(screen.getByTestId('builder-save-name'), { target: { value: 'build' } });
+    await waitFor(() => expect(screen.getByTestId('builder-save').disabled).toBe(false), { timeout: 3000 });
+    fireEvent.click(screen.getByTestId('builder-save'));
+    await waitFor(() => expect(client.saveSpec).toHaveBeenCalled());
+    expect(client.saveSpec.mock.calls[0][0]).toBe('build');
+    expect(client.saveSpec.mock.calls[0][1]).toMatchObject({ version: 1 });
+    expect((await screen.findByRole('alert')).textContent).toMatch(/not written by the pipeline builder/);
+
+    fireEvent.change(screen.getByTestId('builder-open'), { target: { value: 'kept' } });
+    await waitFor(() => expect(client.readSpec).toHaveBeenCalledWith('kept'));
+    expect((await screen.findByRole('status')).textContent).toMatch(/Opened kept/);
+    expect(screen.getByTestId('builder-save-name').value).toBe('kept');
+  });
+
+  it.skipIf(!linked)('hides Save and Open when the client lacks those methods, and still renders the builder', async () => {
+    render(<StratumView client={base()} />);
+    await openPane();
+    expect(screen.queryByTestId('builder-save')).toBeNull();
+    expect(screen.queryByTestId('builder-open')).toBeNull();
+    const validate = screen.getByRole('button', { name: /Validate/ });
+    expect(validate.disabled).toBe(true); // no validateSpec on this client
+  });
+});
+
+describe('Compose stratum DataClient builder methods', () => {
+  it('routes validate/plan/specs to /api/stratum-ui and never throws on a save refusal', async () => {
+    const calls = [];
+    vi.stubGlobal('fetch', vi.fn(async (url, opts = {}) => {
+      calls.push([String(url), opts.method || 'GET']);
+      if (String(url).endsWith('/specs/nope')) return { ok: false, status: 404, json: async () => ({}) };
+      if (String(url).includes('/specs/bad')) return { ok: false, status: 422, json: async () => ({ ok: false, code: 'INVALID', message: 'the engine rejected the spec (1 error)', errors: [{ code: 'X', path: 'p', message: 'm' }] }) };
+      return { ok: true, status: 200, json: async () => ({ status: 'valid' }) };
+    }));
+    const client = createStratumDataClient();
+    expect(await client.validateSpec({})).toEqual({ status: 'valid' });
+    await client.planFlow({}, {});
+    expect(await client.readSpec('nope')).toBeNull();
+    const refused = await client.saveSpec('bad', {});
+    expect(refused).toMatchObject({ ok: false, code: 'INVALID', message: 'the engine rejected the spec (1 error)' });
+    expect(calls).toEqual([
+      ['/api/stratum-ui/validate', 'POST'], ['/api/stratum-ui/plan', 'POST'], ['/api/stratum-ui/specs/nope', 'GET'], ['/api/stratum-ui/specs/bad', 'POST'],
+    ]);
+  });
+});
