@@ -53,6 +53,7 @@ describe('doc links: every doc title in Compose opens its doc', () => {
     const fetchSpy = vi.fn(() => { throw new Error('a component fetched'); });
     vi.stubGlobal('fetch', fetchSpy);
     const got = [];
+    vi.spyOn(window, 'open').mockImplementation(() => null);
     for (const s of SITES) {
       render(<WikiView client={client()} workspace="wiki-eng" frameBase={FRAME} featureCode={s.featureCode} />);
       if (s.pane) fireEvent.click(screen.getByRole('tab', { name: s.pane }));
@@ -64,7 +65,7 @@ describe('doc links: every doc title in Compose opens its doc', () => {
       cleanup();
       resetPaneMemory();
     }
-    expect(got).toEqual(SITES.map((s) => [s.site, s.href, s.href]));
+    expect(got).toEqual(SITES.map((s) => [s.site, s.href, s.href.includes('?source=') ? null : `${s.href.replace('/ui/w/', '/ui/embed/w/')}&theme=light`])) // WIKI-UI-LINKS-1: the Document pane frames the embed route; a source opens the wiki app in a new tab;
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 

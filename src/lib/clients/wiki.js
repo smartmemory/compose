@@ -30,6 +30,7 @@ export function createWikiDataClient() {
     decisions: ({ workspace, featureId }) => call('/query/decisions', { workspace, featureId }),
     decisionsPage: ({ workspace, cursor, size }) => call('/query/decisions_page', { workspace, ...(cursor ? { cursor } : {}), ...(size ? { size } : {}) }),
     sourcesPage: ({ workspace, cursor, size }) => call('/query/sources_page', { workspace, ...(cursor ? { cursor } : {}), ...(size ? { size } : {}) }),
+    featuresPage: ({ workspace, cursor, size }) => call('/query/features_page', { workspace, ...(cursor ? { cursor } : {}), ...(size ? { size } : {}) }),
     docsByArea: ({ workspace, area, cursor, size }) => call('/query/docs_by_area', { workspace, area, ...(cursor ? { cursor } : {}), ...(size ? { size } : {}) }),
     ledger: ({ workspace, from, to, cursor, size }) => call('/query/ledger', { workspace, from, to, ...(cursor ? { cursor } : {}), ...(size ? { size } : {}) }),
     // The proxy answers null for a feed the wiki does not serve; a served feed is the wiki's data_envelope.

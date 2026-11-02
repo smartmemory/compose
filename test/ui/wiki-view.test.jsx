@@ -27,7 +27,7 @@ const graphCalls = () => ({ graphAll: vi.fn(), graphPage: vi.fn(), note: vi.fn()
 describe('Wiki tab', () => {
   it('is a sub-tab of the Library room', () => expect(locateView('wiki')).toEqual({ top: 'library', sub: 'wiki' }));
 
-  it.skipIf(!linked)('renders the feature hub, search and the full-wiki frame from the injected client without fetching', async () => {
+  it.skipIf(!linked)('renders the feature hub, search and the Document frame from the injected client without fetching', async () => {
     const fetchSpy = vi.fn(() => { throw new Error('a component fetched'); });
     vi.stubGlobal('fetch', fetchSpy);
     const client = {
@@ -49,18 +49,18 @@ describe('Wiki tab', () => {
     await waitFor(() => expect(client.search).toHaveBeenCalledWith({ workspace: 'wiki-eng', q: 'COMPOSE-WIKI-TAB-1' }));
     const hit = await screen.findByText('Wiki tab design');
     expect(hit.closest('a').getAttribute('href')).toBe(`${FRAME}/ui/w/wiki-eng/note?id=d1`);
-    fireEvent.click(hit); // a plain click is onNavigate: the note opens in the full-wiki frame
-    expect(screen.getByTitle('wiki').getAttribute('src')).toBe(`${FRAME}/ui/w/wiki-eng/note?id=d1`);
+    fireEvent.click(hit); // a plain click is onNavigate: the note opens in the Document pane
+    expect(screen.getByTitle('wiki').getAttribute('src')).toBe(`${FRAME}/ui/embed/w/wiki-eng/note?id=d1&theme=light`);
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Open full wiki' }));
-    expect(screen.getByTitle('wiki').getAttribute('src')).toBe(`${FRAME}/ui/feature/COMPOSE-WIKI-TAB-1`);
+    fireEvent.click(screen.getByRole('tab', { name: 'Document' })); // the pane keeps the last clicked doc
+    expect(screen.getByTitle('wiki').getAttribute('src')).toBe(`${FRAME}/ui/embed/w/wiki-eng/note?id=d1&theme=light`);
     expect(client.identity).not.toHaveBeenCalled();
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
 
 describe('Wiki tab: order and opening pane', () => {
-  const ORDER = ['Search', 'Graph', 'Area', 'Feature', 'Decisions', 'Sources', 'Ledger', 'Open full wiki'];
+  const ORDER = ['Search', 'Graph', 'Area', 'Feature', 'Decisions', 'Sources', 'Ledger', 'Document'];
   const client = () => ({
     ...graphCalls(),
     identity: vi.fn(), featureHub: vi.fn(() => new Promise(() => {})), decisions: vi.fn(), decisionsPage: vi.fn(), sourcesPage: vi.fn(),
@@ -300,6 +300,7 @@ describe('Compose wiki DataClient', () => {
     await client.decisionsPage({ workspace: 'wiki-eng', cursor: 'c2', size: 20 });
     await client.sourcesPage({ workspace: 'wiki-eng' });
     await client.sourcesPage({ workspace: 'wiki-eng', cursor: 's2', size: 20 });
+    await client.featuresPage({ workspace: 'wiki-eng', cursor: 'f2', size: 20 });
     await client.docsByArea({ workspace: 'wiki-eng', area: 'search' });
     await client.docsByArea({ workspace: 'wiki-eng', area: 'search', cursor: 'a2', size: 20 });
     await client.ledger({ workspace: 'wiki-eng', from: '2026-09-30T00:00:00Z', to: '2026-10-31T00:00:00Z' });
@@ -312,6 +313,7 @@ describe('Compose wiki DataClient', () => {
       'GET /api/wiki/identity', 'POST /api/wiki/query/feature_hub', 'POST /api/wiki/query/search',
       'POST /api/wiki/query/decisions_page', 'POST /api/wiki/query/decisions_page',
       'POST /api/wiki/query/sources_page', 'POST /api/wiki/query/sources_page',
+      'POST /api/wiki/query/features_page',
       'POST /api/wiki/query/docs_by_area', 'POST /api/wiki/query/docs_by_area',
       'POST /api/wiki/query/ledger', 'POST /api/wiki/query/ledger',
       'GET /api/wiki/feeds/upcoming_calls?workspace=wiki-eng', 'GET /api/wiki/feeds/upcoming_calls?workspace=wiki-eng', 'POST /api/wiki/query/decisions',
@@ -321,10 +323,11 @@ describe('Compose wiki DataClient', () => {
     expect(calls[4][2]).toEqual({ workspace: 'wiki-eng', cursor: 'c2', size: 20 });
     expect(calls[5][2]).toEqual({ workspace: 'wiki-eng' });
     expect(calls[6][2]).toEqual({ workspace: 'wiki-eng', cursor: 's2', size: 20 });
-    expect(calls[7][2]).toEqual({ workspace: 'wiki-eng', area: 'search' });
-    expect(calls[8][2]).toEqual({ workspace: 'wiki-eng', area: 'search', cursor: 'a2', size: 20 });
-    expect(calls[9][2]).toEqual({ workspace: 'wiki-eng', from: '2026-09-30T00:00:00Z', to: '2026-10-31T00:00:00Z' });
-    expect(calls[10][2]).toEqual({ workspace: 'wiki-eng', from: '2026-09-30T00:00:00Z', to: '2026-10-31T00:00:00Z', cursor: 'l2', size: 20 });
-    expect(calls[11][1]).toBe('GET');
+    expect(calls[7][2]).toEqual({ workspace: 'wiki-eng', cursor: 'f2', size: 20 });
+    expect(calls[8][2]).toEqual({ workspace: 'wiki-eng', area: 'search' });
+    expect(calls[9][2]).toEqual({ workspace: 'wiki-eng', area: 'search', cursor: 'a2', size: 20 });
+    expect(calls[10][2]).toEqual({ workspace: 'wiki-eng', from: '2026-09-30T00:00:00Z', to: '2026-10-31T00:00:00Z' });
+    expect(calls[11][2]).toEqual({ workspace: 'wiki-eng', from: '2026-09-30T00:00:00Z', to: '2026-10-31T00:00:00Z', cursor: 'l2', size: 20 });
+    expect(calls[12][1]).toBe('GET');
   });
 });

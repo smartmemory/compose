@@ -142,7 +142,7 @@ describe('WikiView resolves a repo path to a wiki note', () => {
   it.skipIf(!linked)('the ledger path opens as its note in the frame; the frame URL carries only the doc id', async () => {
     const c = client({ byPath: async () => ({ workspace: 'wiki-eng', id: 'eng-mac-ops:coordination/ledger.md' }) });
     render(<WikiView client={c} workspace="wiki-eng" frameBase={FRAME} docOpen={{ path: `${LEDGER}#L22710` }} />);
-    await waitFor(() => expect(screen.getByTitle('wiki').getAttribute('src')).toBe(`${FRAME}/ui/w/wiki-eng/note?id=${encodeURIComponent('eng-mac-ops:coordination/ledger.md')}`));
+    await waitFor(() => expect(screen.getByTitle('wiki').getAttribute('src')).toBe(`${FRAME}/ui/embed/w/wiki-eng/note?id=${encodeURIComponent('eng-mac-ops:coordination/ledger.md')}&theme=light`));
   });
 
   it.skipIf(!linked)('a miss keeps today\'s feature hub and warns with the path', async () => {

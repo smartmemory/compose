@@ -33,6 +33,9 @@ async function fakeWiki(calls) {
       ? res.json({ items: [], total: 0, next_cursor: null, generated_at: 't' })
       : res.status(400).json({ code: 'bad_filter', message: 'no such feature' });
   });
+  app.post('/query/features_table', (req, res) => (Object.keys(req.body.filters).length === 0
+    ? res.json({ items: [], total: 0, next_cursor: null, generated_at: 't' })
+    : res.status(400).json({ code: 'bad_filter', message: 'no filters expected' })));
   app.post('/query/sources', (req, res) => {
     if (req.body.page?.cursor === 'REDIRECT') return res.redirect(303, '/signin');
     return Object.keys(req.body.filters).length === 0
@@ -114,6 +117,10 @@ const ROWS = [
     ['POST', '/query/sources', { query: 'sources', workspace: 'wiki-eng', filters: {}, page: { size: 20, cursor: 'abc.DEF_123' } }]],
   ['sources_page: cursor at the cap passes', 'ok', true, 'POST', '/query/sources_page', { workspace: 'wiki-eng', cursor: 'c'.repeat(512) }, null, 200, null, 1,
     ['POST', '/query/sources', { query: 'sources', workspace: 'wiki-eng', filters: {}, page: { size: 50, cursor: 'c'.repeat(512) } }]],
+  ['features_page: allowed, page built here, filters dropped', 'ok', true, 'POST', '/query/features_page', { workspace: 'wiki-eng', size: 20, filters: { status: ['PLANNED'] } }, null, 200, null, 1,
+    ['POST', '/query/features_table', { query: 'features_table', workspace: 'wiki-eng', filters: {}, page: { size: 20 } }]],
+  ['features_page: size 51', 'ok', true, 'POST', '/query/features_page', { workspace: 'wiki-eng', size: 51 }, null, 400, 'bad_request', 0],
+  ['features_page: other workspace', 'ok', true, 'POST', '/query/features_page', { workspace: 'wiki-private' }, null, 403, 'workspace_refused', 0],
   ['sources_page: oversize cursor', 'ok', true, 'POST', '/query/sources_page', { workspace: 'wiki-eng', cursor: 'c'.repeat(513) }, null, 400, 'bad_request', 0],
   ['sources_page: empty cursor', 'ok', true, 'POST', '/query/sources_page', { workspace: 'wiki-eng', cursor: '' }, null, 400, 'bad_request', 0],
   ['sources_page: object cursor', 'ok', true, 'POST', '/query/sources_page', { workspace: 'wiki-eng', cursor: { $ne: 1 } }, null, 400, 'bad_request', 0],

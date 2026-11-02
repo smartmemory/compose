@@ -12,6 +12,7 @@
  *   POST /api/wiki/query/decisions     -> POST /query/decisions    {workspace, featureId}
  *   POST /api/wiki/query/decisions_page -> POST /query/decisions   {workspace, cursor?, size?} (all decisions, paged)
  *   POST /api/wiki/query/sources_page   -> POST /query/sources     {workspace, cursor?, size?} (all sources, paged)
+ *   POST /api/wiki/query/features_page -> POST /query/features_table {workspace, cursor?, size?} (all features, paged; WIKI-UI-LINKS-1)
  *   POST /api/wiki/query/docs_by_area   -> POST /query/docs_by_area {workspace, area, cursor?, size?} (one area's docs, paged)
  *   POST /api/wiki/query/ledger        -> POST /query/ledger       {workspace, from, to, cursor?, size?} (the window's entries, paged, sort ts desc set here)
  *   GET  /api/wiki/feeds/upcoming_calls?workspace= -> GET /feeds/upcoming_calls?workspace= (the ONE fixed feed; null when the wiki does not serve it)
@@ -57,6 +58,7 @@ export const CURSOR_MAX = 512;
 export const WIKI_PAGED_QUERIES = {
   decisions_page: { query: 'decisions', maxSize: 50 },
   sources_page: { query: 'sources', maxSize: 50 },
+  features_page: { query: 'features_table', maxSize: 50 }, // WIKI-UI-LINKS-1: the Feature pane's list when no feature is picked
   docs_by_area: { query: 'docs_by_area', maxSize: 50, field: 'area', max: 200, pattern: /^[A-Za-z0-9_.:@/-]+$/ }, // the wiki schema's area characters
   // A spec with `window` takes `from` and `to` (see windowOf) and carries a fixed `sort` that is built here, never read from the client.
   ledger: { query: 'ledger', maxSize: 50, window: true, sort: [['ts', 'desc']] },

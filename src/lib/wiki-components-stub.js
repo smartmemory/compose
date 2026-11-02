@@ -7,4 +7,5 @@ export const Decisions = () => null;
 export const Sources = () => null;
 export const AreaDocs = () => null;
 export const Ledger = () => null;
+export const Features = () => null;
 export const wikiPath = () => '/';

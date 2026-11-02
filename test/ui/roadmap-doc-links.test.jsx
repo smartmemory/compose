@@ -108,7 +108,7 @@ describe('wiki pane opens the requested doc', () => {
   it.skipIf(!linked)('a listed doc opens as its note in the frame', async () => {
     const client = hubClient([doc('d-design', 'docs/features/F-1/design.md')]);
     render(<WikiView client={client} featureCode="F-1" workspace="wiki-eng" frameBase={FRAME} docOpen={{ path: 'docs/features/F-1/design.md' }} />);
-    await waitFor(() => expect(screen.getByTitle('wiki').getAttribute('src')).toBe(`${FRAME}/ui/w/wiki-eng/note?id=d-design`));
+    await waitFor(() => expect(screen.getByTitle('wiki').getAttribute('src')).toBe(`${FRAME}/ui/embed/w/wiki-eng/note?id=d-design&theme=light`));
   });
   it.skipIf(!linked)('an unlisted doc leaves the feature hub open and throws nothing', async () => {
     const client = hubClient([doc('d-design', 'docs/features/F-1/design.md')]);
