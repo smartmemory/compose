@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://compose.smartmemory.dev/contracts/evidence.schema.json",
   "title": "evidence",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "One receipt for one state claim (COMP-DOGFOOD-EVIDENCE-GATE-1, row A of COMP-DOGFOOD-1). The caller says what it saw; the Compose server re-checks it against the machine (git, ps, the file, the screenshot) and never trusts it. An accepted receipt is stored and returned as an `ev:<id>` (`#/definitions/evidenceRef`), which a later claim may cite in place of the object (the ops ledger, the message bus and the four state tools all take the ref; lib/evidence-cli.js mints one outside MCP). The validator is lib/evidence.js `validateEvidence`; the re-checks are lib/evidence.js `verifyEvidence`; the store is lib/evidence.js `evidenceStorePath` (one JSON line per accepted receipt, `#/definitions/record`).",
   "_source": "smart-memory-ops units/COMP-DOGFOOD-1/plan-dag.md row A (OWNER GO, shape (a): Compose is the system of record)",
   "_roadmap": "COMP-DOGFOOD-EVIDENCE-GATE-1",
@@ -52,7 +52,7 @@
       "maxLength": 2000
     },
     "sha": {
-      "description": "A commit is on the repo's default branch. Re-check: `git rev-parse --verify --quiet <sha>^{commit}` in `repo` (server/lifecycle-guard.js gitCommitExists), then `git merge-base --is-ancestor <sha> <branch>` for the default branch (origin/HEAD, else main, else master; local or origin/).",
+      "description": "A commit is on the repo's default branch. Re-check: `git rev-parse --verify --quiet <sha>^{commit}` in `repo` (server/lifecycle-guard.js gitCommitExists), then `git merge-base --is-ancestor <sha> <branch>` for the default branch (origin/HEAD, else main, else master; local or origin/). An optional `branch` names a declared land branch instead (`land_branches` in contracts/evidence-words.json, starting at 2.0): the same ancestor check against that branch; any other name is refused.",
       "type": "object",
       "required": ["kind", "repo", "sha", "at", "by"],
       "additionalProperties": false,
@@ -60,6 +60,7 @@
         "kind": { "const": "sha" },
         "repo": { "$ref": "#/definitions/absPath" },
         "sha": { "type": "string", "pattern": "^[0-9a-fA-F]{7,40}$" },
+        "branch": { "type": "string", "minLength": 1, "maxLength": 200 },
         "at": { "$ref": "#/definitions/at" },
         "by": { "$ref": "#/definitions/by" }
       }
