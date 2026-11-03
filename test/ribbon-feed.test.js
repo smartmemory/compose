@@ -178,7 +178,7 @@ describe('GET /api/ribbon', () => {
   }
   // [name, query, deps override, status, check(body)]
   const ROWS = [
-    ['a good window answers with the contract keys', `from=${FROM}&to=${TO}`, {}, 200, (b) => assert.deepEqual(Object.keys(b), ['from', 'to', 'now', 'live', 'asOf', 'ageS', 'lanes', 'bands', 'pins', 'coverage', 'history', 'notRecorded', 'sourceErrors'])],
+    ['a good window answers with the contract keys', `from=${FROM}&to=${TO}`, {}, 200, (b) => assert.deepEqual(Object.keys(b), ['from', 'to', 'now', 'live', 'asOf', 'ageS', 'lanes', 'bands', 'pins', 'coverage', 'history', 'notRecorded', 'sourceErrors', 'owner'])],
     ['the eta carries prev null on the first reading and is written to the history file', `from=${FROM}&to=${TO}`, { loadUnits: async () => ({ units: [unit('U5', 'forge', { ready_at: T('10:00'), dispatched_at: T('11:00') })], coverage: {}, asOf: new Date(NOW).toISOString() }) }, 200, (b) => assert.deepEqual(lane(b).eta, { p50: '2h', p80: '3h', asOf: 'a', raw: 'r', prev: null })],
     ['the ledger unreadable: sourceErrors.ledger is set and the owner-queue decide mark still comes back', `from=${FROM}&to=${TO}`, { ledger: { get: async () => ({ value: null, error: 'ENOENT ledger.md' }), rows: () => [] } }, 200, (b) => {
       assert.match(b.sourceErrors.ledger, /ENOENT/);

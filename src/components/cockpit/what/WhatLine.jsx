@@ -4,7 +4,9 @@
  *
  * The state word and counts come from whatRules.js (a rule table, no model call); hovering the state word shows the
  * table with the matching row marked. The optional `onCountOpen(kind)` (RIBBON-NOW-1, `working` | `waiting` | `landed`)
- * takes those three counts instead of navigating; waiting-on-you always opens the inbox. An unknown source reads "?" with "source unavailable", never 0. While the fleet
+ * takes those three counts instead of navigating; waiting-on-you always opens the inbox. An unknown count is never 0 and never a bare
+ * "?" (C6, COMP-DAYVIEW-DESIGN-FIX-1): it shows the last value this page read with its age, muted, or words saying why. The owner
+ * count leads the line (C3): a filled chip in the one loud hue naming the first ask, or "Nothing needs you" at zero. While the fleet
  * or the unit index is still loading it draws a skeleton. Each count links to the place that lists those things.
  */
 import React from 'react';
@@ -13,6 +15,8 @@ import { useUnitIndex } from '../../../lib/useUnitIndex.js';
 import { useAgentState } from './useAgentState.js';
 import { WHAT_RULES, LAST_VISIT_KEY, whatRule, whatCounts, readLastVisit } from './whatRules.js';
 import { useNotifyState } from '../notify/useNotifyState.js';
+import { ownerAsks, stripTag } from '../notify/notifyLogic.js';
+import { smPanel } from '../fleetLogic.js';
 
 const hhmm = (ms) => new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
 
@@ -22,19 +26,69 @@ function freshness(fleetData, index) {
   return times.length ? `as of ${hhmm(Math.min(...times))}` : null;
 }
 
+/** Last known value of each count, kept for the page's life so Home and Day share it: `{id: {n, at}}`. */
+const LAST_KNOWN = new Map();
+
+/** "4 min", "2 h" for the last-known age. */
+function ageWords(ms) {
+  const m = Math.max(0, Math.round(ms / 60_000));
+  return m < 60 ? `${m} min` : `${Math.round(m / 60)} h`;
+}
+
+/**
+ * The words for one count. Known: "<n> <label>". Unknown (C6): the last value read with its age, "1 waiting on you, 4 min
+ * ago", muted; with no earlier value, "<label>: <why>". `why` is the reason in words, never a bare "?".
+ */
+export function countWords({ n, label, why, last, now }) {
+  if (n !== null && n !== undefined) return { text: `${n} ${label}`, known: true };
+  if (last) return { text: `${last.n} ${label}, ${ageWords(now - last.at)} ago`, known: false, why };
+  return { text: `${label}: ${why}`, known: false, why };
+}
+
 function Count({ id, n, label, why, onClick }) {
-  const shown = n === null ? '?' : n;
-  const text = `${shown} ${label}`;
+  if (n !== null && n !== undefined) LAST_KNOWN.set(id, { n, at: Date.now() });
+  const w = countWords({ n, label, why, last: LAST_KNOWN.get(id), now: Date.now() });
   return (
     <button
       type="button"
       data-testid={`what-count-${id}`}
-      className="tabular-nums whitespace-nowrap hover:underline focus-visible:underline outline-none"
-      title={n === null ? why : text}
-      aria-label={n === null ? `${text} (${why})` : text}
+      data-known={w.known ? 'true' : 'false'}
+      className={`tabular-nums whitespace-nowrap hover:underline focus-visible:underline outline-none${w.known ? '' : ' text-muted-foreground'}`}
+      title={w.known ? w.text : `${w.text} (${why})`}
+      aria-label={w.known ? w.text : `${w.text} (${why})`}
       onClick={onClick}
     >
-      {shown} {label}
+      {w.text}
+    </button>
+  );
+}
+
+/**
+ * C3: the owner count leads the line. Above zero, a filled chip in the one loud hue (`--needs-you`, the ribbon's owner
+ * color) naming the first ask, which opens it; at zero, "Nothing needs you" in muted text; unknown, the C6 words.
+ */
+function NeedsYou({ n, rows, why, onClick }) {
+  if (n === null || n === undefined) return <Count id="you" n={null} label="waiting on you" why={why} onClick={onClick} />;
+  if (n === 0) {
+    LAST_KNOWN.set('you', { n, at: Date.now() });
+    return (
+      <button type="button" data-testid="what-count-you" data-known="true" onClick={onClick}
+        className="whitespace-nowrap text-muted-foreground outline-none hover:underline focus-visible:underline">Nothing needs you</button>
+    );
+  }
+  LAST_KNOWN.set('you', { n, at: Date.now() });
+  const first = rows?.[0] ? stripTag(rows[0].text) : '';
+  const title = first.length > 60 ? `${first.slice(0, 59)}…` : first;
+  return (
+    <button
+      type="button"
+      data-testid="what-count-you"
+      data-known="true"
+      className="max-w-full truncate rounded-full bg-[hsl(var(--needs-you))] px-2.5 py-0.5 font-semibold text-background outline-none hover:brightness-110 focus-visible:ring-2 focus-visible:ring-ring"
+      title={first ? `${n} needs you: ${first}` : `${n} needs you`}
+      onClick={onClick}
+    >
+      {n} needs you{title ? `: ${title}` : ''}
     </button>
   );
 }
@@ -64,6 +118,8 @@ export default function WhatLine({ onOpenFleet, onNavigate, onCountOpen }) {
   );
   const rule = React.useMemo(() => whatRule(raw), [raw]);
   const counts = React.useMemo(() => whatCounts(raw), [raw]);
+  // The same rows `whatCounts` counts (ownerAsks over the fleet queue panel with the chip's notify state), for the chip's title.
+  const ownerRows = React.useMemo(() => ownerAsks(smPanel(fleet, 'queue')?.value, notifyState, raw.now)?.rows ?? null, [fleet, notifyState, raw.now]);
 
   if (fleetLoading || indexLoading) {
     return <div data-testid="what-line-skeleton" aria-busy="true" className="h-5 w-2/3 max-w-xl rounded bg-muted animate-pulse" />;
@@ -73,11 +129,11 @@ export default function WhatLine({ onOpenFleet, onNavigate, onCountOpen }) {
     const ev = new CustomEvent('compose:open-inbox', { cancelable: true });
     if (window.dispatchEvent(ev)) onOpenFleet?.(); // nobody handled it yet (before NOTIFY-INBOX-1): the fleet pane lists owner questions
   };
-  const unknown = 'source unavailable';
   const asOf = freshness(fleet, index);
 
   return (
     <div data-testid="what-line" className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm">
+      <NeedsYou n={counts.waitingYou} rows={ownerRows} why="owner queue not reachable, retrying" onClick={openInbox} />
       <span className="group relative">
         <button
           type="button"
@@ -104,17 +160,15 @@ export default function WhatLine({ onOpenFleet, onNavigate, onCountOpen }) {
         </span>
         <span>:</span>
       </span>
-      <Count id="working" n={counts.working} label="working" why={unknown} onClick={() => (onCountOpen ? onCountOpen('working') : onOpenFleet?.())} />
+      <Count id="working" n={counts.working} label="working" why="fleet not reachable, retrying" onClick={() => (onCountOpen ? onCountOpen('working') : onOpenFleet?.())} />
       <span aria-hidden="true">·</span>
-      <Count id="review" n={counts.waitingReview} label="waiting on review" why={unknown} onClick={() => (onCountOpen ? onCountOpen('waiting') : onNavigate?.('process'))} />
-      <span aria-hidden="true">·</span>
-      <Count id="you" n={counts.waitingYou} label="waiting on you" why={unknown} onClick={openInbox} />
+      <Count id="review" n={counts.waitingReview} label="waiting on review" why="unit index not loaded, retrying" onClick={() => (onCountOpen ? onCountOpen('waiting') : onNavigate?.('process'))} />
       <span aria-hidden="true">·</span>
       <Count
         id="landed"
         n={counts.landedSinceVisit}
         label="landed since your last visit"
-        why={lastVisitAt === null && index?.units ? 'no earlier visit recorded' : unknown}
+        why={lastVisitAt === null && index?.units ? 'no earlier visit recorded' : 'unit index not loaded, retrying'}
         onClick={() => (onCountOpen ? onCountOpen('landed') : onNavigate?.('process'))}
       />
       {asOf && <span data-testid="what-asof" className="text-[11px] text-muted-foreground">{asOf}</span>}

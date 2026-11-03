@@ -36,6 +36,7 @@
     --success: 142 71% 45%;
     --warning: 32 95% 52%;
     --artifact: 282 40% 60%;
+    --needs-you: 317 100% 33%;    /* #a90079: the one loud hue, owner waits only (COMP-DAYVIEW-DESIGN-FIX-1) */
     --chart-1: 12 76% 61%;
     --chart-2: 173 58% 39%;
     --chart-3: 197 37% 24%;
@@ -78,6 +79,7 @@
     /* Semantic */
     --success: 142 71% 45%;
     --warning: 38 92% 50%;
+    --needs-you: 315 100% 71%;    /* #ff6ad9 */
     --artifact: 282 40% 60%;
     /* Charts */
     --chart-1: 217 91% 60%;

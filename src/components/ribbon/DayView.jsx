@@ -5,7 +5,8 @@ import { ribbonAlerts } from '../cockpit/notify/notifyState.js';
 import { publishSeats } from '../cockpit/notify/useNotifyState.js';
 import { useCostMeterProps } from '../vision/HomeFleetGlance.jsx';
 import DayRibbon from './DayRibbon.jsx';
-import { alertTip, orphanAlerts } from './ribbonLayout.js';
+import { alertTip, orphanAlerts, withOwnerOpen } from './ribbonLayout.js';
+import { ownerAsks } from '../cockpit/notify/notifyLogic.js';
 import RangeBar from './RangeBar.jsx';
 import { useRibbonWindow } from './useRibbonWindow.js';
 import { useRibbonFeed } from './useRibbonFeed.js';
@@ -81,6 +82,16 @@ export default function DayView({ onOpenFleet, onNavigate, active = true }) {
     [notify.collected, notify.notify?.state],
   );
   const seats = useMemo(() => seatPcts(meter.seats), [meter.seats]);
+  // C3: the ribbon draws an owner wait at now only for an ask the WHAT line still counts: the same `ownerAsks` rule over the
+  // feed's open asks, with the same notify state (an ask answered from the cockpit stops counting in both at once).
+  const ribbonData = useMemo(() => {
+    const open = feed.data?.owner?.open;
+    const ids = Array.isArray(open) ? (ownerAsks(open, notify.notify?.state ?? null, Date.now())?.rows ?? []).map((r) => r.id) : null;
+    return withOwnerOpen(feed.data, ids, win.now);
+  }, [feed.data, notify.notify?.state, win.now]);
+  const openOwner = useCallback(() => {
+    if (window.dispatchEvent(new CustomEvent('compose:open-inbox', { cancelable: true }))) onOpenFleet?.(); // same fallback as the WHAT line
+  }, [onOpenFleet]);
   // "Until reset" on a seat wall reads the seat rows this page already polls (never a second read).
   useEffect(() => { publishSeats(meter.seats); }, [meter.seats]);
 
@@ -205,7 +216,8 @@ export default function DayView({ onOpenFleet, onNavigate, active = true }) {
         {feed.data && (
           <div className="flex-1 min-h-0">
             <DayRibbon
-              data={feed.data}
+              data={ribbonData}
+              onOwnerOpen={openOwner}
               from={win.window.from}
               to={win.window.to}
               now={win.now}

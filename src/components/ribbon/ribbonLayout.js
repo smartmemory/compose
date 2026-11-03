@@ -400,3 +400,62 @@ export const alertTip = (a, now) => {
   const base = tipText({ ...a, kind: 'alert', now });
   return a.cleared ? `${base} · ${CLEARED_WORD[a.cleared.action] ?? a.cleared.action} ${clock(a.cleared.at, now)}` : base;
 };
+
+// ---- one lane state for every view (COMP-DAYVIEW-DESIGN-FIX-1 U1, S1 + S2) ----
+
+/** A current unit with no newer stamp for this long is drawn stale, gets no ETA and is not counted as working. */
+export const STALE_MS = 24 * HOUR;
+/** A span still counts as "at now" when it ended this recently (the feed's clock and the page's differ by a poll). */
+const AT_NOW_SLACK_MS = 120_000;
+
+/** The spans a lane has at `now` (work or wait, never notRecorded). */
+const spansAtNow = (lane, n) => (lane?.spans || []).filter((s) => s.kind !== 'notRecorded' && toMs(s.start) <= n && toMs(s.end) >= n - AT_NOW_SLACK_MS);
+
+/**
+ * What a lane is doing at `now`, the ONE answer the ribbon's NOW text, the phone's Now list and the legend share, so the
+ * views cannot disagree (S1). An owner wait wins over any other span, then any wait, then the current unit's work.
+ * `{kind: 'wait', cause, since, phrase, span}` | `{kind: 'stale' | 'working', since, phrase}` | null (nothing at now).
+ * `stale` (S2): the current unit was dispatched more than `STALE_MS` ago and nothing waits, so it reads as old work, not live.
+ */
+export function laneState(lane, now) {
+  const n = toMs(now);
+  const at = spansAtNow(lane, n);
+  const owner = at.find((s) => s.kind === 'wait' && s.cause === 'owner');
+  const wait = owner || at.find((s) => s.kind === 'wait');
+  const cur = lane?.current || null;
+  if (wait) {
+    const since = toMs(wait.since ?? (cur && !owner ? cur.since : wait.start));
+    const cause = wait.cause || 'unknown';
+    return { kind: 'wait', cause, since, phrase: `${causePhrase(cause)} ${fmtDur(n - since)}`, span: wait };
+  }
+  if (!cur) return null;
+  const since = toMs(cur.since);
+  if (!Number.isFinite(since)) return { kind: 'working', since: null, phrase: 'working' };
+  const age = n - since;
+  return age > STALE_MS
+    ? { kind: 'stale', since, phrase: `stale: working ${fmtDur(age)}, no stamp in 24h` }
+    : { kind: 'working', since, phrase: `working ${fmtDur(age)}` };
+}
+
+/**
+ * C3: the feed with every LIVE owner wait dropped whose ask is no longer open for the headline. `openIds` are the ids
+ * `ownerAsks(feed.owner.open, notifyState)` keeps (the WHAT line's own rule); null means "unknown", so nothing is dropped.
+ * A past owner wait (it ended before now) is history and always stays.
+ */
+export function withOwnerOpen(feed, openIds, now) {
+  if (!feed || !Array.isArray(feed.lanes) || !Array.isArray(openIds)) return feed;
+  const keep = new Set(openIds);
+  const n = toMs(now);
+  const live = (s) => s.kind === 'wait' && s.cause === 'owner' && s.queueId && toMs(s.end) >= n - AT_NOW_SLACK_MS;
+  return { ...feed, lanes: feed.lanes.map((l) => ({ ...l, spans: (l.spans || []).filter((s) => !live(s) || keep.has(s.queueId)) })) };
+}
+
+/** The owner waits the ribbon draws at now: one per open ask, `[{lane, queueId}]` (what the test compares to the headline). */
+export function ownerWaitsAtNow(lanes, now) {
+  const n = toMs(now);
+  return (lanes || []).flatMap((l) => spansAtNow(l, n).filter((s) => s.kind === 'wait' && s.cause === 'owner').map((s) => ({ lane: l.lane, queueId: s.queueId ?? null })));
+}
+
+/** Plain names for the feed's source-level gaps (C2: they are text under the ribbon, never a box over the lanes). */
+const GAP_WORDS = { spend: 'spend history', expiry: 'plan expiry dates', ownerQueue: 'the owner queue', quota: 'seat quota', holds: 'launch holds' };
+export const gapWord = (source) => GAP_WORDS[source] || GAP_WORDS[String(source).split('.')[0]] || source;

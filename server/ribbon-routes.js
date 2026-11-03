@@ -16,7 +16,8 @@ import { readSeats } from './usage-routes.js';
 import { getDataDir } from './project-root.js';
 import { buildUnitIndex } from '../lib/unit-index.js';
 import { buildRibbon, computeHistory, etaWithPrev, parseGateLog, remainingByLane } from '../lib/ribbon-feed.js';
-import { queueDecisions } from '../lib/decisions-ledger.js';
+import { queueDecisions, unitsIn } from '../lib/decisions-ledger.js';
+import { groupOf, stripTag } from '../lib/owner-queue-class.js';
 import { ledgerDecisions, ledgerPath } from './decisions-routes.js';
 
 export const RIBBON_ROUTE = '/api/ribbon';
@@ -34,6 +35,48 @@ function instant(value, name) {
   if (typeof value !== 'string' || !ISO_OFFSET_RE.test(value)) return { error: `${name} must be an ISO 8601 time with an offset, e.g. 2026-10-31T18:00:00+08:00` };
   const t = Date.parse(value);
   return Number.isNaN(t) ? { error: `${name} is not a real time` } : { ms: t };
+}
+
+/**
+ * C3 (COMP-DAYVIEW-DESIGN-FIX-1 U1): the owner waits, from the SAME owner queue the WHAT line counts (`ownerAsks`,
+ * COUNT-ONE-1), so the ribbon can never show "1 waiting on you" with nothing drawn. The queue is folded the way sm_status
+ * folds it (latest record per id); only `asks` and `security` rows count (`groupOf`, the chip's classifier). Each ask goes
+ * on a lane: its own `lane`, else its `unit`'s lane, else the lane of the first unit its text names, else the asking
+ * session's lane (`forge-main` -> forge), else the ops row with `laneGuess: true` (said in the tip, never silent).
+ * Returns `{open, spans}`: `open` are the asks open at `now` in the fleet queue panel's row shape (`{id, by, text, age}`
+ * plus `lane`), which `ownerAsks` reads unchanged; `spans` are `{lane, span}` for every ask open at some time in the window.
+ */
+export function ownerWaits({ queue = [], units = [], lanes = [], from, to, now }) {
+  const byId = new Map();
+  for (const r of queue) if (r && typeof r.id === 'string') byId.set(r.id, { ...(byId.get(r.id) ?? {}), ...r });
+  const laneOfUnit = new Map(units.map((u) => [u.id, u.lane]));
+  const has = new Set(lanes);
+  const fallback = has.has('ops') ? 'ops' : (lanes[0] ?? null);
+  const iso = (t) => new Date(t).toISOString();
+  const open = [];
+  const spans = [];
+  for (const r of byId.values()) {
+    if ((r.status !== 'open' && r.status !== 'closed') || typeof r.ts !== 'number' || !Number.isFinite(r.ts)) continue;
+    const g = groupOf(r.text);
+    if (g !== 'asks' && g !== 'security') continue;
+    const named = [r.lane, laneOfUnit.get(r.unit), ...unitsIn(`${r.unit ?? ''} ${r.text ?? ''}`).map((u) => laneOfUnit.get(u)), String(r.by ?? '').replace(/-main$/, '')]
+      .find((l) => typeof l === 'string' && has.has(l));
+    const lane = named ?? fallback;
+    const start = r.ts * 1000;
+    if (r.status === 'open') open.push({ id: r.id, by: r.by ?? null, text: String(r.text ?? ''), age: Math.max(0, Math.round((now - start) / 1000)), lane });
+    const end = r.status === 'open' ? now : (typeof r.closed_ts === 'number' ? r.closed_ts * 1000 : null);
+    if (lane === null || end === null || end < from || start > to) continue;
+    const title = stripTag(r.text).slice(0, 160);
+    spans.push({
+      lane,
+      span: {
+        kind: 'wait', cause: 'owner', start: iso(Math.max(start, from)), end: iso(Math.min(end, to)), since: iso(start),
+        unit: r.unit ?? null, title, job: null, queueId: r.id, laneGuess: !named,
+        why: `waiting on your answer (owner queue ${r.id}${named ? '' : ', no lane named: shown on ' + lane})`,
+      },
+    });
+  }
+  return { open, spans };
 }
 
 /** Each source reads to `{value}` or `{error}` (never throws). */
@@ -182,6 +225,19 @@ export function attachRibbonRoutes(app, { remote = false, env = process.env, dep
         gateEntries: gl.value ?? [], outage: outage.value ?? null, seats: st.value?.seats ?? null,
         etas, history, sourceErrors, warn,
       });
+      // C3: owner waits from the owner queue, on the lane each one belongs to. A queue that could not be read is unknown
+      // (`owner.open: null`, the ribbon then drops nothing), never an empty list.
+      if (oq.error) body.owner = { open: null, error: oq.error };
+      else {
+        const ow = ownerWaits({ queue: oq.value ?? [], units: unitList, lanes: body.lanes.map((l) => l.lane), from: a.ms, to: b.ms, now: t0 });
+        for (const { lane, span } of ow.spans) {
+          const row = body.lanes.find((l) => l.lane === lane);
+          row.spans.push(span);
+          row.spans.sort((x, y) => Date.parse(x.start) - Date.parse(y.start) || Date.parse(x.end) - Date.parse(y.end));
+          row.idle = false;
+        }
+        body.owner = { open: ow.open };
+      }
       responses.set(key, { at: t0, body });
       while (responses.size > RESPONSE_MAX) responses.delete(responses.keys().next().value);
       res.json(body);

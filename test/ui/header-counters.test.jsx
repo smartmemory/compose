@@ -12,7 +12,7 @@ vi.mock('../../src/components/vision/useVisionStore.js', () => ({
 
 const { default: AttentionQueueSidebar, attentionCollapsedKey } = await import('../../src/components/vision/AttentionQueueSidebar.jsx');
 const { HeaderCounters, AgentStatusPill } = await import('../../src/components/cockpit/HeaderStatus.jsx');
-const { default: WhatLine } = await import('../../src/components/cockpit/what/WhatLine.jsx');
+const { default: WhatLine, countWords } = await import('../../src/components/cockpit/what/WhatLine.jsx');
 const { WHAT_RULES, LAST_VISIT_KEY, whatState, whatCounts } = await import('../../src/components/cockpit/what/whatRules.js');
 const { resetFleetPoller } = await import('../../src/lib/fleetPoller.js');
 const { resetUnitIndex } = await import('../../src/lib/useUnitIndex.js');
@@ -122,7 +122,7 @@ const ROWS = [
     expect(chip.getAttribute('title')).toBe('Compose: 3 items · 1 active · 1 blocked · 1 gate');
     expect(container.querySelector('[class*="hidden"]')).toBeNull();
   }],
-  ['unknown sources render "?" in the what line, never 0 and never an error string', async () => {
+  ['unknown sources read as words in the what line (C6): never 0, never a bare "?", never an error string', async () => {
     resetPollers();
     routeFetch({ '/api/fleet': FLEET_DOWN, '/api/units/index': {} });
     render(<WhatLine onOpenFleet={vi.fn()} onNavigate={vi.fn()} />);
@@ -130,9 +130,19 @@ const ROWS = [
     await screen.findByTestId('what-line');
     expect(screen.getByTestId('what-state').textContent).toBe('Unknown');
     const counts = ['working', 'review', 'you', 'landed'].map((id) => screen.getByTestId(`what-count-${id}`).textContent);
-    expect(counts).toEqual(['? working', '? waiting on review', '? waiting on you', '? landed since your last visit']);
-    expect(counts.join(' ')).not.toMatch(/\b0\b|error|timed out/i);
-    expect(screen.getByTestId('what-count-working').getAttribute('title')).toBe('source unavailable');
+    expect(counts).toEqual([
+      'working: fleet not reachable, retrying', 'waiting on review: unit index not loaded, retrying',
+      'waiting on you: owner queue not reachable, retrying', 'landed since your last visit: unit index not loaded, retrying',
+    ]);
+    expect(counts.join(' ')).not.toMatch(/\b0\b|error|timed out|\?/i);
+    expect(screen.getByTestId('what-line').textContent).not.toContain('?');
+    expect(screen.getByTestId('what-count-working').getAttribute('data-known')).toBe('false');
+  }],
+  ['an unknown count with an earlier reading shows that value and its age, muted (C6)', () => {
+    const w = countWords({ n: null, label: 'waiting on you', why: 'owner queue not reachable, retrying', last: { n: 1, at: NOW - 4 * 60_000 }, now: NOW });
+    expect([w.known, w.why]).toEqual([false, 'owner queue not reachable, retrying']);
+    expect(w.text).toMatch(/^1 waiting on you, 4\s?m\w* ago$/);
+    expect(countWords({ n: 0, label: 'working', why: 'x', last: null, now: NOW })).toEqual({ text: '0 working', known: true });
   }],
   ['the what line reads as one sentence and its hover marks the matching rule', async () => {
     resetPollers();
@@ -144,7 +154,9 @@ const ROWS = [
     expect(line).toBeTruthy();
     expect(screen.getByTestId('what-count-working').textContent).toBe('5 working');
     expect(screen.getByTestId('what-count-review').textContent).toBe('1 waiting on review');
-    expect(screen.getByTestId('what-count-you').textContent).toBe('11 waiting on you');
+    // C3: the owner count leads the line as a chip naming the first ask.
+    expect(screen.getByTestId('what-count-you').textContent).toMatch(/^11 needs you/);
+    expect(line.firstElementChild).toBe(screen.getByTestId('what-count-you'));
     expect(screen.getByTestId('what-count-landed').textContent).toBe('0 landed since your last visit');
     const rules = screen.getAllByTestId('what-rule');
     expect(rules.map((r) => r.getAttribute('data-current'))).toEqual(['false', 'false', 'true', 'false', 'false']);

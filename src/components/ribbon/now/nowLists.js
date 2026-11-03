@@ -8,6 +8,7 @@
 import { smPanel } from '../../cockpit/fleetLogic.js';
 import { etaWord } from '../lane/laneLogic.js';
 import { stripTag } from '../../cockpit/notify/notifyLogic.js';
+import { laneState } from '../ribbonLayout.js';
 
 const ms = (v) => { const t = Date.parse(v ?? ''); return Number.isFinite(t) ? t : null; };
 const laneOfSession = (name) => String(name ?? '').replace(/-main$/, '');
@@ -62,7 +63,9 @@ export function workingNow(fleet, feed, agent = null, now = Date.now()) {
       rows.push({ kind: 'job', lane: laneOfSession(j.session), unit: j.id ?? null, title: j.kind ?? null, since: Number.isFinite(j.age) ? now - j.age * 1000 : null });
     }
   } else if (lanes) {
-    for (const l of lanes) if (l.current) rows.push({ kind: 'lane', lane: l.lane, unit: l.current.id, title: l.current.title ?? null, since: ms(l.current.since) });
+    // S2: only a lane whose current unit is live work stands in; a stale or waiting one is not "working".
+    const at = typeof feed?.now === 'string' ? feed.now : now; // the feed's own clock, as phoneLines reads it
+    for (const l of lanes) if (l.current && laneState(l, at)?.kind === 'working') rows.push({ kind: 'lane', lane: l.lane, unit: l.current.id, title: l.current.title ?? null, since: ms(l.current.since) });
   } else return null;
   return rows.sort(oldestFirst);
 }
@@ -115,7 +118,7 @@ export function landedSince(index, sinceMs, feed = null) {
 }
 
 /**
- * The phone's per-lane lines: `{lane, text}` for each lane with something current, waiting or next:
+ * The phone's per-lane lines: `{lane, tone, text}` (`tone` is laneState's kind or wait cause, null for an index-only line) for each lane with something current, waiting or next:
  * "<title> · <state> · ETA <when>" (`etaWord` of the lane drawer: a time or "in 9h", never the feed's long `raw` text). `null` when the feed is down. `index` may be null (then no lane reads "waiting").
  */
 export function phoneLines(feed, index, now = Date.now()) {
@@ -125,17 +128,24 @@ export function phoneLines(feed, index, now = Date.now()) {
   const out = [];
   for (const l of feed.lanes) {
     const waits = units.filter((u) => u?.lane === l.lane && (u.waiting === 'review' || u.waiting === 'owner'));
-    let title; let state;
-    if (l.current) { title = l.current.title || l.current.id; state = 'working'; }
-    else if (waits.length) {
+    // S1: the ribbon's own answer for the lane (laneState), so "main" never reads "working" here and "waiting on review" there.
+    const st = laneState(l, nowIso);
+    let title; let state; let tone = null;
+    if (st) {
+      const owner = st.kind === 'wait' && st.cause === 'owner';
+      title = owner ? (st.span.title || l.current?.title || l.current?.id || 'an owner question') : (l.current?.title || l.current?.id || st.span?.title || st.span?.unit || l.lane);
+      state = st.phrase;
+      tone = st.kind === 'wait' ? st.cause : st.kind;
+    } else if (waits.length) {
       title = waits[0].title || waits[0].id;
       const since = waits[0].waiting === 'owner' ? ms(waits[0].ownerWaitSince) : null;
       state = waits[0].waiting === 'owner' ? `waiting on you${since === null ? '' : ` ${agoWords(since, now)}`}` : 'waiting on review';
     }
     else if (l.next?.length) { title = l.next[0].title || l.next[0].id; state = 'next up'; }
     else continue;
-    const eta = l.eta?.noData ? 'no data' : l.eta ? etaWord(l.eta.p50, nowIso) : 'unknown';
-    out.push({ lane: l.lane, text: `${clip(String(title))} · ${state} · ETA ${eta}` });
+    // S2: a stale unit has no live estimate, so it shows none.
+    const eta = tone === 'stale' ? 'none (stale)' : l.eta?.noData ? 'no data' : l.eta ? etaWord(l.eta.p50, nowIso) : 'unknown';
+    out.push({ lane: l.lane, tone, text: `${clip(String(title))} · ${state} · ETA ${eta}` });
   }
   return out;
 }

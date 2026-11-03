@@ -120,6 +120,16 @@ describe('Day money block as bars (COMP-COCKPIT-MONEY-COMPACT-1)', () => {
       expect(screen.queryByTestId('cost-meter-api-credit')).toBeNull();
       expect(screen.queryByTestId('cost-meter-asof')).toBeNull();
     }],
+    ['owner D-0043: each seat\'s 5h and 7d bars sit together on one shaded band, Codex on its own', () => {
+      meter();
+      const bands = [...document.querySelectorAll('[data-band="seat"]')];
+      expect(bands.map((b) => b.getAttribute('data-testid'))).toEqual(['cost-meter-seat-seat1', 'cost-meter-seat-seat2', 'cost-meter-seat-seat3', 'cost-meter-seat-seat4', 'cost-meter-codex']);
+      for (const b of bands.slice(0, 4)) {
+        expect(b.querySelectorAll('[role="progressbar"]').length).toBe(2);
+        expect(b.className).toMatch(/\bbg-muted\/40\b/);
+        expect(b.firstElementChild.className).toMatch(/\bgap-0\b/);
+      }
+    }],
   ];
   it.each(ROW_TABLE)('%s', (_name, run) => { run(); });
 });

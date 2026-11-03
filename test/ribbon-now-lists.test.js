@@ -106,7 +106,7 @@ describe('phoneLines', () => {
     assert.ok(long.text.startsWith('Long title Long title') && long.text.includes('…') && long.text.endsWith('working · ETA 02:00 Sun'), 'a long title is clipped, a time ETA reads like the ribbon\'s');
     assert.match(got.find((l) => l.lane === 'g').text, /· ETA Tue$/, 'a later day reads as a weekday');
     assert.deepEqual(got.filter((l) => !['f', 'g'].includes(l.lane)).map((l) => `${l.lane}: ${l.text}`), [
-      'a: Search · working · ETA in 9h',
+      'a: Search · working 8h · ETA in 9h',
       'b: Waiting one · waiting on review · ETA no data',
       'c: T-X · waiting on you · ETA unknown',
       'd: Queued one · next up · ETA unknown',

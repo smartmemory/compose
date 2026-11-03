@@ -44,7 +44,7 @@ function Bar({ pct, state = 'ok', testId }) {
 function Col({ n, state, base, tick = null, reset, title, testId, pctText }) {
   const h = fillPct(n);
   return (
-    <div className="flex w-8 flex-col items-center gap-0.5" title={title} data-testid={testId}>
+    <div className="flex w-6 flex-col items-center gap-0.5" title={title} data-testid={testId}>
       <span className={cn('text-[10px] leading-3 font-mono', h === null ? MUTED : 'text-card-foreground')}>{h === null ? 'n/a' : pctText}</span>
       <div className="relative h-9 w-3 rounded bg-muted" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={h === null ? undefined : Math.round(h)} data-state={h === null ? 'empty' : state} data-height={h === null ? '' : Math.round(h)}>
         {h !== null && <div className={cn('absolute inset-x-0 bottom-0 rounded', FILL[state] ?? base)} style={{ height: `${h}%` }} />}
@@ -58,10 +58,15 @@ function Col({ n, state, base, tick = null, reset, title, testId, pctText }) {
 const FIVE = 'bg-primary';
 const WEEK = 'bg-chart-2';
 
+/**
+ * One seat's pair on its own shaded band (OWNER D-0043, COMP-DAYVIEW-DESIGN-FIX-1 U1): the band is the theme's muted token, the
+ * two 24 px columns touch, so the bars sit 12 px apart inside a pair and 32 px apart across pairs (6 + 6 band padding + 8 gap
+ * + 6 + 6), and the pairs read as groups.
+ */
 function Pair({ name, title, testId, flash, press, children }) {
   return (
-    <div className={cn('flex shrink-0 flex-col items-center gap-0.5 px-0.5', press && PRESS, flash && 'ring-2 ring-primary')} title={title} data-testid={testId} data-flash={flash ? 'true' : undefined} {...(press ?? {})}>
-      <div className="flex gap-1">{children}</div>
+    <div className={cn('flex shrink-0 flex-col items-center gap-0.5 rounded-md bg-muted/40 px-1.5 py-1', press && PRESS, flash && 'ring-2 ring-primary')} title={title} data-testid={testId} data-band="seat" data-flash={flash ? 'true' : undefined} {...(press ?? {})}>
+      <div className="flex gap-0">{children}</div>
       <span className={cn('text-[11px] leading-4', MUTED)}>{name}</span>
     </div>
   );
@@ -92,7 +97,7 @@ export default function CostBars({ rows, seats, seatsError, pending, spend, spen
         {pending && <div className="h-4 w-2/3 rounded bg-muted animate-pulse" data-testid="cost-meter-skeleton" aria-label="Loading seats" />}
         {seatsError && <span className="text-[12px] text-destructive" data-testid="cost-meter-seats-down">usage_watch unavailable: {seatsError}</span>}
         {retired.count > 0 && <span className="sr-only" data-testid="cost-meter-retired">{RETIRED_NOTE(retired.count)}</span>}
-        <div className="flex flex-wrap items-end gap-x-3 gap-y-1.5">
+        <div className="flex flex-wrap items-end gap-x-2 gap-y-1.5">
           {pairs.map((p) => {
             const w = p.week;
             return (
@@ -114,7 +119,7 @@ export default function CostBars({ rows, seats, seatsError, pending, spend, spen
             );
           })}
           {cx && (
-            <div className="border-l border-border pl-3">
+            <div className="border-l border-border pl-2">
               <Pair
                 name="Codex"
                 testId="cost-meter-codex"

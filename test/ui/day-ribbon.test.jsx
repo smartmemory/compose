@@ -46,7 +46,9 @@ const ROWS = [
       for (const k of ['land', 'deploy', 'decide']) expect(count(root, `mark-${k}`)).toBeGreaterThan(0);
       expect(count(root, 'now-line')).toBe(1);
       expect(root.textContent).toContain('NOW 16:40');
-      expect(root.textContent).toContain('Search filters by workspace');
+      // S2: a working unit prints its age after a shorter title (the full title is in the tip).
+      expect(root.querySelector('[data-testid="lane-2.0"] [data-testid="current"]').textContent).toBe('Search filter… · 7h 10m');
+      expect(root.querySelector('[data-testid="lane-2.0"] [data-testid="current"]').getAttribute('data-state')).toBe('working');
       expect(root.textContent).toContain('→ Workspace switcher…');
       expect(count(root, 'eta')).toBeGreaterThan(0);
       expect(root.querySelector('[data-testid="ribbon-title"]').textContent).toBe('Lanes · yesterday 18:00 to tomorrow 06:00');
@@ -116,8 +118,12 @@ const ROWS = [
     name: 'prehistory: dashed not-recorded regions name the source and no lane is blank',
     p: () => props('prehistory'),
     check: ({ root }) => {
+      // C2 (U1): the source-level gap is words under the ribbon, never a box over the lane field.
       expect(count(root, 'region-notRecorded')).toBe(1);
-      expect(root.querySelector('[data-testid="region-notRecorded"] [data-tip]').getAttribute('data-tip')).toBe('Not recorded · stamps.dispatched_at\nnot recorded: stamps begin 2026-09-01');
+      expect(root.querySelector('svg [data-testid="region-notRecorded"]')).toBeNull();
+      expect(root.querySelector('svg .reg-norec')).toBeNull();
+      expect(root.querySelector('[data-testid="ribbon-gaps"] [data-testid="region-notRecorded"]').getAttribute('data-tip')).toBe('Not recorded · stamps.dispatched_at\nnot recorded: stamps begin 2026-09-01');
+      expect(root.querySelector('[data-testid="ribbon-gaps"]').textContent).toBe('Not recorded in this window: stamps.dispatched_at (not recorded: stamps begin 2026-09-01)');
       for (const n of ['2.0', 'ops']) {
         const lane = root.querySelector(`[data-testid="lane-${n}"]`);
         expect(within(lane).getByTestId('lane-empty').textContent).toBe('not recorded in this window');
@@ -217,7 +223,9 @@ const ROWS = [
       expect(lanes).toBe(5);
       const marks = count(root, 'mark-land') + count(root, 'mark-deploy') + count(root, 'mark-deployFail') + count(root, 'mark-decide');
       const pins = count(root, 'pin-seatReset') + count(root, 'pin-expiry');
-      expect(focusable.length).toBe(lanes + 1 + marks + pins + count(root, 'eta') + 1); // LIVE-DATA-1: the ETA pin is now a tab stop
+      // LIVE-DATA-1: the ETA pin is a tab stop; U1 (C3): so is the owner marker at NOW on a lane waiting on you.
+      expect(count(root, 'owner-now')).toBe(1);
+      expect(focusable.length).toBe(lanes + 1 + marks + pins + count(root, 'eta') + 1 + count(root, 'owner-now'));
 
       const land = root.querySelector('[data-testid="mark-land"]');
       key(land);
@@ -326,6 +334,27 @@ const ROWS = [
       fireEvent.pointerUp(window, { clientX: 302, pointerId: 1 });
       expect(AXIS).not.toHaveBeenCalled();
       box.mockRestore();
+    },
+  },
+  {
+    name: 'M9: the legend lists exactly the span kinds this render draws, and drops one when it is gone',
+    p: () => props('day'),
+    check: ({ root, rerender }) => {
+      const SPAN_KEYS = ['owner', 'work', 'stale', 'review', 'gate', 'quota', 'unknown', 'norec'];
+      const spanKeys = () => {
+        const out = new Set([...root.querySelectorAll('rect.seg')].map((r) => ({ 's-work': 'work', 's-stale': 'stale', 's-norec': 'norec' })[[...r.classList].find((c) => c.startsWith('s-'))] ?? [...r.classList].find((c) => c.startsWith('s-')).slice(2)));
+        if (root.querySelector('[data-testid="span-wait"][data-cause="owner"], g[data-cause="owner"]')) out.add('owner');
+        return [...out].sort();
+      };
+      const legendKeys = () => [...root.querySelectorAll('[data-testid="ribbon-legend"] [data-key]')].map((e) => e.getAttribute('data-key')).filter((k) => SPAN_KEYS.includes(k)).sort();
+      const before = spanKeys();
+      expect(before.length).toBeGreaterThan(1);
+      expect(legendKeys()).toEqual(before);
+      const gone = before.find((k) => k !== 'work');
+      const strip = props('day', { edit: (d) => { for (const l of d.lanes) l.spans = (l.spans || []).filter((sp) => (sp.kind === 'wait' ? (['review', 'gate', 'quota', 'owner'].includes(sp.cause) ? sp.cause : 'unknown') : sp.kind === 'work' ? 'work' : 'norec') !== gone); } });
+      rerender(<DayRibbon {...strip} />);
+      expect(legendKeys()).not.toContain(gone);
+      expect(legendKeys()).toEqual(spanKeys());
     },
   },
 ];

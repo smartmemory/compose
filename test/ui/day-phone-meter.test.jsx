@@ -44,7 +44,9 @@ describe('phone Day meter cards (COMP-COCKPIT-PHONE-1)', () => {
     ['the box and meter keep their phone classes and test ids', async () => {
       render(<DayView onNavigate={() => {}} />);
       await screen.findByTestId('cost-meter-seat-seat2');
-      expect(screen.getByTestId('day-phone-meter-box').className).toContain('max-h-[120px]');
+      // C5 (U1): no height cap and no inner scroll, so every seat row is whole.
+      expect(screen.getByTestId('day-phone-meter-box').className).not.toMatch(/max-h-|overflow-y-auto/);
+      expect(screen.queryByTestId('day-phone-meter-toggle')).toBeNull();
       expect(screen.getByTestId('day-phone-meter').className).toContain('shrink-0');
       expect(screen.queryByTestId('day-ribbon')).toBeNull();
     }],
