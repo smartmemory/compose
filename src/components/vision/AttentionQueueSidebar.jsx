@@ -173,6 +173,7 @@ function IdeasSection({ onViewChange }) {
  *   projectRoot      string   ← the cockpit's project, highlighted in project mode
  *   noProjectLane    string | null  ← the project-less lane a project room is showing
  *   onSelectProject  (lane, root|null) => void
+ *   switchRefused    string | null  ← the lane whose project the last row click could not open
  */
 function AttentionQueueSidebar({
   storageScope,
@@ -202,6 +203,7 @@ function AttentionQueueSidebar({
   projectRoot = null,
   noProjectLane = null,
   onSelectProject,
+  switchRefused = null,
 }) {
   const safeItems = items || [];
   const safeGates = gates || [];
@@ -279,6 +281,7 @@ function AttentionQueueSidebar({
             projectRoot={projectRoot}
             noProjectLane={noProjectLane}
             onSelectProject={onSelectProject}
+            switchRefused={switchRefused}
           />
         </div>
       </ScrollArea>

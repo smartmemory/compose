@@ -49,7 +49,7 @@ describe('collect with the review source', () => {
   it('an overdue group is a critical chip row', () => {
     const c = collect({ ...base, review: ok([group('g1', 'forge-main', 30)]) }, NOW);
     assert.equal(c.rows.length, 1);
-    assert.deepEqual(chipState(c), { state: 'alerts', count: 1, critical: 1, unavailable: 0 });
+    assert.deepEqual(chipState(c), { state: 'alerts', count: 0, critical: 1, unavailable: 0, others: ['review'] }); // a review is not an owner ask
   });
   it('a failed review read makes the chip unknown, not all clear', () => {
     const c = collect({ ...base, review: { value: null, error: 'HTTP 500' } }, NOW);

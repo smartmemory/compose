@@ -35,7 +35,7 @@ import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { open, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { resolveStratumBin } from '../lib/stratum-engine.js';
 import { groupOf, stripTag } from '../lib/owner-queue-class.js';
 import { optionsOf, choiceText } from '../lib/ask-options.js';
@@ -82,7 +82,7 @@ export function runReader(argv, { timeoutMs, env = process.env, okCodes = [0] } 
     try {
       child = spawn(argv[0], argv.slice(1), { shell: false, stdio: ['ignore', 'pipe', 'pipe'], env });
     } catch (error) {
-      reject(new Error(`cannot start ${argv[0]}: ${error.code ?? error.message}`));
+      reject(new Error(`cannot start ${basename(argv[0])}: ${error.code ?? 'spawn failed'}`));
       return;
     }
     let stdout = '';
@@ -104,27 +104,43 @@ export function runReader(argv, { timeoutMs, env = process.env, okCodes = [0] } 
     }, timeoutMs);
     child.stdout.on('data', (d) => { if (stdout.length < MAX_STDOUT) stdout += d; });
     child.stderr.on('data', (d) => { if (stderr.length < 4096) stderr += d; });
-    child.on('error', (error) => finish(reject, new Error(`cannot start ${argv[0]}: ${error.code ?? error.message}`)));
+    child.on('error', (error) => finish(reject, new Error(`cannot start ${basename(argv[0])}: ${error.code ?? 'spawn failed'}`)));
     child.on('close', (code, signal) => {
       clearTimeout(killTimer);
       if (timedOut) return finish(reject, new Error(`timed out after ${timeoutMs} ms`));
       if (code === null) return finish(reject, new Error(`killed by ${signal}`));
       if (!okCodes.includes(code)) {
         const why = stderr.trim().split('\n').filter((l) => !/ExperimentalWarning|--trace-warnings/.test(l)).pop() ?? '';
-        return finish(reject, new Error(`exit ${code}${why ? `: ${why.slice(0, 200)}` : ''}`));
+        return finish(reject, new Error(`exit ${code}${why ? `: ${scrubHome(why).slice(0, 200)}` : ''}`));
       }
       return finish(resolve, { code, stdout, stderr });
     });
   });
 }
 
+/** A diagnostic that leaves the process carries no home path: `/Users/x/...` reads `~/...`. */
+function scrubHome(text) {
+  const home = homedir();
+  return home && home !== '/' ? String(text).split(home).join('~') : String(text);
+}
+
 function parseJson(text, what) {
   try { return JSON.parse(text); } catch { throw new Error(`${what} printed no JSON document`); }
 }
 
+const MAX_WARNINGS = 5;
+const MAX_WARNING_CHARS = 200;
+
+/** A source's `warnings` (strings), bounded; `{}` when it has none, so a clean source's shape is unchanged. */
+function boundedWarnings(raw) {
+  if (!Array.isArray(raw)) return {};
+  const warnings = raw.filter((w) => typeof w === 'string' && w.trim()).slice(0, MAX_WARNINGS).map((w) => w.slice(0, MAX_WARNING_CHARS));
+  return warnings.length ? { warnings } : {};
+}
+
 /** sm_status: keep only the panels the view shows, each still `{value, error, ts}`. */
 export async function readSmStatus(readers, env, timeoutMs = TIMEOUT_MS.sm_status) {
-  if (!existsSync(readers.smStatus)) throw new Error(`reader missing: ${readers.smStatus}`);
+  if (!existsSync(readers.smStatus)) throw new Error(`reader missing: ${basename(readers.smStatus)}`);
   const { stdout } = await runReader([readers.python, readers.smStatus, '--json'], { timeoutMs, env });
   const doc = parseJson(stdout, 'sm_status.py --json');
   if (!doc || typeof doc.sources !== 'object' || doc.sources === null) throw new Error('sm_status.py --json has no sources object');
@@ -132,7 +148,7 @@ export async function readSmStatus(readers, env, timeoutMs = TIMEOUT_MS.sm_statu
   for (const name of SM_PANELS) {
     const src = doc.sources[name];
     out[name] = src && typeof src === 'object'
-      ? { value: src.value ?? null, error: src.error ?? null, ts: src.ts ?? null }
+      ? { value: src.value ?? null, error: src.error ?? null, ts: src.ts ?? null, ...boundedWarnings(src.warnings) }
       : { value: null, error: `sm_status has no ${name} source`, ts: null };
   }
   return { generated: doc.generated ?? null, ...out };
@@ -158,7 +174,7 @@ export async function readStratum(readers, env, timeoutMs = TIMEOUT_MS.stratum) 
   };
 }
 
-/** Call a (req, res) handler in-process and parse its JSON body. */
+/** Call a (req, res) handler in-process and parse its JSON body. The call is local, so it names the loopback Host the handler's guard (COMP-LOOPBACK-HOST-GUARD-1) requires. */
 function callHandler(handler, url) {
   return new Promise((resolve, reject) => {
     let status = 200;
@@ -178,7 +194,7 @@ function callHandler(handler, url) {
       },
       write(c) { chunks.push(String(c)); return true; },
     };
-    Promise.resolve(handler({ method: 'GET', url, headers: {} }, res)).catch(reject);
+    Promise.resolve(handler({ method: 'GET', url, headers: { host: '127.0.0.1' } }, res)).catch(reject);
   });
 }
 
@@ -222,7 +238,7 @@ export async function readCadence(handler, readers) {
   try {
     wouldLaunch = { value: await readLastWouldLaunch(readers.shadowPath), error: null };
   } catch (error) {
-    wouldLaunch = { value: null, error: `shadow log: ${error.code ?? error.message}` };
+    wouldLaunch = { value: null, error: `shadow log: ${error.code ?? 'unreadable'}` };
   }
   return {
     generatedAt: belt.generatedAt ?? null,
@@ -234,14 +250,15 @@ export async function readCadence(handler, readers) {
 }
 
 /**
- * Stratum wins where both readers know a value: a detached job's liveness. For each sm_status job with
- * a pid, `alive` comes from Stratum's alive-job list when Stratum answered, else from sm_status.
+ * Stratum's fleet is `launch_gate.py --fleet`'s population: running, vendor claude, kind detached. Stratum wins on liveness
+ * only inside that population; a bash, Codex or runner job is not in its list, so its absence says nothing and it keeps
+ * sm_status's own pid check. Without Stratum's answer every job keeps sm_status liveness.
  */
 export function mergeJobs(smJobs, stratum) {
   if (!Array.isArray(smJobs)) return smJobs;
   const pids = stratum ? new Set(stratum.jobs.map((j) => j.pid).filter((p) => p !== null)) : null;
   return smJobs.map((j) => {
-    if (pids && Number.isFinite(j?.pid)) return { ...j, alive: pids.has(j.pid), aliveFrom: 'stratum' };
+    if (pids && Number.isFinite(j?.pid) && j.kind === 'detached' && j.vendor === 'claude') return { ...j, alive: pids.has(j.pid), aliveFrom: 'stratum' };
     return { ...j, aliveFrom: 'sm_status' };
   });
 }
@@ -262,7 +279,7 @@ export function createSourceCache(name, load, { ttlMs, now = Date.now, warn = co
         if (down) info(`${logPrefix} ${name} recovered`);
         down = false;
       } catch (error) {
-        const reason = String(error?.message ?? error).slice(0, 300);
+        const reason = scrubHome(error?.message ?? error).slice(0, 300);
         entry = { value: null, error: reason, ts: now() };
         if (!down) warn(`${logPrefix} ${name} unavailable: ${reason}`);
         down = true;

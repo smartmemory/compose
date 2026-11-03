@@ -163,6 +163,9 @@ export function attentionAdapter(attention) {
   if (attention?.error != null || !v) return { rows: [], defaults: [], unavailable: label };
   const alerts = Array.isArray(v.alerts) ? v.alerts : null;
   if (!alerts) return { rows: [], defaults: [], unavailable: label };
+  // Cadence answers HTTP 200 with `errors` (and `alerts: []`) when its own reader failed: that is a lost source, never "no alerts".
+  // Any rows that did come back stay.
+  const readerLost = Array.isArray(v.errors) && v.errors.length > 0;
   return {
     defaults: alerts.filter((a) => a.state === 'fallback').map((a) => a.name),
     rows: alerts.filter((a) => a.state !== 'fallback').map((a) => ({
@@ -177,7 +180,7 @@ export function attentionAdapter(attention) {
       wall: a.name,
       ...(seatOfWall(a.name) ? { seat: seatOfWall(a.name) } : {}),
     })),
-    unavailable: null,
+    unavailable: readerLost ? label : null,
   };
 }
 
@@ -207,6 +210,7 @@ export function reviewAdapter(review, now = Date.now()) {
 }
 
 const SEVERITY_RANK = { critical: 0, warn: 1 };
+export const FLEET_UNREADABLE = 'fleet unreadable';
 
 /**
  * `sources` = `{fleet, outage, attention, review}` (fleet is the /api/fleet body; the others `{value, error}`).
@@ -233,23 +237,36 @@ export function collect(sources, now = Date.now(), state = null) {
     else rows.push(r);
   }
   const unknown = [...new Set(results.map((r) => r.unavailable).filter(Boolean))];
+  // A failed refresh keeps the last good fleet body on screen (fleetPoller): its rows may be stale, so the chip cannot say "All clear".
+  if (sources.fleet && sources.fleetError != null && !unknown.includes(FLEET_UNREADABLE)) unknown.push(FLEET_UNREADABLE);
   return { rows, cleared, unknown, defaults };
 }
 
-/** `all-clear` (every source answered, no rows) | `alerts` | `unknown` (no rows, a source is down). */
+/** The row kinds that wait on the owner: the count `ownerAsks` makes (the chip, WHAT and the NOW drawer show this one number). */
+const OWNER_KINDS = new Set(['security', 'ask', 'ask-overdue']);
+const OTHER_WORD = { context: 'context', disk: 'disk', outage: 'outage', attention: 'Cadence', review: 'review' };
+
+/**
+ * `all-clear` (every source answered, no rows) | `alerts` | `unknown` (no rows, a source is down).
+ * COUNT-ONE-1 review M1: `count` is the owner-ask rows only, the same n WHAT and the NOW drawer show; the other alert kinds
+ * (context, disk, outage, attention, review) are `others` (their words), shown beside the number and in the tone, never added to it.
+ */
 export function chipState(collected) {
   const critical = collected.rows.filter((r) => r.severity === 'critical').length;
-  const count = collected.rows.length;
+  const count = collected.rows.filter((r) => OWNER_KINDS.has(r.kind)).length;
+  const others = [...new Set(collected.rows.filter((r) => !OWNER_KINDS.has(r.kind)).map((r) => OTHER_WORD[r.kind] ?? r.kind))];
   const unavailable = collected.unknown.length;
-  if (count > 0) return { state: 'alerts', count, critical, unavailable };
-  if (unavailable > 0) return { state: 'unknown', count: 0, critical: 0, unavailable };
-  return { state: 'all-clear', count: 0, critical: 0, unavailable: 0 };
+  if (collected.rows.length > 0) return { state: 'alerts', count, critical, unavailable, others };
+  if (unavailable > 0) return { state: 'unknown', count: 0, critical: 0, unavailable, others: [] };
+  return { state: 'all-clear', count: 0, critical: 0, unavailable: 0, others: [] };
 }
 
 export function chipLabel(cs) {
   if (cs.state === 'all-clear') return 'All clear';
   if (cs.state === 'unknown') return 'Alerts unknown';
-  return `${cs.count} alert${cs.count === 1 ? '' : 's'}`;
+  const marker = cs.others?.length ? cs.others.join(', ') : '';
+  if (cs.count === 0) return `Alerts: ${marker}`;
+  return `${cs.count} alert${cs.count === 1 ? '' : 's'}${marker ? ` · ${marker}` : ''}`;
 }
 
 /** The unknown line the tray shows: "No alerts from the sources that answered; N unavailable". */

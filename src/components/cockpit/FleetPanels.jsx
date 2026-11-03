@@ -83,6 +83,16 @@ function panelOr(panel, id, title, cls, render, fresh) {
       </div>
     ), card.props.children);
   }
+  const warnings = Array.isArray(panel.warnings) ? panel.warnings.filter((w) => typeof w === 'string' && w) : [];
+  if (panel.error == null && panel.value != null && warnings.length) {
+    // a clean read with reader warnings (a skipped line, a partial scan): the rows may be incomplete
+    const card = React.cloneElement(render(panel.value), { fresh });
+    return React.cloneElement(card, {}, (
+      <div className={cls.note} data-testid={`fleet-warnings-${id}`} style={TONE.yellow}>
+        may be incomplete: {warnings[0]}{warnings.length > 1 ? ` (+${warnings.length - 1} more)` : ''}
+      </div>
+    ), card.props.children);
+  }
   if (panel.value == null) {
     return <Unavailable key={id} id={id} title={title} reason={panel.error ?? 'no data'} cls={cls} />;
   }

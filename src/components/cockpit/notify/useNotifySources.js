@@ -80,15 +80,15 @@ export function resetNotifyPoller() {
  * Every mount also runs the release check: an ack or dismiss whose source answered without the row is released once.
  */
 export function useNotifySources() {
-  const { data: fleet, loading: fleetLoading } = useFleet();
+  const { data: fleet, loading: fleetLoading, error: fleetError } = useFleet();
   const [cad, setCad] = useState(state);
   useEffect(() => subscribeCadence(setCad), []);
   const notify = useNotifyState();
   const loading = (fleetLoading && !fleet) || cad.outage === null;
   const out = useMemo(() => {
-    const collected = { ...collect({ fleet, outage: cad.outage, attention: cad.attention, review: cad.review }, Date.now(), notify.state), stateUnavailable: notify.unavailable };
+    const collected = { ...collect({ fleet, fleetError, outage: cad.outage, attention: cad.attention, review: cad.review }, Date.now(), notify.state), stateUnavailable: notify.unavailable };
     return { loading, collected, chip: chipState(collected), notify };
-  }, [fleet, cad, loading, notify]);
+  }, [fleet, fleetError, cad, loading, notify]);
   useEffect(() => {
     if (out.loading || !notify.state) return;
     const keys = releaseKeys(out.collected, notify.state, smPanel(fleet, 'queue')?.value);

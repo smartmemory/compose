@@ -171,27 +171,27 @@ const ROWS = [
   ['alert Acknowledge: the row leaves the count, sits under Cleared (1) with Restore, Restore brings it back', async () => {
     const s = fakeServer();
     await openTray();
-    expect(chipText()).toContain('4 alerts');
+    expect(chipText()).toContain('3 alerts · Cadence');
     fireEvent.click(within(trayRow('seat1 5h')).getByTestId('notify-ack'));
-    await waitFor(() => expect(chipText()).toContain('3 alerts'));
+    await waitFor(() => expect(chipText()).toMatch(/3 alerts$/));
     expect(posted(s, '/api/notify/state').at(-1)).toMatchObject({ key: 'attention:seat1 5h', action: 'ack' });
     fireEvent.click(screen.getByTestId('notify-cleared-toggle'));
     const cleared = screen.getByTestId('notify-row-cleared');
     expect(within(cleared).getByTestId('notify-cleared-line').textContent).toMatch(/^acknowledged \d\d:\d\d/);
     fireEvent.click(within(cleared).getByTestId('notify-restore'));
-    await waitFor(() => expect(chipText()).toContain('4 alerts'));
+    await waitFor(() => expect(chipText()).toContain('3 alerts · Cadence'));
     expect(posted(s, '/api/notify/state').at(-1)).toEqual({ key: 'attention:seat1 5h', action: 'restore' });
   }],
   ['alert Dismiss then Restore', async () => {
     const s = fakeServer();
     await openTray();
     fireEvent.click(within(trayRow('seat1 5h')).getByTestId('notify-dismiss'));
-    await waitFor(() => expect(chipText()).toContain('3 alerts'));
+    await waitFor(() => expect(chipText()).toMatch(/3 alerts$/));
     expect(s.entries['attention:seat1 5h'].action).toBe('dismiss');
     fireEvent.click(screen.getByTestId('notify-cleared-toggle'));
     expect(within(screen.getByTestId('notify-row-cleared')).getByTestId('notify-cleared-line').textContent).toMatch(/^dismissed/);
     fireEvent.click(within(screen.getByTestId('notify-row-cleared')).getByTestId('notify-restore'));
-    await waitFor(() => expect(chipText()).toContain('4 alerts'));
+    await waitFor(() => expect(chipText()).toContain('3 alerts · Cadence'));
     expect(s.entries['attention:seat1 5h']).toBeUndefined();
   }],
   ['snooze menu: "Until reset" only once the Day page published the seat; a pick stores until', async () => {
@@ -205,7 +205,7 @@ const ROWS = [
     expect(within(screen.getByTestId('notify-snooze-menu')).getAllByRole('menuitem').map((b) => b.getAttribute('data-testid')))
       .toEqual(['notify-snooze-1h', 'notify-snooze-reset', 'notify-snooze-tomorrow']);
     fireEvent.click(screen.getByTestId('notify-snooze-reset'));
-    await waitFor(() => expect(chipText()).toContain('3 alerts'));
+    await waitFor(() => expect(chipText()).toMatch(/3 alerts$/));
     expect(posted(s, '/api/notify/state').at(-1)).toMatchObject({ key: 'attention:seat1 5h', action: 'snooze', until: resets });
     expect(screen.queryByTestId('notify-snooze-menu')).toBeNull();
   }],
@@ -215,12 +215,12 @@ const ROWS = [
     await openTray();
     fireEvent.click(within(trayRow('seat1 5h')).getByTestId('notify-ack'));
     await waitFor(() => expect(within(trayRow('seat1 5h')).getByTestId('notify-write-error').textContent).toBe('Not saved: disk is read-only'));
-    expect(chipText()).toContain('4 alerts');
+    expect(chipText()).toContain('3 alerts · Cadence');
   }],
   ['info row (FYI) Acknowledge in the drawer: it moves into the Cleared fold, the chip never counted it', async () => {
     const s = fakeServer();
     await openDrawer();
-    expect(chipText()).toContain('4 alerts');
+    expect(chipText()).toContain('3 alerts · Cadence');
     fireEvent.click(screen.getAllByTestId('inbox-group-toggle').find((b) => b.textContent.includes('fyi')));
     const row = drawerRow('fyi-1');
     expect(within(row).getByTestId('notify-actions').getAttribute('data-class')).toBe('info');
@@ -228,7 +228,7 @@ const ROWS = [
     await waitFor(() => expect(screen.getByTestId('inbox-cleared-toggle').textContent).toContain('Cleared (1)'));
     expect(screen.queryAllByTestId('inbox-row').map((r) => r.getAttribute('data-id'))).not.toContain('fyi-1');
     expect(posted(s, '/api/notify/state').at(-1)).toMatchObject({ key: 'queue:fyi-1', action: 'ack' });
-    expect(chipText()).toContain('4 alerts');
+    expect(chipText()).toContain('3 alerts · Cadence');
   }],
   ['security banner Acknowledge: the banner goes, the chip stays at its count, the drawer row is marked acknowledged', async () => {
     const s = fakeServer();
@@ -242,7 +242,7 @@ const ROWS = [
     await waitFor(() => expect(screen.queryByTestId('security-banner')).toBeNull());
     expect(posted(s, '/api/notify/state').at(-1)).toMatchObject({ key: 'security:sec-1', action: 'ack' });
     expect(posted(s, '/api/notify/state').at(-1).meta.textHash).toMatch(/^[0-9a-f]{8}$/);
-    expect(chipText()).toContain('4 alerts');
+    expect(chipText()).toContain('3 alerts · Cadence');
     expect(drawerRow('sec-1').getAttribute('data-acked')).toBe('true');
     expect(within(drawerRow('sec-1')).getByTestId('notify-acked').textContent).toMatch(/^acknowledged \d\d:\d\d$/);
   }],
@@ -283,7 +283,7 @@ const ROWS = [
     expect(screen.queryByTestId('notify-snooze-menu')).toBeNull();
     expect(screen.getByTestId('notify-tray')).toBeTruthy();
     key('d');
-    await waitFor(() => expect(chipText()).toContain('3 alerts'));
+    await waitFor(() => expect(chipText()).toMatch(/3 alerts$/));
     expect(posted(s, '/api/notify/state').at(-1)).toMatchObject({ key: 'attention:seat1 5h', action: 'dismiss' });
     key('Escape');
     expect(screen.queryByTestId('notify-tray')).toBeNull();

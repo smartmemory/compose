@@ -38,7 +38,7 @@ export function NoComposeProject({ lane }) {
   );
 }
 
-export default function FleetProjectsSection({ onViewChange, mode = 'lane', projectRoot = null, noProjectLane = null, onSelectProject }) {
+export default function FleetProjectsSection({ onViewChange, mode = 'lane', projectRoot = null, noProjectLane = null, onSelectProject, switchRefused = null }) {
   const projectMode = mode === 'project';
   const { data, error, loading } = useProcess();
   const lanes = useFleetProjects();
@@ -148,6 +148,11 @@ export default function FleetProjectsSection({ onViewChange, mode = 'lane', proj
     <div data-testid="fleet-projects">
       <p className={`${HEAD} mb-1`} style={MUTED}>Projects</p>
       {body}
+      {projectMode && switchRefused ? (
+        <p className="mt-1 px-2 text-[11px]" role="alert" style={{ color: 'hsl(var(--warning))' }} data-testid="fleet-project-switch-refused">
+          Could not open {switchRefused}. The room still shows the project it had.
+        </p>
+      ) : null}
       {lanes.saveError ? (
         <p className="mt-1 px-2 text-[11px]" role="alert" style={{ color: 'hsl(var(--destructive))' }} data-testid="fleet-projects-error">{lanes.saveError}</p>
       ) : null}

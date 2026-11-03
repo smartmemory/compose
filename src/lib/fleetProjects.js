@@ -33,7 +33,7 @@ export function projectsModeFor(room) {
 }
 
 const subscribers = new Set();
-const initial = () => ({ picked: null, override: undefined, confirmed: undefined, saveError: null });
+const initial = () => ({ picked: null, override: undefined, confirmed: undefined, saveError: null, settled: false });
 let state = initial();
 let chain = Promise.resolve();
 let latest = 0;
@@ -49,9 +49,29 @@ export function orderLanes(known, saved) {
   return Array.isArray(saved) ? saved.filter((n) => k.includes(n)) : k;
 }
 
-/** The saved order in effect: the optimistic one while set, else the server's (null = no key = every lane). */
+// Envelopes (`fleet` objects) a render saw before the last save was confirmed. One that is not in here arrived after the
+// save, so what it carries is newer than the saved order (another tab, a hand edit) and wins over the override.
+let seenBeforeSave = new WeakSet();
+let clearScheduled = false;
+
+const sameOrder = (a, b) => Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((n, i) => n === b[i]);
+
+/**
+ * The saved order in effect: the optimistic one while set, else the server's (null = no key = every lane). A confirmed
+ * save's override ends at the first envelope fetched after it (it matches the saved order, or it is newer and wins).
+ */
 export function effectiveOrder(fleet, s = state) {
-  return s.override !== undefined ? s.override : (Array.isArray(fleet?.projects) ? fleet.projects : null);
+  const server = Array.isArray(fleet?.projects) ? fleet.projects : null;
+  if (!s.settled && fleet && typeof fleet === 'object') seenBeforeSave.add(fleet);
+  if (s.override === undefined) return server;
+  if (!s.settled) return s.override;
+  const newer = fleet && typeof fleet === 'object' && !seenBeforeSave.has(fleet);
+  if (!newer && !sameOrder(server, s.override)) return s.override;
+  if (!clearScheduled) {
+    clearScheduled = true;
+    queueMicrotask(() => { clearScheduled = false; if (state.settled) emit({ override: undefined, settled: false }); });
+  }
+  return server;
 }
 
 /** The lane the KPI tiles show: the picked one when it is a shown builder column, else the first shown. */
@@ -68,7 +88,7 @@ export function setPickedLane(name) {
  * to the last confirmed order with `saveError` set when the POST fails.
  */
 export function saveFleetProjects(projects) {
-  emit({ override: projects, saveError: null });
+  emit({ override: projects, saveError: null, settled: false });
   const seq = ++latest;
   chain = chain.then(async () => {
     try {
@@ -78,9 +98,10 @@ export function saveFleetProjects(projects) {
       let body = null;
       try { body = await res.json(); } catch { /* no body */ }
       if (!res.ok) throw new Error(body?.error ?? `save failed (${res.status})`);
-      emit(seq === latest ? { confirmed: projects, override: projects } : { confirmed: projects });
+      // the latest save confirmed: nothing is left to fail, so an earlier save's error line goes
+      emit(seq === latest ? { confirmed: projects, override: projects, saveError: null, settled: true } : { confirmed: projects });
     } catch (error) {
-      emit({ override: state.confirmed, saveError: `Not saved: ${String(error?.message ?? error)}` });
+      emit({ override: state.confirmed, settled: false, saveError: `Not saved: ${String(error?.message ?? error)}` });
     }
   });
   return chain;
@@ -106,6 +127,18 @@ export function selectProjectLane(lane, roots) {
   return r?.root && r.hasCompose ? { switchTo: r.root, noProject: null } : { switchTo: null, noProject: lane };
 }
 
+/**
+ * A project-room row click as a decision: what the room shows afterwards. `switchProject(root)` resolves false when the
+ * cockpit's switch refused or failed, so the old room stays and the row says so (`refused` names the lane).
+ * `noProjectLane: undefined` means "leave it as it is".
+ */
+export async function selectProjectRow({ lane, root, projectRoot, switchProject }) {
+  if (!root) return { noProjectLane: lane, refused: null };
+  if (root === projectRoot) return { noProjectLane: null, refused: null };
+  const switched = await switchProject(root);
+  return switched === false ? { noProjectLane: undefined, refused: lane } : { noProjectLane: null, refused: null };
+}
+
 let rootsState = { roots: null, error: null };
 let rootsLoad = null;
 const rootsSubscribers = new Set();
@@ -117,6 +150,7 @@ function loadRoots() {
       const body = await res.json();
       if (!res.ok) throw new Error(body?.error ?? `roots route ${res.status}`);
       rootsState = { roots: body.roots ?? {}, error: body.error ?? null };
+      if (rootsState.error) rootsLoad = null; // a 200 that carries a config error is not a final answer: a remount reads again
     } catch (error) {
       rootsState = { roots: {}, error: String(error?.message ?? error) };
       rootsLoad = null; // the next mount tries again
@@ -252,6 +286,8 @@ export function fetchProjectDoc(name, id) {
 /** Test seam (called by resetProcessPoller): forget the selection, any unsaved order, the roots map and the model. */
 export function resetFleetProjects() {
   state = initial();
+  seenBeforeSave = new WeakSet();
+  clearScheduled = false;
   chain = Promise.resolve();
   rootsState = { roots: null, error: null };
   rootsLoad = null;

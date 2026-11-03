@@ -8,7 +8,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
 import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { attachFleetRoutes, resolveFleetReaders } from '../server/fleet-routes.js';
@@ -129,6 +129,33 @@ const ROWS = [
     ok(sources.sm_status);
     assert.ok(sources.sm_status.value.jobs.value.every((j) => j.aliveFrom === 'sm_status'));
     assert.equal(sources.sm_status.value.jobs.value.find((j) => j.id === 'job-dead').alive, true);
+  }],
+  ['Stratum decides liveness only inside its population (running detached Claude): bash and Codex stay alive, a missing Claude job is dead', { FLEET_FIXTURE_SM: 'jobs', FLEET_FIXTURE_STRATUM: 'empty' }, {}, async ({ get }) => {
+    const { sources } = await get();
+    ok(sources.stratum);
+    assert.deepEqual(sources.stratum.value.jobs, [], 'Stratum answered with an empty fleet');
+    const jobs = Object.fromEntries(sources.sm_status.value.jobs.value.map((j) => [j.id, [j.alive, j.aliveFrom]]));
+    assert.deepEqual(jobs, { 'live-bash': [true, 'sm_status'], 'live-codex': [true, 'sm_status'], 'claude-gone': [false, 'stratum'] });
+  }],
+  ['a source with a value, no error and warnings reaches the response, bounded to strings', { FLEET_FIXTURE_SM: 'warn' }, {}, async ({ get }) => {
+    const { queue, sessions } = (await get()).sources.sm_status.value;
+    assert.equal(queue.error, null);
+    assert.notEqual(queue.value, null);
+    assert.equal(queue.warnings.length, 5, 'at most five');
+    assert.ok(queue.warnings.every((w) => typeof w === 'string' && w.length <= 200), 'strings only, each cut');
+    assert.equal(queue.warnings[0], 'owner_queue.py: line 7 unreadable');
+    assert.equal('warnings' in sessions, false, 'a clean source keeps its shape');
+  }],
+  ['a missing reader and a failing reader name the file, never a home path', { COMPOSE_FLEET_SM_STATUS: join(homedir(), 'nope', 'sm_status.py'), COMPOSE_FLEET_STRATUM_BIN: join(homedir(), 'nope', 'stratum') }, {}, async ({ get, warns }) => {
+    const { sources } = await get();
+    down(sources.sm_status, /^reader missing: sm_status\.py$/);
+    down(sources.stratum, /^cannot start stratum: ENOENT$/);
+    for (const text of [JSON.stringify(sources), ...warns]) assert.equal(text.includes(homedir()), false, text);
+  }],
+  ['a reader that exits non-zero with a home path on stderr is scrubbed', { FLEET_FIXTURE_SM: 'fail-home', HOME: homedir() }, {}, async ({ get, warns }) => {
+    const { sm_status: sm } = (await get()).sources;
+    down(sm, /^exit 1: can't open ~\/x\.py$/);
+    assert.equal((JSON.stringify(sm) + warns.join('\n')).includes(homedir()), false);
   }],
   ['stratum refusal (backend unconfigured) is an outage with its code', { FLEET_FIXTURE_STRATUM: 'refused' }, {}, async ({ get }) => {
     down((await get()).sources.stratum, /^backend-unconfigured: session backend not configured/);

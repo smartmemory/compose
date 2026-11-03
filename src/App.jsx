@@ -86,7 +86,7 @@ import FleetProjectsSection, { NoComposeProject } from './components/vision/Flee
 import ProjectsHome from './components/vision/ProjectsHome.jsx';
 import ProjectGraphView from './components/vision/ProjectGraphView.jsx';
 import { closeProjectGraph, useProjectFocus, useProjectModel } from './lib/fleetProjects.js';
-import { projectsModeFor } from './lib/fleetProjects.js';
+import { projectsModeFor, selectProjectRow } from './lib/fleetProjects.js';
 import OpenLoopsPanel from './components/vision/OpenLoopsPanel.jsx';
 import { useDesignStore } from './components/vision/useDesignStore.js';
 import CommandPalette from './components/vision/shared/CommandPalette.jsx';
@@ -692,6 +692,7 @@ function AppInner() {
 
   // COMP-COCKPIT-FLEET-PROJECTS-2: the project-less lane a project room is showing ("No Compose project for <lane>").
   const [noProjectLane, setNoProjectLane] = useState(null);
+  const [switchRefused, setSwitchRefused] = useState(null);
   // COMP-COCKPIT-PROJECT-MODEL-1: a lane or project link opens that project's merged graph (a read, never a switch).
   const projectFocus = useProjectFocus();
   const { model: projectModel } = useProjectModel();
@@ -709,7 +710,7 @@ function AppInner() {
         body: JSON.stringify({ path: newPath }),
       });
       const data = await r.json();
-      if (!data.ok) return false;
+      if (!data.ok) { console.warn('[compose] project switch refused by the server'); return false; }
       // Refresh cached workspace id BEFORE setting projectRoot — the latter
       // triggers a remount of views keyed by projectRoot (e.g., DesignView),
       // and their mount effects fire wsFetch immediately. Updating the cache
@@ -725,7 +726,8 @@ function AppInner() {
       setProjectRoot(data.targetRoot);
       // Vision store will get new state via WebSocket broadcast
       return true;
-    } catch {
+    } catch (error) {
+      console.warn(`[compose] project switch failed: ${error?.name ?? 'error'}`);
       return false;
     }
   }, [refreshWorkspace]);
@@ -734,9 +736,9 @@ function AppInner() {
   // cockpit to it through the one switch above (a no-op when it is already the project); one without shows the
   // plain line instead of any project's data.
   const handleSelectProject = useCallback(async (lane, root) => {
-    if (!root) { setNoProjectLane(lane); return; }
-    if (root === projectRoot) { setNoProjectLane(null); return; }
-    await handleProjectSwitch(root);
+    const r = await selectProjectRow({ lane, root, projectRoot, switchProject: handleProjectSwitch });
+    if (r.noProjectLane !== undefined) setNoProjectLane(r.noProjectLane);
+    setSwitchRefused(r.refused);
   }, [projectRoot, handleProjectSwitch]);
 
   // ── Derived flags ───────────────────────────────────────────────────────
@@ -1483,6 +1485,7 @@ function AppInner() {
                             projectRoot={projectRoot}
                             noProjectLane={noProjectLane}
                             onSelectProject={handleSelectProject}
+                            switchRefused={switchRefused}
                             onViewChange={handleViewChange}
                           />
                         )}
@@ -1527,6 +1530,7 @@ function AppInner() {
                         projectRoot={projectRoot}
                         noProjectLane={noProjectLane}
                         onSelectProject={handleSelectProject}
+                        switchRefused={switchRefused}
                       />
                 )}
               </div>

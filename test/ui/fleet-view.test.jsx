@@ -152,6 +152,25 @@ describe('Fleet UI on the real route (fixture readers)', () => {
   }, 20_000);
 });
 
+describe('Fleet UI: reader warnings (COMP-COCKPIT-12-FU-1 M2)', () => {
+  let srv;
+  beforeAll(async () => { srv = await startServer(fixtureEnv({ FLEET_FIXTURE_SM: 'warn' })); });
+  afterAll(() => srv.stop());
+  beforeEach(() => { resetFleetPoller(); pointFetchAt(srv.base); });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('a panel with rows, no error and warnings says it may be incomplete', async () => {
+    let pane = 'sessions';
+    const { rerender } = render(<SessionsView sessions={[]} pane={pane} onPaneChange={(p) => { pane = p; }} />);
+    fireEvent.click(await screen.findByTestId('sessions-pane-fleet'));
+    rerender(<SessionsView sessions={[]} pane={pane} onPaneChange={(p) => { pane = p; }} />);
+    const note = await screen.findByTestId('fleet-warnings-owner', {}, { timeout: 10_000 });
+    expect(note.textContent).toBe('may be incomplete: owner_queue.py: line 7 unreadable (+4 more)');
+    expect(screen.queryByTestId('fleet-partial-owner')).toBeNull();
+    expect(screen.queryByTestId('fleet-warnings-ledger')).toBeNull();
+  }, 20_000);
+});
+
 describe('Fleet UI with every reader down', () => {
   let srv;
   beforeAll(async () => {
@@ -346,13 +365,13 @@ describe('COMP-COCKPIT-NOTIFY-CHIP-1 rows', () => {
 });
 
 describe('COMP-COCKPIT-NOTIFY-CHIP-1 chip, tray and banner', () => {
-  const stubSources = ({ fleet, cadenceOk }) => vi.stubGlobal('fetch', async (url) => {
+  const stubSources = ({ fleet, cadenceOk, attention = { alerts: [] }, fleetStatus = () => 200 }) => vi.stubGlobal('fetch', async (url) => {
     const u = String(url);
-    if (u === '/api/fleet') return { ok: true, json: async () => fleet };
+    if (u === '/api/fleet') return fleetStatus() === 200 ? { ok: true, json: async () => fleet } : { ok: false, status: fleetStatus(), json: async () => ({}) };
     if (!cadenceOk) return { ok: false, status: 502, json: async () => ({}) };
     if (u.endsWith('/outage')) return { ok: true, json: async () => ({ state: 'ok' }) };
     if (u.endsWith('/review')) return { ok: true, json: async () => ({ reviewMaxH: 24, inReview: [], inReviewByLane: {}, ungrouped: { count: 0, oldestLanded: null }, errors: [] }) };
-    if (u.endsWith('/attention')) return { ok: true, json: async () => ({ alerts: [] }) };
+    if (u.endsWith('/attention')) return { ok: true, json: async () => attention };
     return { ok: false, status: 404, json: async () => ({}) };
   });
   beforeEach(() => { resetFleetPoller(); resetNotifyPoller(); });
@@ -380,6 +399,32 @@ describe('COMP-COCKPIT-NOTIFY-CHIP-1 chip, tray and banner', () => {
     render(<><NotifyChip /><SecurityBanner /></>);
     await waitFor(() => expect(screen.getByTestId('notify-chip').textContent).toContain('All clear'));
     expect(screen.queryByTestId('security-banner')).toBeNull();
+  });
+
+  it('M1: a fleet refresh that fails after a clean read turns All clear into Alerts unknown (last rows kept)', async () => {
+    let status = 200;
+    stubSources({ fleet: smFleet({ queue: [], sessions: [], df: DISK_OK }), cadenceOk: true, fleetStatus: () => status });
+    render(<NotifyChip />);
+    await waitFor(() => expect(screen.getByTestId('notify-chip').textContent).toContain('All clear'));
+    status = 502;
+    await act(async () => { document.dispatchEvent(new Event('visibilitychange')); await new Promise((r) => setTimeout(r, 50)); });
+    await waitFor(() => expect(screen.getByTestId('notify-chip').textContent).toContain('Alerts unknown'));
+    fireEvent.click(screen.getByTestId('notify-chip'));
+    expect(screen.getByTestId('notify-unknown').textContent).toContain('fleet unreadable');
+  });
+
+  it('M2: a Cadence attention answer that carries errors is Alerts unknown, not All clear', async () => {
+    stubSources({ fleet: smFleet({ queue: [], sessions: [], df: DISK_OK }), cadenceOk: true, attention: { alerts: [], errors: ['cadence page: fixture unavailable'] } });
+    render(<NotifyChip />);
+    await waitFor(() => expect(screen.getByTestId('notify-chip').textContent).toContain('Alerts unknown'));
+    fireEvent.click(screen.getByTestId('notify-chip'));
+    expect(screen.getByTestId('notify-unknown').textContent).toContain('cadence attention');
+  });
+
+  it('COUNT-ONE M1: a disk alert beside the owner asks shows as its own marker, the number stays the owner count', async () => {
+    stubSources({ fleet: smFleet({ queue: QUEUE, sessions: [], df: { free_gb: 80 } }), cadenceOk: true });
+    render(<NotifyChip />);
+    await waitFor(() => expect(screen.getByTestId('notify-chip').textContent).toContain('3 alerts · disk'));
   });
 
   it('cadence down turns All clear into Alerts unknown and the tray names the source', async () => {

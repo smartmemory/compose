@@ -35,7 +35,8 @@ describe('notify cleared state', () => {
       assert.deepEqual(keys(c.rows), ['security:S1', 'ask:A1', 'attention:seat1 5h']);
       assert.deepEqual(c.cleared, []);
       assert.equal(ownerAsks(QUEUE).n, 2);
-      assert.equal(chipState(c).count, 3);
+      assert.equal(chipState(c).count, 2, 'the chip number is the owner asks; the seat wall is an other, not added in');
+      assert.deepEqual(chipState(c).others, ['Cadence']);
     }],
     ['an acked alert leaves the count and moves into cleared', () => {
       const c = collect(sources(), NOW, st({ 'attention:seat1 5h': { action: 'ack', at } }));
@@ -59,7 +60,7 @@ describe('notify cleared state', () => {
       const sec = st({ 'security:S1': { action: 'ack', at, textHash: fnv1a(SEC_TEXT) } });
       assert.equal(isCleared('security:S1', null, sec, NOW), false);
       const c = collect(sources(), NOW, sec);
-      assert.equal(chipState(c).count, 3);
+      assert.equal(chipState(c).count, 2);
       assert.equal(chipState(c).critical, 1);
       assert.equal(bannerText(c, sec), null);
       assert.equal(ownerAsks(QUEUE, sec, NOW).n, 2);
@@ -124,7 +125,8 @@ describe('notify cleared state', () => {
     }],
     ['state unavailable (null) hides nothing', () => {
       const c = collect(sources(), NOW, null);
-      assert.equal(chipState(c).count, 3);
+      assert.equal(chipState(c).count, 2);
+      assert.equal(c.rows.length, 3);
       assert.notEqual(bannerText(c, null), null);
     }],
     ['until reset: 5h wall reads five_h, 7d wall reads seven_d, hidden without a seat or with a past reset', () => {
