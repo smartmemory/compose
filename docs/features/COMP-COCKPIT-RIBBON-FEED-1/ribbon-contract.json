@@ -16,6 +16,7 @@
       "group": "'product' | 'ops' (LANE_GROUPS table)",
       "seat": "string | null",
       "idle": "bool: no current unit and no span or mark in the window",
+      "paused": "bool (COMP-DAYVIEW-SPLIT-2): the lane is listed in fleet.paused of the target root's .compose/compose.json, read fresh on every request (cache hits included). A paused lane is drawn muted with a \"paused\" label and is never idle, stale or waiting on you on the Day view. `idle` keeps its own meaning. A missing key pauses nothing; a malformed one pauses nothing and the route logs one WARNING per distinct problem.",
       "current": "{id, title, titleSource, since} | null (null in a past window)",
       "spans": [{
         "kind": "'work' | 'wait' | 'notRecorded'",

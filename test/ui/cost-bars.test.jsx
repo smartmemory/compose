@@ -43,7 +43,7 @@ describe('Day money block as bars (COMP-COCKPIT-MONEY-COMPACT-1)', () => {
       expect(screen.getByTestId('cost-meter-5h-seat1').contains(left)).toBe(true);
       expect(screen.getByTestId('cost-meter-fable-seat1').contains(right)).toBe(true);
       expect([t('cost-meter-5h-seat1'), t('cost-meter-fable-seat1')]).toEqual(['70%↻27m', '9%↻6d']);
-      expect(pair.textContent.endsWith('s1')).toBe(true);
+      expect(pair.textContent.endsWith('s1\u00a0')).toBe(true); // SPLIT-2: the seat name, then its reserved (empty) label row
       expect(screen.getByTestId('cost-meter').textContent.match(/5h-only/g)).toBeNull();
       expect(pair.getAttribute('title')).toContain('Team seats are 5h-only');
       expect(screen.getAllByRole('progressbar', { hidden: true }).filter((b) => b.closest('[data-testid^="cost-meter-seat-"]')).length).toBe(8);

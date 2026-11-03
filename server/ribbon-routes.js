@@ -10,10 +10,10 @@ import { appendFile, readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
 import { createSourceCache } from './fleet-routes.js';
-import { resolveProcessSources } from './process-routes.js';
+import { readFleetPaused, resolveProcessSources } from './process-routes.js';
 import { createEtaReader } from './ops-status-routes.js';
 import { readSeats } from './usage-routes.js';
-import { getDataDir } from './project-root.js';
+import { getDataDir, getTargetRoot } from './project-root.js';
 import { buildUnitIndex } from '../lib/unit-index.js';
 import { buildRibbon, computeHistory, etaWithPrev, parseGateLog, remainingByLane, safeReason } from '../lib/ribbon-feed.js';
 import { queueDecisions, unitsIn } from '../lib/decisions-ledger.js';
@@ -107,6 +107,19 @@ export function attachRibbonRoutes(app, { remote = false, env = process.env, dep
   const sources = deps.sources ?? resolveProcessSources(env);
   const opsRoot = dirname(sources.queuesDir);
   const dataDir = deps.dataDir ?? (() => getDataDir());
+  // COMP-DAYVIEW-SPLIT-2: `fleet.paused` is read from the same compose.json as `/api/process`'s `fleet.projects`, fresh on
+  // every request (cache hits included), so a lane is paused or not the moment the file says so. A malformed value warns
+  // once per distinct problem (the Day view polls; one warning per poll would bury it) and pauses nothing.
+  const projectRoot = deps.projectRoot ?? ((root) => () => root)(getTargetRoot());
+  let pausedWarned = null;
+  const pausedLanes = async () => {
+    let r;
+    try { r = await readFleetPaused(projectRoot()); } catch (e) { r = { paused: [], error: `compose.json unreadable (${e?.code ?? e?.message ?? e}), so fleet.paused was not read` }; }
+    if (r.error && r.error !== pausedWarned) warn(`[ribbon] ${r.error}; no lane is paused`);
+    pausedWarned = r.error;
+    return new Set(r.paused);
+  };
+  const withPaused = (body, paused) => ({ ...body, lanes: (body.lanes ?? []).map((l) => ({ ...l, paused: paused.has(l.lane) })) });
   const files = {
     snapshots: env.COMPOSE_RIBBON_SNAPSHOTS || join(homedir(), '.claude', 'usage', 'snapshots.jsonl'),
     ownerQueue: env.COMPOSE_RIBBON_OWNER_QUEUE || join(opsRoot, 'coordination', 'owner-queue.jsonl'),
@@ -192,7 +205,8 @@ export function attachRibbonRoutes(app, { remote = false, env = process.env, dep
     const key = `${minute(a.ms)}|${minute(b.ms)}`;
     const t0 = now();
     const hit = responses.get(key);
-    if (hit && t0 - hit.at < RESPONSE_TTL_MS) return res.json({ ...hit.body, ageS: Math.max(0, Math.floor((t0 - Date.parse(hit.body.asOf)) / 1000)) });
+    const paused = await pausedLanes();
+    if (hit && t0 - hit.at < RESPONSE_TTL_MS) return res.json({ ...withPaused(hit.body, paused), ageS: Math.max(0, Math.floor((t0 - Date.parse(hit.body.asOf)) / 1000)) });
     try {
       const base = `http://127.0.0.1:${req.socket.localPort}`;
       const [u, snap, oq, gl, st, led, outage] = await Promise.all([
@@ -263,7 +277,7 @@ export function attachRibbonRoutes(app, { remote = false, env = process.env, dep
       }
       responses.set(key, { at: t0, body });
       while (responses.size > RESPONSE_MAX) responses.delete(responses.keys().next().value);
-      res.json(body);
+      res.json(withPaused(body, paused));
     } catch (error) {
       warn(`[ribbon] failed: ${String(error?.message ?? error)}`);
       res.status(500).json({ error: String(error?.message ?? error) });

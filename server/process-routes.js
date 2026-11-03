@@ -189,6 +189,25 @@ export async function readFleetProjects(root) {
 }
 
 /**
+ * COMP-DAYVIEW-SPLIT-2: `fleet.paused` of `<root>/.compose/compose.json`, the lanes the owner deliberately paused:
+ * `{paused, error}`. A missing file or key pauses nothing (`error` null). A malformed value (not JSON, not an array of
+ * strings) pauses nothing and names the problem in `error`, which the caller logs. Paused is only ever this list, never
+ * inferred from inactivity.
+ */
+export async function readFleetPaused(root) {
+  const text = await readIfExists(join(root, '.compose', 'compose.json'));
+  if (text === null) return { paused: [], error: null };
+  let cfg;
+  try { cfg = JSON.parse(text); } catch { return { paused: [], error: 'compose.json is not JSON, so fleet.paused was not read' }; }
+  const list = cfg?.fleet?.paused;
+  if (list === undefined) return { paused: [], error: null };
+  if (!Array.isArray(list) || !list.every((n) => typeof n === 'string')) {
+    return { paused: [], error: `fleet.paused must be an array of lane names, got ${JSON.stringify(list).slice(0, 80)}` };
+  }
+  return { paused: [...new Set(list)], error: null };
+}
+
+/**
  * `{roots: {lane: {root, hasCompose}}, error}` for each known lane: `fleet.roots[lane]` when the key is present (a
  * string path, or null for none), else the default. A malformed `fleet.roots` is ignored whole, with `error` set.
  */

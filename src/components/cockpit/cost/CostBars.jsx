@@ -43,11 +43,13 @@ function Bar({ pct, state = 'ok', testId }) {
  */
 function Col({ n, state, base, tick = null, reset, title, testId, pctText }) {
   const h = fillPct(n);
-  // U2 M10 + F4: 28 px columns (wide enough for "↻2.1h" under the bar), 4 px apart inside a pair.
+  // U2 M10 + F4: 28 px columns (wide enough for "↻2.1h" under the bar), 4 px apart inside a pair. COMP-DAYVIEW-SPLIT-2
+  // (owner "the bars are still a bit thick"): the bar is 6 px wide on the same 36 px height, half the old 12 px; the column
+  // keeps its 28 px, so the value and the reset text fit exactly as before.
   return (
     <div className="flex w-7 flex-col items-center gap-0.5" title={title} data-testid={testId}>
       <span className={cn('text-[10px] leading-3 font-mono', h === null ? MUTED : 'text-card-foreground')}>{h === null ? 'n/a' : pctText}</span>
-      <div className="relative h-9 w-3 rounded bg-muted" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={h === null ? undefined : Math.round(h)} data-state={h === null ? 'empty' : state} data-height={h === null ? '' : Math.round(h)}>
+      <div className="relative h-9 w-1.5 rounded bg-muted" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={h === null ? undefined : Math.round(h)} data-state={h === null ? 'empty' : state} data-height={h === null ? '' : Math.round(h)}>
         {h !== null && <div className={cn('absolute inset-x-0 bottom-0 rounded', FILL[state] ?? base)} style={{ height: `${h}%` }} />}
         {tick !== null && <div className="absolute -inset-x-0.5 h-0.5 bg-foreground" title="pace" style={{ bottom: `calc(${Math.min(100, Math.max(0, tick))}% - 1px)` }} data-testid={`${testId}-tick`} data-tick={Math.round(tick)} />}
       </div>
@@ -82,8 +84,12 @@ function Pair({ name, title, testId, flash, press, over = null, children }) {
     <div className={cn('flex shrink-0 flex-col items-center gap-0.5 rounded-md bg-muted/40 px-1.5 py-1', press && PRESS, flash && 'ring-2 ring-primary')} title={title} data-testid={testId} data-band="seat" data-flash={flash ? 'true' : undefined} {...(press ?? {})}>
       <div className="flex gap-1">{children}</div>
       <span className={cn('text-[11px] leading-4', MUTED)}>{name}</span>
-      {/* U2 M10: a colored bar says why in words, so the color is never the only signal. */}
-      {over && <span className={cn('text-[10px] leading-3', over === 'full' ? 'text-destructive' : 'text-[hsl(var(--warning-ink))]')} data-testid={`${testId}-over`}>{over === 'full' ? 'at cap' : 'over pace'}</span>}
+      {/* U2 M10: a colored bar says why in words, so the color is never the only signal. COMP-DAYVIEW-SPLIT-2 (owner "awkward
+          when 'over pace' offsets them"): the label row is always there, a non-breaking space when there is nothing to say,
+          so every pair is the same height and a seat over pace keeps its bars level with its neighbours'. */}
+      <span className="h-3 text-[10px] leading-3 whitespace-nowrap" data-testid={`${testId}-label`}>
+        {over ? <span className={over === 'full' ? 'text-destructive' : 'text-[hsl(var(--warning-ink))]'} data-testid={`${testId}-over`}>{over === 'full' ? 'at cap' : 'over pace'}</span> : '\u00a0'}
+      </span>
     </div>
   );
 }
@@ -117,7 +123,9 @@ export default function CostBars({ rows, seats, seatsError, pending, spend, spen
         {/* U2 M4: plain words on screen, the tool's own reason one hover away. */}
         {seatsError && <span className="text-[12px] text-destructive" data-testid="cost-meter-seats-down" title={String(seatsError)}>Seat usage: not read, retrying</span>}
         {retired.count > 0 && <span className="sr-only" data-testid="cost-meter-retired">{RETIRED_NOTE(retired.count)}</span>}
-        <div className="flex flex-wrap items-end gap-x-2 gap-y-1.5">
+        {/* COMP-DAYVIEW-SPLIT-2: pairs line up by their tops. Every pair is the same height (reserved label row), and the
+            Codex block's "not reported" line hangs below its pair instead of lifting it, which items-end did. */}
+        <div className="flex flex-wrap items-start gap-x-2 gap-y-1.5">
           {pairs.map((p) => {
             const w = p.week;
             const fiveState = barState(fillPct(p.five.n), false);

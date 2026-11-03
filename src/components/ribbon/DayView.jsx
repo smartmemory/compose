@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import WhatLine from '../cockpit/what/WhatLine.jsx';
+import WhatLine, { withoutPaused } from '../cockpit/what/WhatLine.jsx';
 import { useNotifySources } from '../cockpit/notify/useNotifySources.js';
 import { ribbonAlerts } from '../cockpit/notify/notifyState.js';
 import { publishSeats } from '../cockpit/notify/useNotifyState.js';
 import { useCostMeterProps } from '../vision/HomeFleetGlance.jsx';
 import DayRibbon from './DayRibbon.jsx';
-import { alertTip, isLive, orphanAlerts, sourceErrorLines, withOwnerOpen } from './ribbonLayout.js';
+import { alertTip, isLive, orphanAlerts, pausedOf, sourceErrorLines, withOwnerOpen } from './ribbonLayout.js';
 import { PRESETS } from './rangeLogic.js';
 import { daySources } from './daySources.js';
 import { DayMissingSources, DaySourceNotes } from './DaySourceNotes.jsx';
@@ -64,7 +64,7 @@ export { sourceErrorLines };
  */
 export function skeletonOf(last) {
   if (!Array.isArray(last?.lanes)) return { lanes: [] };
-  return { lanes: last.lanes.map((l) => ({ lane: l.lane, group: l.group, seat: l.seat, idle: l.idle, spans: [], marks: [] })) };
+  return { lanes: last.lanes.map((l) => ({ lane: l.lane, group: l.group, seat: l.seat, idle: l.idle, paused: l.paused, spans: [], marks: [] })) };
 }
 
 /** `[{label, pct}]` for DayRibbon's "(seatN has room for them)": five-hour used percent of each active seat. */
@@ -146,6 +146,13 @@ export default function DayView({ onOpenFleet, onNavigate, active = true }) {
   const unitSrc = useUnitIndex();
   const unitIndex = unitSrc.data;
   const agent = useAgentState();
+  // COMP-DAYVIEW-SPLIT-2: the deliberately paused lanes (`fleet.paused`, stamped on the ribbon's lanes) and the open asks
+  // placed on them. The WHAT line and the Now drawer read the same filtered inputs, so a count and the list it opens agree.
+  // Keyed by value, so a poll that changes nothing paused does not recompute the WHAT line. The last body stands in while a
+  // window loads, so the counts do not jump up for one read.
+  const pausedKey = JSON.stringify(pausedOf(feed.data ?? feed.last));
+  const paused = useMemo(() => JSON.parse(pausedKey), [pausedKey]);
+  const dayIn = useMemo(() => withoutPaused(fleet, unitIndex, paused), [fleet, unitIndex, paused]);
   const [lastVisitAt] = useState(readLastVisit);
   const [nowKind, setNowKind] = useState(null);
   const nowKindRef = useRef(null);
@@ -182,11 +189,12 @@ export default function DayView({ onOpenFleet, onNavigate, active = true }) {
         && [...document.querySelectorAll('[data-testid^="cost-meter-seat-"]')].some((n) => n.getAttribute('data-testid') === `cost-meter-seat-${seat}`);
       if (seatShown) {
         e.preventDefault();
-        setMeterOpen(true);
+        // SPLIT-2: the meter is always full size since COMP-DAYVIEW-SPLIT-1, so there is no box to open first (8ae79420 removed
+        // its state and left this call, which threw on every tray "Show <seat>").
         flash(setFlashSeat, seat);
       } else if (lane && lanesRef.current.some((l) => l.lane === lane) && document.querySelector('[data-testid="day-ribbon"]')) {
         e.preventDefault();
-        if (lanesRef.current.some((l) => l.lane === lane && l.idle)) setIdle(true);
+        if (lanesRef.current.some((l) => l.lane === lane && l.idle && !l.paused)) setIdle(true); // a paused lane is never folded
         flash(setFlashLane, lane);
       }
     };
@@ -213,7 +221,7 @@ export default function DayView({ onOpenFleet, onNavigate, active = true }) {
   // U3 (AD#18): the two questions down read as links: the accent ink at the body size, underlined on hover and focus.
   const footLink = 'text-[length:var(--type-body)] text-[color:var(--rb-accent)] hover:underline focus-visible:underline underline-offset-2 outline-none';
 
-  const drawer = nowKind && <NowDrawer kind={nowKind} onClose={closeNow} fleet={fleet} index={unitIndex} feed={nowData} feedLoading={nowSrc.loading} agent={agent} lastVisitAt={lastVisitAt} sources={sources} />;
+  const drawer = nowKind && <NowDrawer kind={nowKind} onClose={closeNow} fleet={dayIn.fleet} index={dayIn.index} feed={nowData} feedLoading={nowSrc.loading} agent={agent} lastVisitAt={lastVisitAt} sources={sources} />;
   if (phone) {
     return (
       <div className="h-full min-h-0 overflow-hidden" data-testid="day-view">
@@ -226,7 +234,7 @@ export default function DayView({ onOpenFleet, onNavigate, active = true }) {
   return (
     <div ref={rootRef} className="h-full min-h-0 flex flex-col gap-2 p-3 overflow-y-auto" data-testid="day-view">
       <div className="sticky top-0 z-10 bg-background" data-testid="day-what">
-        <WhatLine onOpenFleet={onOpenFleet} onNavigate={onNavigate} onCountOpen={setNowKind} />
+        <WhatLine onOpenFleet={onOpenFleet} onNavigate={onNavigate} onCountOpen={setNowKind} paused={paused} />
       </div>
       <RangeBar
         window={win.window}

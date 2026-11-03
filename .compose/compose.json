@@ -61,6 +61,11 @@
     "tokenEnv": "WIKI_OWNER_TOKEN"
   },
   "fleet": {
+    "paused": [
+      "hub",
+      "setup",
+      "trader"
+    ],
     "projects": [
       "2.0",
       "hub",

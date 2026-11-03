@@ -35,6 +35,17 @@ export const RIBBON_CSS = `
 .day-ribbon .s-gate{fill:url(#rb-hz-gate)}
 .day-ribbon .s-unknown{fill:url(#rb-hz-unknown);stroke:var(--rb-muted);stroke-opacity:.5;stroke-width:.6}
 .day-ribbon .s-norec{fill:transparent;stroke:var(--rb-muted);stroke-width:1;stroke-dasharray:3 2.5}
+.day-ribbon .seg.in-owner{fill:none;stroke-width:1.2;stroke-opacity:1;stroke-dasharray:none}
+.day-ribbon .s-work.in-owner{stroke:var(--rb-work)} .day-ribbon .s-stale.in-owner{stroke:var(--rb-work);stroke-dasharray:5 3}
+.day-ribbon .s-review.in-owner{stroke:var(--rb-wait)} .day-ribbon .s-quota.in-owner{stroke:var(--rb-quota)}
+.day-ribbon .s-gate.in-owner{stroke:var(--rb-gate)} .day-ribbon .s-unknown.in-owner{stroke:var(--rb-muted)}
+.day-ribbon .s-norec.in-owner{stroke:var(--rb-muted);stroke-dasharray:3 2.5}
+.day-ribbon .lane-paused .lname{font-weight:500;fill:var(--rb-muted)}
+.day-ribbon .lane-paused .seg{opacity:.35}
+.day-ribbon .lane-paused .s-owner{fill:var(--rb-muted)}
+.day-ribbon .lane-paused .mark{opacity:.5}
+.day-ribbon .paused-t{font-size:var(--rb-label);fill:var(--rb-muted);font-style:italic;letter-spacing:.04em}
+.day-ribbon .s-paused{fill:var(--rb-muted);fill-opacity:.35}
 .day-ribbon .own-q{font-size:var(--rb-label);font-weight:800;fill:hsl(var(--background));pointer-events:none}
 .day-ribbon .own-now{cursor:pointer;outline:none} .day-ribbon .own-now circle{fill:var(--rb-you)}
 .day-ribbon .own-now:focus-visible circle{stroke:var(--rb-fg);stroke-width:2}

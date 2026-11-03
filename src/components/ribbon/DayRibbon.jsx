@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
-  alertTip, axisTicks, clientToSvgX, clock, etaAt, etaWord, fmtDur, gapWord, isLive, laneState, layoutLanes, nextResetsLine, resetTicks, seatShort,
+  alertTip, axisTicks, clientToSvgX, clock, dayLaneState, etaAt, etaWord, fmtDur, gapWord, isLive, isPaused, layoutLanes, nextResetsLine, resetTicks, seatShort,
   tipText, toMs, when, windowTitle, xOf,
 } from './ribbonLayout.js';
 import { clusterMarks, MIN_DRAG_MS } from './rangeLogic.js';
@@ -87,6 +87,7 @@ const LEGEND = [
   ['owner', 's-owner', 'waiting on you'], ['work', 's-work', 'working'], ['stale', 's-stale', 'stale (no stamp in 24h)'],
   ['review', 's-review', 'waiting on review'], ['gate', 's-gate', 'waiting on gate'], ['quota', 's-quota', 'waiting on quota'],
   ['unknown', 's-unknown', 'waiting, cause not recorded'], ['norec', 's-norec', 'not recorded'],
+  ['paused', 's-paused', 'paused project (muted, never counted)'],
   ['hold', 'band-hold', 'launch hold'], ['outage', 'band-outage', 'outage'],
   ['land', 'shape', 'landed'], ['deploy', 'shape', 'deployed'], ['deployFail', 'shape', 'deploy failed'], ['decide', 'shape', 'decided for you'],
   ['cluster', '#', 'events grouped (count)'], ['alert', '⚠', 'alert'], ['eta', '◆', 'expected landing'], ['reset', '│', 'seat reset (AHEAD)'],
@@ -196,7 +197,9 @@ export default function DayRibbon({
   const nx = X(now);
   const inWindow = (t) => toMs(t) >= toMs(from) && toMs(t) <= toMs(to);
   // One state per lane at now (S1), judged on the feed's own clock (RIBBON-ROWS-1 M2), and C3: an open owner wait leads its group.
-  const states = new Map(live && !updating ? lanes.map((l) => [l.lane, laneState(l, now, data?.now)]) : []);
+  // COMP-DAYVIEW-SPLIT-2: a paused lane has no state (dayLaneState), so it is never working, stale or waiting here.
+  const pausedNames = lanes.filter(isPaused).map((l) => l.lane);
+  const states = new Map(live && !updating ? lanes.map((l) => [l.lane, dayLaneState(l, now, data?.now, pausedNames)]) : []);
   const ownerAt = (l) => (states.get(l.lane)?.cause === 'owner' ? 0 : 1);
   const groups = layoutLanes(lanes, { idleOpen, seats }).map((g) => ({ ...g, rows: [...g.rows].sort((a, b) => ownerAt(a) - ownerAt(b)) }));
   const drawn = new Set(); // every legend key this render draws (M9)
@@ -211,10 +214,12 @@ export default function DayRibbon({
   const rows = [];
   let y = R.AX + 6;
   groups.forEach((g) => {
-    const major = groupProject([...g.rows, ...(g.idle?.lanes || [])], laneProjects);
+    const major = groupProject([...g.rows, ...g.paused, ...(g.idle?.lanes || [])], laneProjects);
     rows.push({ type: 'group', y, label: g.label, group: g.group, major: major?.chip || null });
     y += R.GH;
     g.rows.forEach((lane) => { rows.push({ type: 'lane', y, lane, major: major?.chip || null }); y += R.RH; });
+    // COMP-DAYVIEW-SPLIT-2: paused lanes after the active ones, before the idle fold: muted, labelled, never folded away.
+    g.paused.forEach((lane) => { rows.push({ type: 'lane', y, lane, major: major?.chip || null }); y += R.RH; });
     if (g.idle) {
       rows.push({ type: 'idle', y, idle: g.idle });
       y += R.RH;
@@ -267,6 +272,12 @@ export default function DayRibbon({
 
   const laneRow = (lane, ry, idle, major) => {
     const mid = ry + 16;
+    const paused = isPaused(lane);
+    if (paused) drawn.add('paused');
+    // The waiting-on-you band stays solid (s2-coord 2026-11-03): any other span that overlaps an owner wait on this row is
+    // drawn as its outline only (`in-owner`), so the red is never tinted by a fill or a hatch laid over it.
+    const ownerRanges = paused ? [] : (lane.spans || []).filter((s) => s.kind === 'wait' && s.cause === 'owner').map((s) => [toMs(s.start), toMs(s.end)]);
+    const inOwner = (s) => ownerRanges.some(([a, b]) => toMs(s.start) < b && toMs(s.end) > a);
     const cur = live && !updating ? lane.current : null;
     const st = live ? states.get(lane.lane) : null;
     const waiting = st?.kind === 'wait' ? st : null;
@@ -275,7 +286,7 @@ export default function DayRibbon({
     const laneAlerts = alerts.filter((a) => alertLane(a) === lane.lane && a.since && inWindow(a.since));
     if (laneAlerts.length) drawn.add('alert');
     // S2: a stale unit has no live estimate; M3: neither has a lane that is waiting (it lands after the wait, unknown when).
-    const eta = live && cur && !stale && !waiting ? lane.eta : null;
+    const eta = live && cur && !stale && !waiting && !paused ? lane.eta : null; // SPLIT-2: a paused lane has no estimate
     const etaFor = waiting?.cause === 'owner' && cur ? lane.eta : null; // only to say "◆ on answer"
     const openEta = (e) => onMarkOpen && onMarkOpen({ kind: 'eta', lane: lane.lane, p50: eta.p50, p80: eta.p80, asOf: eta.asOf, prev: eta.prev }, rectOf(e));
     const etaMs = eta?.p50 ? etaAt(eta.p50, now) : null;
@@ -283,7 +294,7 @@ export default function DayRibbon({
     const prevMs = eta?.prev?.p50 ? etaAt(eta.prev.p50, eta.prev.asOf && Number.isFinite(toMs(eta.prev.asOf)) ? eta.prev.asOf : now) : null;
     const prevIn = prevMs != null && inWindow(prevMs);
     const stateCls = st ? STATE_CLASS[st.kind === 'wait' ? st.cause : st.kind] || 's-unknown' : null;
-    const next = live && !updating ? (lane.next || []) : [];
+    const next = live && !updating && !paused ? (lane.next || []) : [];
     const nextTitles = next.map((n) => n.title || n.id);
     const own = laneProjects[lane.lane] ?? null;
     const chip = own && own.project !== major?.project ? own : null; // M6: only where it differs from the group
@@ -330,8 +341,8 @@ export default function DayRibbon({
     const name = fitText(lane.lane, nameRoom, PX.body, 650) || lane.lane.slice(0, 1);
 
     return (
-      <g key={`${lane.lane}-${idle ? 'idle' : 'row'}`} className={`lane${idle ? ' lane-idle' : ''}${flashing === lane.lane ? ' rb-flash' : ''}`}
-        data-testid={`lane-${lane.lane}`} data-lane={lane.lane} tabIndex={0} role="button" aria-label={`${lane.lane} lane details`}
+      <g key={`${lane.lane}-${idle ? 'idle' : 'row'}`} className={`lane${idle ? ' lane-idle' : ''}${paused ? ' lane-paused' : ''}${flashing === lane.lane ? ' rb-flash' : ''}`}
+        data-testid={`lane-${lane.lane}`} data-lane={lane.lane} data-paused={paused ? 'true' : undefined} tabIndex={0} role="button" aria-label={`${lane.lane} lane details${paused ? ', paused' : ''}`}
         onClick={() => onLaneOpen && onLaneOpen(lane)} onKeyDown={activate(() => onLaneOpen && onLaneOpen(lane))}>
         <rect className="row-bg" x="2" y={ry + 1} width={R.W - 4} height={R.RH - 2} rx="5" />
         {chip ? (
@@ -350,9 +361,9 @@ export default function DayRibbon({
           const staleWork = stale && s.kind === 'work' && (s.unit == null || s.unit === cur?.id);
           const cls = s.kind === 'work' ? (staleWork ? 's-stale' : 's-work') : s.kind === 'wait' ? (SPAN_CLASS[s.cause] || 's-unknown') : 's-norec';
           const key = s.kind === 'work' ? (staleWork ? 'stale' : 'work') : s.kind === 'wait' ? (SPAN_CLASS[s.cause] ? s.cause : 'unknown') : 'norec';
-          drawn.add(key);
+          if (!paused || key !== 'owner') drawn.add(key); // a paused lane's ask is muted, so it is not "waiting on you"
           const w = Math.max(1.5, x1 - x0 - SPAN_GAP);
-          if (key === 'owner') {
+          if (key === 'owner' && !paused) {
             // C1: the one loud state, full row height with a "?" at its start.
             return (
               <g key={i} className="seg" data-testid="span-wait" data-cause="owner" data-queue={s.queueId ?? ''} data-tip={laneTip(lane, s) + (s.laneGuess ? '\nno lane named: shown on this row' : '')}>
@@ -362,7 +373,7 @@ export default function DayRibbon({
             );
           }
           return (
-            <rect key={i} className={`seg ${cls}`} data-testid={`span-${s.kind}`} data-cause={s.kind === 'wait' ? key : undefined} x={f1(x0)} y={ry + 11} width={f1(w)} height="10" rx="2"
+            <rect key={i} className={`seg ${cls}${key !== 'owner' && inOwner(s) ? ' in-owner' : ''}`} data-testid={`span-${s.kind}`} data-cause={s.kind === 'wait' ? key : undefined} x={f1(x0)} y={ry + 11} width={f1(w)} height="10" rx="2"
               data-tip={laneTip(lane, s) + (staleWork ? '\nstale: no stamp in 24h, no estimate' : '')} />
           );
         })}
@@ -370,6 +381,12 @@ export default function DayRibbon({
           <text className="empty-t" data-testid="lane-empty" x={R.X0 + 8} y={ry + 20}>
             {covered ? 'nothing in this window' : 'not recorded in this window'}
           </text>
+        )}
+        {paused && (
+          // COMP-DAYVIEW-SPLIT-2: listed in fleet.paused by the owner. The words sit at the right edge, where a live lane's ETA
+          // would be (a paused lane has none), so they read in a past window too.
+          <text className="paused-t" data-testid={`lane-paused-${lane.lane}`} x={R.X1} y={ry + 20} textAnchor="end"
+            data-tip={`${lane.lane} is paused (fleet.paused in .compose/compose.json): never counted as idle, stale or waiting`}>paused</text>
         )}
         {/* M5: marks closer than a glyph's width merge into one count at every window width. */}
         {(() => {

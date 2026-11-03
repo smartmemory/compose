@@ -78,7 +78,7 @@ function pinCard(p, ctx) {
   }
   const seat = p.seat || p.label;
   const reading = (ctx.seats || []).find((s) => s.label === p.seat);
-  const queued = (ctx.lanes || []).filter((l) => p.seat && l.seat === p.seat && !l.idle).map((l) => l.lane);
+  const queued = (ctx.lanes || []).filter((l) => p.seat && l.seat === p.seat && !l.idle && !l.paused).map((l) => l.lane);
   const at = reading && typeof reading.pct === 'number' ? ` It is at ${reading.pct}% now${queued.length ? ` with ${queued.join(', ')} work queued` : ''}.` : '';
   return {
     kind: 'seatReset', tone: p.atGate ? 'warn' : 'plain', icon: '↻', title: `${seat} ${toMs(p.at) > toMs(ctx.now) ? 'resets' : 'reset'} ${clock(p.at, ctx.now)}`, name: '', sub: '',

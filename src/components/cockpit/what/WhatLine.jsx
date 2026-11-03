@@ -38,6 +38,29 @@ function partialWhy(fleet) {
   return r.busy === null ? 'the sessions list is unreadable' : 'the jobs list is unreadable';
 }
 
+/**
+ * COMP-DAYVIEW-SPLIT-2: the inputs with the deliberately paused lanes' waits taken out. `paused` is `{lanes, asks}`
+ * (`pausedOf` of the ribbon body): a unit on a paused lane no longer counts as waiting (its `waiting` is cleared, the unit
+ * stays, so its landing still counts), and an open owner ask placed on a paused lane leaves the queue rows the counts read.
+ * Both the counts and the state word ("Stalled") read these inputs, so a paused lane can make neither move. The ask stays
+ * in the owner queue and the inbox; only this line's count leaves it out. No paused lanes: the inputs come back unchanged.
+ */
+export function withoutPaused(fleet, index, paused) {
+  const lanes = new Set(paused?.lanes ?? []);
+  const asks = new Set(paused?.asks ?? []);
+  if (!lanes.size && !asks.size) return { fleet, index };
+  const units = Array.isArray(index?.units) && lanes.size
+    ? index.units.map((u) => (u && lanes.has(u.lane) && u.waiting ? { ...u, waiting: null } : u))
+    : null;
+  const sm = fleet?.sources?.sm_status;
+  const q = sm?.value?.queue;
+  const queue = asks.size && Array.isArray(q?.value) ? { ...q, value: q.value.filter((r) => !asks.has(r?.id)) } : null;
+  return {
+    fleet: queue ? { ...fleet, sources: { ...fleet.sources, sm_status: { ...sm, value: { ...sm.value, queue } } } } : fleet,
+    index: units ? { ...index, units } : index,
+  };
+}
+
 /** Last known value of each count, kept for the page's life so Home and Day share it: `{id: {n, at}}`. */
 const LAST_KNOWN = new Map();
 
@@ -105,15 +128,17 @@ function NeedsYou({ n, rows, why, onClick }) {
   );
 }
 
-export default function WhatLine({ onOpenFleet, onNavigate, onCountOpen }) {
+export default function WhatLine({ onOpenFleet, onNavigate, onCountOpen, paused = null }) {
   const fleetSrc = useFleet();
   const indexSrc = useUnitIndex();
   const { loading: fleetLoading } = fleetSrc;
   const { loading: indexLoading } = indexSrc;
-  const fleet = fleetSrc.error ? null : fleetSrc.data;
+  const fleetRead = fleetSrc.error ? null : fleetSrc.data;
   // COMP-SOURCE-ENVELOPE-1: an index the producer says is partial is not a count either ("0 waiting" would be a guess).
   const indexUnknown = Boolean(indexSrc.error || indexSrc.partial?.length);
-  const index = indexUnknown ? null : indexSrc.data;
+  const indexRead = indexUnknown ? null : indexSrc.data;
+  // COMP-DAYVIEW-SPLIT-2: the Day view passes its paused lanes; every count and the state word below read these inputs.
+  const { fleet, index } = React.useMemo(() => withoutPaused(fleetRead, indexRead, paused), [fleetRead, indexRead, paused]);
   const fleetWhy = fleetSrc.error ? sourceNoteText('fleet', fleetSrc, { short: true }) : null;
   const indexWhy = indexUnknown ? sourceNoteText('unit index', indexSrc, { short: true }) : null;
   const agent = useAgentState();

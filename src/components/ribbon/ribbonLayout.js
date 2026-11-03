@@ -187,12 +187,16 @@ export const seatShort = (seat) => (seat ? String(seat).replace(/^seat/i, 's') :
  * show; every idle lane folds into one `idle` entry per group `{n, lanes, names, seatNote}` (null when the group has
  * none) and, when `idleOpen`, its lanes come back in `idle.rows` to draw under the fold row. `seatNote` reads
  * "(seatN has room for them)" only when an idle lane has a known seat under 50% in `seats` (`[{label, pct}]`).
+ * COMP-DAYVIEW-SPLIT-2: a paused lane (`isPaused`) is never in `rows` or the idle fold; it comes back in `paused`, drawn
+ * muted after the group's rows, whether or not it has anything in the window.
  */
 export function layoutLanes(lanes, { idleOpen = false, seats = [] } = {}) {
   const GROUPS = [['product', 'PRODUCT'], ['ops', 'OPS']];
   const under50 = (seats || []).filter((s) => typeof s?.pct === 'number' && s.pct < 50);
   return GROUPS.map(([group, label]) => {
-    const mine = (lanes || []).filter((l) => l.group === group);
+    const all = (lanes || []).filter((l) => l.group === group);
+    const paused = all.filter(isPaused);
+    const mine = all.filter((l) => !isPaused(l));
     const idle = mine.filter((l) => l.idle);
     const room = under50
       .filter((s) => idle.some((l) => l.seat === s.label))
@@ -201,11 +205,28 @@ export function layoutLanes(lanes, { idleOpen = false, seats = [] } = {}) {
       group,
       label,
       rows: mine.filter((l) => !l.idle),
+      paused,
       idle: idle.length
         ? { n: idle.length, lanes: idle, names: idle.map((l) => l.lane), open: !!idleOpen, seatNote: room ? `(${room.label} has room for them)` : null }
         : null,
     };
-  }).filter((g) => g.rows.length || g.idle);
+  }).filter((g) => g.rows.length || g.paused.length || g.idle);
+}
+
+// ---- COMP-DAYVIEW-SPLIT-2: deliberately paused lanes ----
+
+/** A lane the owner listed in `fleet.paused` (the route stamps `paused: true`). Never inferred from inactivity. */
+export const isPaused = (l) => l?.paused === true;
+
+/**
+ * `{lanes, asks}` of a ribbon body: the paused lane names, and the ids of the open owner asks placed on one of them
+ * (`owner.open[].lane`). Empty lists when the body has none, so every caller can pass it through unchanged.
+ */
+export function pausedOf(feed) {
+  const lanes = (Array.isArray(feed?.lanes) ? feed.lanes : []).filter(isPaused).map((l) => l.lane);
+  const set = new Set(lanes);
+  const open = Array.isArray(feed?.owner?.open) ? feed.owner.open : [];
+  return { lanes, asks: open.filter((o) => o && set.has(o.lane)).map((o) => o.id) };
 }
 
 const CAUSE_PHRASE = { review: 'waiting on review', owner: 'waiting on you', gate: 'waiting on gate', quota: 'waiting on quota' };
@@ -526,6 +547,18 @@ export function laneState(lane, now, asOf = null) {
 }
 
 /**
+ * COMP-DAYVIEW-SPLIT-2: the Day view's lane state. A paused lane has none (null): it is never working, stale or waiting,
+ * so it gets no NOW words, no ETA, no Needs-you marker and no stale styling. On any other lane, a mirror of an ask placed
+ * on a paused lane (`askedOn`) is not a wait either.
+ */
+export function dayLaneState(lane, now, asOf = null, pausedLanes = []) {
+  if (isPaused(lane)) return null;
+  const off = new Set(pausedLanes);
+  if (!off.size) return laneState(lane, now, asOf);
+  return laneState({ ...lane, spans: (lane?.spans || []).filter((s) => !(isMirrorSpan(s) && off.has(s.askedOn))) }, now, asOf);
+}
+
+/**
  * C3: the feed with every LIVE owner wait dropped whose ask is no longer open for the headline. `openIds` are the ids
  * `ownerAsks(feed.owner.open, notifyState)` keeps (the WHAT line's own rule); null means "unknown", so nothing is dropped.
  * A past owner wait (it ended before now) is history and always stays. "Live" is `ownerAtNow` judged on the feed's clock
@@ -542,12 +575,13 @@ export function withOwnerOpen(feed, openIds, now) {
 
 /**
  * The owner waits the ribbon draws at now: one per open ask, `[{lane, queueId}]` (what the test compares to the headline).
+ * A paused lane adds none (COMP-DAYVIEW-SPLIT-2): its asks are drawn muted and the headline leaves them out too.
  * Judged by `ownerAtNow`: on a readable queue only queue spans count (a stamp, even one clipped at the read, is history); on
  * an unreadable one an open stamp counts too, with `queueId: null`.
  */
 export function ownerWaitsAtNow(lanes, now, asOf = null) {
   const n = toMs(now);
-  return (lanes || []).flatMap((l) => spansAtNow(l, n, refOf(n, asOf)).filter(ownerAtNow).map((s) => ({ lane: l.lane, queueId: s.queueId ?? null })));
+  return (lanes || []).filter((l) => !isPaused(l)).flatMap((l) => spansAtNow(l, n, refOf(n, asOf)).filter(ownerAtNow).map((s) => ({ lane: l.lane, queueId: s.queueId ?? null })));
 }
 
 /** Plain names for the feed's source-level gaps (C2: they are text under the ribbon, never a box over the lanes). */
