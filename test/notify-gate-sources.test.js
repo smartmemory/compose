@@ -33,6 +33,9 @@ const cg = (flowId, stepId, extra = {}) => ({
   id: `${flowId}:${stepId}:1`, flowId, stepId, round: 1, itemId: 'item-1', status: 'pending', createdAt: ago(120), ...extra,
 });
 const quiet = () => {};
+// FU-2: the workspace a Compose publish is scoped to, and one sink answer as the sink records it.
+const WS = 'ws-1';
+const ANS = (source, scope = null) => ({ source, scope, at: NOW });
 const up = (value) => ({ value, error: null });
 const CADENCE = up({ alerts: [{ name: 'seat2 5h', state: 'tripped', value: 97, trip: 95 }] });
 // Every other source answered and empty, so `unknown` holds only what the sink says.
@@ -45,15 +48,15 @@ describe('mappers', () => {
     assert.equal(dropped, 0);
     for (const r of rows) assert.ok(validRow(r), JSON.stringify(validRow.errors));
     assert.deepEqual(rows.map((r) => [r.key, r.kind, r.severity, r.since, r.runId, r.stepId, r.action]), [
-      ['stratum-gate:run-a:review', 'stratum-gate', 'warn', 600, 'run-a', 'review', 'stratum'],
-      ['stratum-gate:run-b:ship', 'stratum-gate', 'warn', null, 'run-b', 'ship', 'stratum'],
+      ['stratum-gate:run-a:review:0', 'stratum-gate', 'warn', 600, 'run-a', 'review', 'stratum'],
+      ['stratum-gate:run-b:ship:2', 'stratum-gate', 'warn', null, 'run-b', 'ship', 'stratum'],
     ]);
     assert.ok(rows.every((r) => !('gateToken' in r) && !JSON.stringify(r).includes('tok-')));
   });
 
   test('a PendingGate with no run or step id is counted as dropped, never keyed "undefined"', () => {
     const { rows, dropped } = stratumGateRows([pg('run-a', 'review'), { ...pg('x', 'y'), runId: '' }, { flowName: 'f' }], NOW);
-    assert.deepEqual(rows.map((r) => r.key), ['stratum-gate:run-a:review']);
+    assert.deepEqual(rows.map((r) => r.key), ['stratum-gate:run-a:review:0']);
     assert.equal(dropped, 2);
   });
 
@@ -63,11 +66,11 @@ describe('mappers', () => {
       cg('flow-2', 'plan', { createdAt: undefined }),
       cg('flow-3', 'ship', { status: 'resolved', resolvedAt: ago(5) }),
     ];
-    const rows = composeGateRows(gates, { items: [{ id: 'item-1', title: 'Gate sources' }], now: NOW });
+    const rows = composeGateRows(gates, { items: [{ id: 'item-1', title: 'Gate sources' }], now: NOW, scope: WS });
     for (const r of rows) assert.ok(validRow(r), JSON.stringify(validRow.errors));
     assert.deepEqual(rows.map((r) => [r.key, r.kind, r.since, r.gateId, r.title]), [
-      ['compose-gate:flow-1:design:1', 'compose-gate', 120, 'flow-1:design:1', 'Gate sources: design waiting'],
-      ['compose-gate:flow-2:plan:1', 'compose-gate', null, 'flow-2:plan:1', 'Gate sources: plan waiting'],
+      ['compose-gate:ws-1:flow-1:design:1', 'compose-gate', 120, 'flow-1:design:1', 'Gate sources: design waiting'],
+      ['compose-gate:ws-1:flow-2:plan:1', 'compose-gate', null, 'flow-2:plan:1', 'Gate sources: plan waiting'],
     ]);
     assert.ok(rows.every((r) => !('gateToken' in r)));
   });
@@ -77,30 +80,30 @@ describe('one row per gate', () => {
   test('a Stratum gate matching a pending Compose gate (runId=flowId, stepId) leaves one row, the Compose one, marked as a Stratum flow gate', () => {
     const rows = [
       ...stratumGateRows([pg('flow-1', 'design'), pg('flow-9', 'qa')], NOW).rows,
-      ...composeGateRows([cg('flow-1', 'design')], { now: NOW }),
+      ...composeGateRows([cg('flow-1', 'design')], { now: NOW, scope: WS }),
     ];
     const merged = mergeGateRows(rows);
-    assert.deepEqual(merged.map((r) => r.key), ['stratum-gate:flow-9:qa', 'compose-gate:flow-1:design:1']);
+    assert.deepEqual(merged.map((r) => r.key), ['stratum-gate:flow-9:qa:0', 'compose-gate:ws-1:flow-1:design:1']);
     const c = merged.find((r) => r.kind === 'compose-gate');
     assert.equal(c.stratumRunId, 'flow-1');
     assert.match(c.detail, /^Stratum flow gate/);
     // ...and through the sink and collect, the same: one row for the pair.
-    const sink = createAttentionSink({ warn: quiet });
+    const sink = createAttentionSink({ warn: quiet, now: () => NOW });
     sink.publish('stratum', stratumGateRows([pg('flow-1', 'design')], NOW).rows);
-    publishComposeGates(sink, { gates: [cg('flow-1', 'design')], connected: true, now: NOW });
-    assert.deepEqual(collect({ ...ALL, sink: sink.readState() }, NOW).rows.map((r) => r.key), ['compose-gate:flow-1:design:1']);
+    publishComposeGates(sink, { gates: [cg('flow-1', 'design')], connected: true, scope: WS, now: NOW });
+    assert.deepEqual(collect({ ...ALL, sink: sink.readState() }, NOW).rows.map((r) => r.key), ['compose-gate:ws-1:flow-1:design:1']);
   });
 });
 
 describe('no silent degradation', () => {
   test('a rejecting listGates keeps the last good rows and names "stratum gates" unknown, never zero gates', async () => {
-    const sink = createAttentionSink({ warn: quiet });
+    const sink = createAttentionSink({ warn: quiet, now: () => NOW });
     const warnings = [];
     await pollStratumGates({ client: { listGates: async () => [pg('run-a', 'review')] }, sink, warn: (m) => warnings.push(m), now: () => NOW });
     assert.deepEqual(collect({ ...ALL, sink: sink.readState() }, NOW).unknown, []);
     await pollStratumGates({ client: { listGates: async () => { throw new Error('HTTP 502'); } }, sink, warn: (m) => warnings.push(m), now: () => NOW });
     const c = collect({ ...ALL, sink: sink.readState() }, NOW);
-    assert.deepEqual(c.rows.map((r) => r.key), ['stratum-gate:run-a:review']);
+    assert.deepEqual(c.rows.map((r) => r.key), ['stratum-gate:run-a:review:0']);
     assert.deepEqual(c.unknown, [STRATUM_LABEL]);
     assert.notEqual(chipState(c).state, 'all-clear');
     assert.equal(warnings.length, 1);
@@ -110,29 +113,29 @@ describe('no silent degradation', () => {
     assert.deepEqual(collect({ ...ALL, sink: sink.readState() }, NOW).unknown, [STRATUM_LABEL]);
     // The next good read clears the mark and replaces the rows.
     await pollStratumGates({ client: { listGates: async () => [] }, sink, warn: quiet, now: () => NOW });
-    assert.deepEqual(collect({ ...ALL, sink: sink.readState() }, NOW), { rows: [], cleared: [], unknown: [], defaults: [], answered: ['stratum'] });
+    assert.deepEqual(collect({ ...ALL, sink: sink.readState() }, NOW), { rows: [], cleared: [], unknown: [], defaults: [], answered: [ANS('stratum')] });
   });
 
   test('a rejecting first read (no rows yet) is "Alerts unknown", not "All clear"', async () => {
-    const sink = createAttentionSink({ warn: quiet });
+    const sink = createAttentionSink({ warn: quiet, now: () => NOW });
     await pollStratumGates({ client: { listGates: async () => { throw new Error('down'); } }, sink, warn: quiet, now: () => NOW });
     assert.equal(chipState(collect({ ...ALL, sink: sink.readState() }, NOW)).state, 'unknown');
   });
 
   test('a disconnected store keeps the last Compose rows and names "compose gates" unknown', () => {
-    const sink = createAttentionSink({ warn: assert.fail });
-    publishComposeGates(sink, { gates: [cg('flow-1', 'design')], connected: true, now: NOW });
+    const sink = createAttentionSink({ warn: assert.fail, now: () => NOW });
+    publishComposeGates(sink, { gates: [cg('flow-1', 'design')], connected: true, scope: WS, now: NOW });
     publishComposeGates(sink, { gates: [], connected: false, now: NOW });
     const c = collect({ ...ALL, sink: sink.readState() }, NOW);
-    assert.deepEqual(c.rows.map((r) => r.key), ['compose-gate:flow-1:design:1']);
+    assert.deepEqual(c.rows.map((r) => r.key), ['compose-gate:ws-1:flow-1:design:1']);
     assert.deepEqual(c.unknown, [COMPOSE_LABEL]);
-    publishComposeGates(sink, { gates: [], connected: true, now: NOW });
+    publishComposeGates(sink, { gates: [], connected: true, scope: WS, now: NOW });
     assert.deepEqual(collect({ ...ALL, sink: sink.readState() }, NOW).unknown, []);
   });
 
   test('Stratum absent: a never-started poller is no source at all, and stop() removes a started one (not unknown, not polled again)', async () => {
-    const sink = createAttentionSink({ warn: quiet });
-    publishComposeGates(sink, { gates: [], connected: true, now: NOW });
+    const sink = createAttentionSink({ warn: quiet, now: () => NOW });
+    publishComposeGates(sink, { gates: [], connected: true, scope: WS, now: NOW });
     assert.deepEqual(collect({ ...ALL, sink: sink.readState() }, NOW).unknown, []);
     let calls = 0;
     const doc = { visibilityState: 'visible', addEventListener: () => {}, removeEventListener: () => {} };
@@ -142,12 +145,12 @@ describe('no silent degradation', () => {
     assert.equal(calls, 1);
     assert.deepEqual(sink.readState().unavailable, [STRATUM_LABEL]);
     stop();
-    assert.deepEqual(sink.readState(), { rows: [], unavailable: [], answered: ['compose-gates'] });
+    assert.deepEqual(sink.readState(), { rows: [], unavailable: [], answered: [ANS('compose-gates', WS)] });
     assert.deepEqual(collect({ ...ALL, sink: sink.readState() }, NOW).unknown, []);
   });
 
   test('a read in flight when the poller stops publishes nothing (the source stays gone)', async () => {
-    const sink = createAttentionSink({ warn: quiet });
+    const sink = createAttentionSink({ warn: quiet, now: () => NOW });
     let release;
     const client = { listGates: () => new Promise((r) => { release = r; }) };
     const doc = { visibilityState: 'visible', addEventListener: () => {}, removeEventListener: () => {} };
@@ -159,7 +162,7 @@ describe('no silent degradation', () => {
   });
 
   test('a hidden document polls nothing until it is shown (the cadence loop rule)', async () => {
-    const sink = createAttentionSink({ warn: quiet });
+    const sink = createAttentionSink({ warn: quiet, now: () => NOW });
     let calls = 0;
     const handlers = [];
     const doc = { visibilityState: 'hidden', addEventListener: (_e, fn) => handlers.push(fn), removeEventListener: () => {} };
@@ -175,21 +178,21 @@ describe('no silent degradation', () => {
 
 describe('the sink keeps its old contract', () => {
   test('rows null with an unavailable label keeps the list; a list with the label replaces it; no label clears the mark', () => {
-    const sink = createAttentionSink({ warn: assert.fail });
+    const sink = createAttentionSink({ warn: assert.fail, now: () => NOW });
     const row = { key: 'k1', kind: 'stratum-gate', severity: 'warn', title: 't', sourceLabel: 'stratum gates' };
     sink.publish('stratum', [row]);
     const before = sink.readState();
     assert.equal(sink.readState(), before, 'stable object between publishes');
     sink.publish('stratum', null, { unavailable: 'stratum gates' });
-    assert.deepEqual(sink.readState(), { rows: [row], unavailable: ['stratum gates'], answered: ['stratum'] });
+    assert.deepEqual(sink.readState(), { rows: [row], unavailable: ['stratum gates'], answered: [ANS('stratum')] });
     sink.publish('stratum', [], { unavailable: 'stratum gates' });
-    assert.deepEqual(sink.readState(), { rows: [], unavailable: ['stratum gates'], answered: ['stratum'] });
+    assert.deepEqual(sink.readState(), { rows: [], unavailable: ['stratum gates'], answered: [ANS('stratum')] });
     sink.publish('stratum', []);
-    assert.deepEqual(sink.readState(), { rows: [], unavailable: [], answered: ['stratum'] });
+    assert.deepEqual(sink.readState(), { rows: [], unavailable: [], answered: [ANS('stratum')] });
   });
 
   test('a published row is re-aged from sinceAt at read time', () => {
-    const sink = createAttentionSink({ warn: quiet });
+    const sink = createAttentionSink({ warn: quiet, now: () => NOW });
     sink.publish('stratum', stratumGateRows([pg('run-a', 'review')], NOW).rows);
     assert.equal(sinkAdapter(sink.readState(), NOW + 3_600_000).rows[0].since, 600 + 3600);
     assert.deepEqual(sinkAdapter(undefined, NOW), { rows: [], unavailable: null });
@@ -198,9 +201,9 @@ describe('the sink keeps its old contract', () => {
 
 describe('into the inbox', () => {
   const mixed = () => {
-    const sink = createAttentionSink({ warn: quiet });
+    const sink = createAttentionSink({ warn: quiet, now: () => NOW });
     sink.publish('stratum', stratumGateRows([pg('run-a', 'review')], NOW).rows); // since 600
-    publishComposeGates(sink, { gates: [cg('flow-1', 'design')], connected: true, now: NOW }); // since 120
+    publishComposeGates(sink, { gates: [cg('flow-1', 'design')], connected: true, scope: WS, now: NOW }); // since 120
     return sink;
   };
 
@@ -208,7 +211,7 @@ describe('into the inbox', () => {
     const review = up({ reviewMaxH: 24, inReview: [{ id: 'g1', lane: 'forge', overdue: true, ageMs: 90_000_000, rows: [{}] }] });
     const c = collect({ ...ALL, attention: CADENCE, review, sink: mixed().readState() }, NOW);
     // critical first, then the older wait (larger since) first, then no age (Cadence attention, since null) last.
-    assert.deepEqual(c.rows.map((r) => r.key), ['review:g1', 'stratum-gate:run-a:review', 'compose-gate:flow-1:design:1', 'attention:seat2 5h']);
+    assert.deepEqual(c.rows.map((r) => r.key), ['review:g1', 'stratum-gate:run-a:review:0', 'compose-gate:ws-1:flow-1:design:1', 'attention:seat2 5h']);
     for (const r of c.rows) assert.ok(validRow(r), JSON.stringify(validRow.errors));
   });
 
@@ -244,43 +247,43 @@ describe('into the inbox', () => {
 
 describe('COMP-SUBAPP-ATTENTION-FU-1: the sink says which sources answered', () => {
   test('a source that published a list is in `answered`; a failed read and a retired source are not', () => {
-    const sink = createAttentionSink({ warn: quiet });
+    const sink = createAttentionSink({ warn: quiet, now: () => NOW });
     assert.deepEqual(sink.readState().answered, []);
     sink.publish('stratum', null, { unavailable: STRATUM_LABEL });
     assert.deepEqual(sink.readState().answered, [], 'a failed first read has not answered');
     sink.publish('stratum', []);
-    assert.deepEqual(sink.readState().answered, ['stratum'], 'an empty list is an answer');
+    assert.deepEqual(sink.readState().answered, [ANS('stratum')], 'an empty list is an answer');
     sink.publish('compose-gates', []);
     sink.retire('stratum');
-    assert.deepEqual(sink.readState().answered, ['compose-gates']);
+    assert.deepEqual(sink.readState().answered, [ANS('compose-gates')]);
   });
 
   test('stop() retires the Stratum source, so a stopped poller is not an answer', async () => {
-    const sink = createAttentionSink({ warn: quiet });
+    const sink = createAttentionSink({ warn: quiet, now: () => NOW });
     const doc = { visibilityState: 'visible', addEventListener: () => {}, removeEventListener: () => {} };
     const stop = startStratumGatePoller({ client: { listGates: async () => [] }, sink, intervalMs: 60_000, warn: quiet, doc });
     await new Promise((r) => setTimeout(r, 0));
-    assert.deepEqual(sink.readState().answered, ['stratum']);
+    assert.deepEqual(sink.readState().answered, [ANS('stratum')]);
     stop();
     assert.deepEqual(sink.readState().answered, []);
   });
 
   test('collect returns the sink\'s `answered` as `collected.answered`', () => {
-    const sink = createAttentionSink({ warn: quiet });
+    const sink = createAttentionSink({ warn: quiet, now: () => NOW });
     sink.publish('stratum', []);
-    assert.deepEqual(collect({ ...ALL, sink: sink.readState() }, NOW).answered, ['stratum']);
+    assert.deepEqual(collect({ ...ALL, sink: sink.readState() }, NOW).answered, [ANS('stratum')]);
     assert.deepEqual(collect(ALL, NOW).answered, []);
   });
 });
 
 describe('COMP-SUBAPP-ATTENTION-FU-1: a dismissed gate row is released when its source answered without it', () => {
   const dismissed = (...keys) => ({ v: 1, entries: Object.fromEntries(keys.map((k) => [k, { action: 'dismiss', at: ago(60) }])) });
-  const SKEY = 'stratum-gate:run-a:review';
-  const CKEY = 'compose-gate:flow-1:design:1';
+  const SKEY = 'stratum-gate:run-a:review:0';
+  const CKEY = 'compose-gate:ws-1:flow-1:design:1';
   const release = (sink, state) => releaseKeys(collect({ ...ALL, sink: sink.readState() }, NOW, state), state, null);
 
   test('stratum: released once the gate left the source, and the revised gate then shows as an open row', async () => {
-    const sink = createAttentionSink({ warn: quiet });
+    const sink = createAttentionSink({ warn: quiet, now: () => NOW });
     const state = dismissed(SKEY);
     await pollStratumGates({ client: { listGates: async () => [pg('run-a', 'review')] }, sink, warn: quiet, now: () => NOW });
     assert.deepEqual(release(sink, state), [], 'still waiting and dismissed: kept, hidden');
@@ -289,25 +292,25 @@ describe('COMP-SUBAPP-ATTENTION-FU-1: a dismissed gate row is released when its 
     assert.deepEqual(release(sink, state), [SKEY], 'the gate left the source: released');
     // The release clears the entry; the revised gate (same run and step) waits again and is no longer hidden.
     await pollStratumGates({ client: { listGates: async () => [pg('run-a', 'review', { round: 1 })] }, sink, warn: quiet, now: () => NOW });
-    assert.deepEqual(collect({ ...ALL, sink: sink.readState() }, NOW, { v: 1, entries: {} }).rows.map((r) => r.key), [SKEY]);
+    assert.deepEqual(collect({ ...ALL, sink: sink.readState() }, NOW, { v: 1, entries: {} }).rows.map((r) => r.key), ['stratum-gate:run-a:review:1']); // FU-2: round 1 is its own key
   });
 
   test('stratum: kept while "stratum gates" is unknown', async () => {
-    const sink = createAttentionSink({ warn: quiet });
+    const sink = createAttentionSink({ warn: quiet, now: () => NOW });
     await pollStratumGates({ client: { listGates: async () => [] }, sink, warn: quiet, now: () => NOW });
     await pollStratumGates({ client: { listGates: async () => { throw new Error('down'); } }, sink, warn: quiet, now: () => NOW });
-    assert.deepEqual(sink.readState().answered, ['stratum']);
+    assert.deepEqual(sink.readState().answered, [ANS('stratum')]);
     assert.deepEqual(release(sink, dismissed(SKEY)), []);
   });
 
   test('stratum: kept while Stratum is absent (never published)', () => {
-    const sink = createAttentionSink({ warn: quiet });
-    publishComposeGates(sink, { gates: [], connected: true, now: NOW });
+    const sink = createAttentionSink({ warn: quiet, now: () => NOW });
+    publishComposeGates(sink, { gates: [], connected: true, scope: WS, now: NOW });
     assert.deepEqual(release(sink, dismissed(SKEY)), []);
   });
 
   test('stratum: kept when Stratum answered and was then stopped', async () => {
-    const sink = createAttentionSink({ warn: quiet });
+    const sink = createAttentionSink({ warn: quiet, now: () => NOW });
     const doc = { visibilityState: 'visible', addEventListener: () => {}, removeEventListener: () => {} };
     const stop = startStratumGatePoller({ client: { listGates: async () => [] }, sink, intervalMs: 60_000, warn: quiet, doc });
     await new Promise((r) => setTimeout(r, 0));
@@ -317,11 +320,11 @@ describe('COMP-SUBAPP-ATTENTION-FU-1: a dismissed gate row is released when its 
   });
 
   test('compose: released when the source answered without the key, kept while "compose gates" is unknown', () => {
-    const sink = createAttentionSink({ warn: quiet });
+    const sink = createAttentionSink({ warn: quiet, now: () => NOW });
     const state = dismissed(CKEY);
-    publishComposeGates(sink, { gates: [cg('flow-1', 'design')], connected: true, now: NOW });
+    publishComposeGates(sink, { gates: [cg('flow-1', 'design')], connected: true, scope: WS, now: NOW });
     assert.deepEqual(release(sink, state), [], 'still pending and dismissed: kept');
-    publishComposeGates(sink, { gates: [], connected: true, now: NOW });
+    publishComposeGates(sink, { gates: [], connected: true, scope: WS, now: NOW });
     assert.deepEqual(release(sink, state), [CKEY]);
     publishComposeGates(sink, { gates: [], connected: false, now: NOW });
     assert.deepEqual(release(sink, state), []);

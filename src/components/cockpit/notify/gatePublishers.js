@@ -5,6 +5,8 @@
  * Stratum poller calls the Compose Stratum client's `listGates` (the GatesInbox's own read) on the notify cadence, and App
  * publishes the vision store's `gates`. No React here; nothing in this file resolves, approves or dismisses a gate, and no row
  * carries a `gateToken`: a row carries only the ids its click needs.
+ * COMP-SUBAPP-ATTENTION-FU-2: a row key names ONE gate instance, `<source>:<scope>:<gate>:<round>` (`gateKeyOf` reads it
+ * back), and every publish carries its scope, so an answer from another round or another project is never this gate's answer.
  */
 // No imports: notifyLogic.js imports this file (its sink adapter merges these rows), never the other way round.
 
@@ -36,7 +38,8 @@ export function stratumGateRows(gates, now = Date.now()) {
     if (!runId || !stepId) continue;
     const sinceAt = at(g.waitingSince);
     rows.push({
-      key: `stratum-gate:${runId}:${stepId}`,
+      // FU-2: the round is part of the identity: a revised gate's next round is a new gate, never the dismissed one.
+      key: `stratum-gate:${runId}:${stepId}:${Number.isInteger(g.round) && g.round >= 0 ? g.round : 0}`,
       kind: 'stratum-gate',
       severity: 'warn',
       title: `Gate waiting: ${str(g.flowName) ?? runId} · ${stepId}`,
@@ -55,15 +58,45 @@ export function stratumGateRows(gates, now = Date.now()) {
 /** The pending rule `PendingGates` already draws (DashboardView.jsx:290): pending, or never resolved. */
 export const isPendingGate = (g) => !!g && (g.status === 'pending' || !g.resolvedAt);
 
-/** Compose's vision-store gates -> inbox rows for the pending ones. `items` (optional) names each gate's item. */
-export function composeGateRows(gates, { items = [], now = Date.now() } = {}) {
+/**
+ * FU-2: a Compose gate's key, `compose-gate:<workspaceId>:<gateId>`. The gate id is the store's own identity, already
+ * `<flowId>:<stepId>:<round>` (lib/vision-writer.js:337, server/vision-routes.js:1070), so the key is
+ * `compose-gate:<workspaceId>:<flow>:<step>:<round>`: scope first, like `<source>:<scope>:<gate>:<round>` for every source.
+ * The workspace id is URI-encoded, so it never holds a `:` and `gateKeyOf` can split it off unambiguously.
+ */
+export const composeGateKey = (scope, gateId) => `compose-gate:${encodeURIComponent(scope)}:${gateId}`;
+
+/**
+ * Who answers for a gate key: `{source, label, scope}`, or null for a key that is not a gate's. `scope` is null for Stratum
+ * (its run ids are global) and the workspace id for Compose. A Compose key stored before FU-2 (`compose-gate:<flow>:<step>:
+ * <round>`, three parts) has no scope: `legacy: true`, and any Compose answer covers it, so it is released once (its key
+ * never comes back). A pre-FU-2 Stratum key (no round) needs no such case: its scope was already null. Never throws.
+ */
+export function gateKeyOf(key) {
+  const k = String(key ?? '');
+  if (k.startsWith('stratum-gate:')) return { source: STRATUM_SOURCE, label: STRATUM_LABEL, scope: null, legacy: false };
+  if (!k.startsWith('compose-gate:')) return null;
+  const parts = k.slice('compose-gate:'.length).split(':');
+  if (parts.length < 4) return { source: COMPOSE_SOURCE, label: COMPOSE_LABEL, scope: null, legacy: true };
+  try {
+    return { source: COMPOSE_SOURCE, label: COMPOSE_LABEL, scope: decodeURIComponent(parts[0]), legacy: false };
+  } catch {
+    return { source: COMPOSE_SOURCE, label: COMPOSE_LABEL, scope: null, legacy: true };
+  }
+}
+
+/**
+ * Compose's vision-store gates -> inbox rows for the pending ones, keyed in the workspace `scope` (FU-2). `items` (optional)
+ * names each gate's item.
+ */
+export function composeGateRows(gates, { items = [], now = Date.now(), scope } = {}) {
   const titleOf = new Map((Array.isArray(items) ? items : []).map((i) => [i?.id, i?.title]));
   return (Array.isArray(gates) ? gates : []).filter((g) => isPendingGate(g) && str(g.id)).map((g) => {
     // A gate's own time is `createdAt` (server/vision-routes.js:1001, lib/vision-writer.js:350); no time, no age.
     const sinceAt = at(g.createdAt);
     const what = str(titleOf.get(g.itemId)) ?? str(g.itemId) ?? 'Gate';
     return {
-      key: `compose-gate:${g.id}`,
+      key: composeGateKey(scope, g.id),
       kind: 'compose-gate',
       severity: 'warn',
       title: `${what}: ${str(g.stepId) ?? 'gate'} waiting`,
@@ -101,12 +134,78 @@ export function mergeGateRows(rows) {
 }
 
 /**
- * Publish Compose's gates: rows when the store is connected; when it is not, keep the last rows and mark the source unknown
- * (a disconnected store's `gates` is not "no gates").
+ * Publish Compose's gates for the workspace `scope`: rows when the store is connected; when it is not, or no workspace is
+ * known, keep the last rows and mark the source unknown (a disconnected store's `gates` is not "no gates", and a list with
+ * no workspace is nobody's answer).
  */
-export function publishComposeGates(sink, { gates, connected, items, now = Date.now() }) {
-  if (!connected) sink.publish(COMPOSE_SOURCE, null, { unavailable: COMPOSE_LABEL });
-  else sink.publish(COMPOSE_SOURCE, composeGateRows(gates, { items, now }));
+export function publishComposeGates(sink, { gates, connected, items, now = Date.now(), scope }) {
+  if (!connected || typeof scope !== 'string' || scope === '') sink.publish(COMPOSE_SOURCE, null, { unavailable: COMPOSE_LABEL });
+  else sink.publish(COMPOSE_SOURCE, composeGateRows(gates, { items, now, scope }), { scope });
+}
+
+/**
+ * FU-2: Compose's gate publisher over the vision store (`store`: a zustand store, `getState`/`getInitialState`/`subscribe`).
+ * The store's `gates` belong to whichever workspace the server had when its socket opened, and a project switch closes every
+ * socket (server/workspace-runtime.js, `suspend()`), so a connection is the unit of scope. Per connection:
+ *   - the workspace is read (`readWorkspaceId`) AFTER the socket opened, so it is the server's workspace for that socket,
+ *     whatever order the client's own workspace refresh lands in;
+ *   - the store's first `gates` replacement after the open is that connection's first `visionState`/`hydrate`; the list
+ *     left over from the previous connection (the old project's) is never published as an answer.
+ * Until both hold, and while disconnected, the source is published unknown (last rows kept). Subscribing to the store, not
+ * to React renders, sees every transition in order, so a close-open-hydrate inside one render batch is not missed.
+ * Returns `stop()`, which retires the source.
+ */
+export function trackComposeGates({ store, sink, readWorkspaceId, warn = console.warn, now = () => Date.now() }) {
+  let stopped = false;
+  let epoch = 0; // one per socket connection
+  let scope = null; // the workspace the open connection serves, once read
+  let hydrated = false; // the store's gates were replaced since the connection opened
+  const publish = () => {
+    if (stopped) return;
+    const s = store.getState();
+    if (s.connected && hydrated && scope) publishComposeGates(sink, { gates: s.gates, items: s.items, connected: true, scope, now: now() });
+    else sink.publish(COMPOSE_SOURCE, null, { unavailable: COMPOSE_LABEL });
+  };
+  const opened = () => {
+    const mine = ++epoch;
+    scope = null;
+    const lost = (why) => {
+      if (!stopped && mine === epoch) warn(`[notify] compose gates: ${why}; the source stays unknown until the vision socket reconnects`);
+    };
+    Promise.resolve().then(readWorkspaceId).then((id) => {
+      if (stopped || mine !== epoch) return;
+      if (typeof id === 'string' && id !== '') { scope = id; publish(); } else lost('the workspace read answered no id');
+    }, (e) => lost(`the workspace is unreadable (${String(e?.message ?? e)})`));
+  };
+  const onChange = (s, prev) => {
+    if (s.connected && !prev.connected) { hydrated = false; opened(); }
+    else if (!s.connected && prev.connected) { epoch += 1; scope = null; hydrated = false; }
+    if (s.connected && s.gates !== prev.gates) hydrated = true;
+    if (s.connected !== prev.connected || s.gates !== prev.gates || s.items !== prev.items) publish();
+  };
+  const s0 = store.getState();
+  if (s0.connected) {
+    // Already open when we started: its hydrate has happened iff the gates are no longer the store's initial list.
+    hydrated = typeof store.getInitialState === 'function' && s0.gates !== store.getInitialState().gates;
+    opened();
+  }
+  publish();
+  const unsubscribe = store.subscribe(onChange);
+  return () => {
+    stopped = true;
+    epoch += 1;
+    unsubscribe();
+    sink.retire?.(COMPOSE_SOURCE);
+  };
+}
+
+/**
+ * FU-2 (F3): a built Stratum whose availability check has not answered is expected but silent, so it is published unknown,
+ * never left out (left out reads "All clear"). Returns the cleanup, which retires the mark.
+ */
+export function markStratumUnknown(sink) {
+  sink.publish(STRATUM_SOURCE, null, { unavailable: STRATUM_LABEL });
+  return () => sink.retire?.(STRATUM_SOURCE);
 }
 
 /** One `listGates` read published: a failed or non-list answer keeps the last rows and marks the source unknown. */

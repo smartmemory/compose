@@ -10,7 +10,7 @@
  * its acknowledgement only hides the banner until the row's text changes (`escalated`).
  */
 import { groupOf } from '../../../../lib/owner-queue-class.js';
-import { STRATUM_SOURCE, STRATUM_LABEL, COMPOSE_LABEL } from './gatePublishers.js';
+import { gateKeyOf } from './gatePublishers.js';
 
 export const NOTIFY_KEY_PREFIXES = ['security:', 'ask:', 'queue:', 'ctx:', 'attention:'];
 export const NOTIFY_KEYS_EXACT = ['disk', 'outage'];
@@ -131,17 +131,32 @@ export function snoozePresets(row, seats, now = Date.now()) {
   return out;
 }
 
+/**
+ * COMP-SUBAPP-ATTENTION-FU-2: the ONE rule for every gate source (Stratum, Compose, and any later one `gateKeyOf` knows).
+ * A gate key's dismissal may be released only when its source's current answer is for the key's scope, was made after the
+ * dismissal (`entry.at`; an entry with no time is not held back), and the source is not unknown. A legacy key (no scope)
+ * accepts any scope. Anything else (never published, stopped, unknown, another project's list, an answer older than the
+ * dismissal) is not this gate's answer.
+ */
+export function gateAnswered(key, entry, unknown, answered) {
+  const owner = gateKeyOf(key);
+  if (!owner || unknown.includes(owner.label)) return false;
+  const a = answered.find((x) => x?.source === owner.source);
+  if (!a || (!owner.legacy && (a.scope ?? null) !== owner.scope)) return false;
+  const t = ms(entry?.at);
+  return t === null || (Number.isFinite(a.at) && a.at >= t);
+}
+
 /** Which collected-source label owns a key: the release flow only fires when that source answered. */
-function sourceDown(key, unknown, answered) {
+function sourceDown(key, entry, unknown, answered) {
   const has = (l) => unknown.includes(l);
   if (/^(security|ask|queue):/.test(key)) return has('sm_status') || has('sm_status queue');
   if (key.startsWith('ctx:')) return has('sm_status') || has('sm_status sessions');
   if (key === 'disk') return has('sm_status') || has('sm_status df');
   if (key === 'outage') return has('cadence outage');
   if (key.startsWith('attention:')) return has('cadence attention');
-  // Stratum has no source at all when it is absent or stopped (App.jsx): only a published list says it answered.
-  if (key.startsWith('stratum-gate:')) return !answered.includes(STRATUM_SOURCE) || has(STRATUM_LABEL);
-  if (key.startsWith('compose-gate:')) return has(COMPOSE_LABEL);
+  // Gate sources: only an answer for the key's own (source, scope) after the dismissal says the source answered.
+  if (gateKeyOf(key)) return !gateAnswered(key, entry, unknown, answered);
   return true;
 }
 
@@ -158,7 +173,7 @@ export function releaseKeys(collected, state, queueRows) {
   const out = [];
   for (const [key, e] of Object.entries(entries)) {
     if (e?.action !== 'ack' && e?.action !== 'dismiss') continue;
-    if (sourceDown(key, unknown, answered)) continue;
+    if (sourceDown(key, e, unknown, answered)) continue;
     if (/^(security|ask|queue):/.test(key)) {
       if (!Array.isArray(queueRows) || ids.has(key.slice(key.indexOf(':') + 1))) continue;
     } else if (present.has(key)) continue;

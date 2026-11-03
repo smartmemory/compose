@@ -13,6 +13,7 @@ import { smPanel } from '../fleetLogic.js';
 import { releaseKeys } from './notifyState.js';
 import { useNotifyState, releaseOnce } from './useNotifyState.js';
 import { attentionSink } from '../subappHost.js';
+import { trackComposeGates, startStratumGatePoller, markStratumUnknown } from './gatePublishers.js';
 
 export const NOTIFY_POLL_MS = 60_000;
 
@@ -99,4 +100,27 @@ export function useNotifySources() {
     if (keys.length) releaseOnce(keys, fleet);
   }, [out, notify.state, fleet]);
   return out;
+}
+
+/** The server's active workspace id (`GET /api/workspace`, the read WorkspaceContext makes), for the Compose gate scope. */
+export async function readActiveWorkspaceId() {
+  const r = await fetch('/api/workspace');
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return (await r.json())?.id;
+}
+
+/**
+ * COMP-SUBAPP-ATTENTION-FU-2: App's wiring of the two gate publishers into the attention sink, extracted so it is tested on
+ * the mounted App (test/ui/attention-app-wiring.test.jsx).
+ *   - Compose: `trackComposeGates` over the vision store, scoped to the workspace each socket serves.
+ *   - Stratum: the poller runs only on `stratumAvail === 'yes'`; a built Stratum whose check is still `unknown` is published
+ *     unavailable ("Alerts unknown", never "All clear"); `no` (stub build, or 404) is no source at all.
+ */
+export function useGatePublishers({ stratumAvail, stratumBuilt, store, createStratumClient, sink = attentionSink, readWorkspaceId = readActiveWorkspaceId, intervalMs = NOTIFY_POLL_MS }) {
+  useEffect(() => trackComposeGates({ store, sink, readWorkspaceId }), [store, sink, readWorkspaceId]);
+  useEffect(() => {
+    if (stratumAvail === 'yes') return startStratumGatePoller({ client: createStratumClient(), sink, intervalMs });
+    if (stratumAvail === 'unknown' && stratumBuilt) return markStratumUnknown(sink);
+    return undefined;
+  }, [stratumAvail, stratumBuilt, sink, createStratumClient, intervalMs]);
 }

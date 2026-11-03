@@ -16,7 +16,7 @@ import OpsView from './components/cockpit/OpsView.jsx';
 import UsageView from './components/usage/UsageView.jsx';
 import ProcessView from './components/cockpit/ProcessView.jsx';
 import { useOpsStatusIndexState } from './components/cockpit/useOpsStatusIndex.js';
-import { useStratumUiAvailability } from './components/cockpit/useStratumUiAvailable.js';
+import { useStratumUiAvailability, stratumUiBuilt } from './components/cockpit/useStratumUiAvailable.js';
 import { useCadenceUiAvailability } from './components/cockpit/useCadenceUiAvailable.js';
 import { useWikiTabState } from './components/cockpit/useWikiTab.js';
 import ColleaguePanel from './components/colleague/ColleaguePanel.jsx';
@@ -97,8 +97,7 @@ import { computeBuildStateMap, computeAgentOverlay } from './components/vision/g
 import { withComposeToken } from './lib/compose-api.js';
 import { wsFetch, getAuthMode } from './lib/wsFetch.js';
 import { buildSubappHost, attentionSink, opsLaneOf } from './components/cockpit/subappHost.js';
-import { publishComposeGates, startStratumGatePoller } from './components/cockpit/notify/gatePublishers.js';
-import { NOTIFY_POLL_MS } from './components/cockpit/notify/useNotifySources.js';
+import { useGatePublishers } from './components/cockpit/notify/useNotifySources.js';
 import { createStratumDataClient } from './lib/clients/stratum.js';
 import { requestRoomFocus } from './components/cockpit/roomFocus.js';
 import { useWorkspace } from './contexts/WorkspaceContext.jsx';
@@ -573,17 +572,10 @@ function AppInner() {
     statusSnapshots: s.statusSnapshots, setStatusSnapshot: s.setStatusSnapshot,
   })));
 
-  // COMP-SUBAPP-ATTENTION-1: Compose's pending gates go into the attention sink whenever the store's gates change; a
-  // disconnected store keeps the last rows and marks "compose gates" unknown (gatePublishers.js publishComposeGates).
-  useEffect(() => {
-    publishComposeGates(attentionSink, { gates, connected, items });
-  }, [gates, connected, items]);
-  // COMP-SUBAPP-ATTENTION-1: Stratum's waiting gates are polled while Stratum is available, whichever room is open. Not built
-  // or not available ('no') is no source at all; stop() removes it from the sink.
-  useEffect(() => {
-    if (stratumAvail !== 'yes') return undefined;
-    return startStratumGatePoller({ client: createStratumDataClient(), sink: attentionSink, intervalMs: NOTIFY_POLL_MS });
-  }, [stratumAvail]);
+  // COMP-SUBAPP-ATTENTION-1 / FU-2: the gate publishers (useNotifySources.js useGatePublishers). Compose's pending gates are
+  // published per workspace, as an answer only after that workspace's first hydrate; Stratum's are polled while it is
+  // available, and a built Stratum whose check is still unknown shows as unknown, never "All clear".
+  useGatePublishers({ stratumAvail, stratumBuilt: stratumUiBuilt(), store: useVisionStore, createStratumClient: createStratumDataClient, sink: attentionSink });
 
   // COMP-AUDIT-17 §2.5: focus is explicit state, separate from selection. Only the
   // right panel's Focus button sets it; only the chip's × (or a project switch, or a

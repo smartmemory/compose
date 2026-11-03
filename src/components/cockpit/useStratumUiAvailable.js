@@ -1,5 +1,15 @@
 import { useEffect, useState } from 'react';
-import { checkAvailability } from './availabilityCheck.js';
+import { checkUntilSettled } from './availabilityCheck.js';
+
+/**
+ * COMP-SUBAPP-ATTENTION-FU-2 (F3): the recheck interval while the check stays `unknown`. 30 s: a dev-server restart is
+ * usually over in seconds, and while unknown the inbox says "Alerts unknown", so a short wait matters more than the one
+ * small GET per 30 s it costs (only while unknown; a settled check never reruns).
+ */
+export const STRATUM_RECHECK_MS = 30_000;
+
+/** True when this build linked `@smartmemory/stratum-ui` (`__STRATUM_UI__`). */
+export const stratumUiBuilt = () => typeof __STRATUM_UI__ !== 'undefined' && !!__STRATUM_UI__;
 
 /**
  * True when the Stratum tab can work (COMPOSE-STRAT-TAB-1): this build linked
@@ -11,14 +21,15 @@ import { checkAvailability } from './availabilityCheck.js';
  * in flight, then `yes` or `no`. `no` at once when this build did not link the package.
  */
 export function useStratumUiAvailability() {
-  const built = typeof __STRATUM_UI__ !== 'undefined' && __STRATUM_UI__;
+  const built = stratumUiBuilt();
   const [state, setState] = useState('unknown');
   useEffect(() => {
     if (!built) return undefined;
-    let live = true;
-    checkAvailability({ name: 'stratum', url: '/api/stratum-ui/available', decide: (j) => (j?.available === true ? 'yes' : 'no'), isLive: () => live })
-      .then(({ state: s }) => { if (live && s !== 'unknown') setState(s); });
-    return () => { live = false; };
+    // FU-2: a check that failed twice is rechecked slowly, never left `unknown` for the session.
+    return checkUntilSettled({
+      name: 'stratum', url: '/api/stratum-ui/available', decide: (j) => (j?.available === true ? 'yes' : 'no'),
+      recheckMs: STRATUM_RECHECK_MS, onSettled: setState,
+    });
   }, [built]);
   return built ? state : 'no';
 }

@@ -255,7 +255,7 @@ export function collect(sources, now = Date.now(), state = null) {
   const unknown = [...new Set(results.flatMap((r) => r.unavailable ?? []).filter(Boolean))];
   // A failed refresh keeps the last good fleet body on screen (fleetPoller): its rows may be stale, so the chip cannot say "All clear".
   if (sources.fleet && sources.fleetError != null && !unknown.includes(FLEET_UNREADABLE)) unknown.push(FLEET_UNREADABLE);
-  const answered = [...new Set(results.flatMap((r) => r.answered ?? []))];
+  const answered = results.flatMap((r) => r.answered ?? []); // `{source, scope, at}` per answering source (only the sink has any)
   return { rows, cleared, unknown, defaults, answered };
 }
 

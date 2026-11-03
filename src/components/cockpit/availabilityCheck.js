@@ -47,3 +47,27 @@ export async function checkAvailability({
   }
   return { state: 'unknown', json: null };
 }
+
+/**
+ * COMP-SUBAPP-ATTENTION-FU-2 (F3): `checkAvailability` again every `recheckMs` while it stays `unknown`, until it settles
+ * (`yes` or `no`, passed to `onSettled`) or `cancel()` is called. Only the first round logs its failure, plus one line saying
+ * a recheck is scheduled, so a server that is down for an hour does not log every 30 s. Returns `cancel`.
+ */
+export function checkUntilSettled({ onSettled, recheckMs, warn = (...a) => console.warn(...a), setTimer = setTimeout, clearTimer = clearTimeout, ...opts }) {
+  let live = true;
+  let timer = null;
+  let round = 0;
+  const run = () => {
+    if (!live) return; // a timer that fired after cancel()
+    const first = round === 0;
+    round += 1;
+    checkAvailability({ ...opts, warn: first ? warn : () => {}, isLive: () => live }).then(({ state }) => {
+      if (!live) return;
+      if (state !== 'unknown') { onSettled(state); return; }
+      if (first) warn(`[nav] ${opts.name} availability unknown; rechecking every ${Math.round(recheckMs / 1000)} s`);
+      timer = setTimer(run, recheckMs);
+    });
+  };
+  run();
+  return () => { live = false; clearTimer(timer); };
+}

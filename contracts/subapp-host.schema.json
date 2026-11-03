@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://compose.smartmemory.dev/contracts/subapp-host.schema.json",
   "title": "subapp-host",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "The one object a host app hands every mounted sub-app (Stratum, Cadence, the wiki), through the package's own data provider: `<DataClientProvider host>` (@smartmemory/stratum-ui, @cadence/ui) and `<WikiDataProvider host>` (@wiki/components); each package reads it with `useHost()`, null when it runs standalone. Three parts: what the user has selected, how the rooms are authenticated, and where they publish attention rows. Compose builds it in one place (`src/components/cockpit/subappHost.js` `buildSubappHost`). The optional `workspace` (306b) names the Compose workspace the host is showing; a switch changes its `id` and the rooms re-read.",
   "_source": "ROADMAP.md row 306a COMP-SUBAPP-HOST-1 (OWNER DECISION D-0018)",
   "_roadmap": "COMP-SUBAPP-HOST-1",
@@ -16,12 +16,23 @@
       "$ref": "#/definitions/workspace"
     },
     "attention": {
-      "description": "The attention sink: a function `(source, rows) => void`. `source` names the publisher (`stratum`, `compose-gates`, ...); `rows` is that publisher's whole current list of inbox rows (each `#/definitions/inboxRow`) and replaces its last one, so an empty list clears it. JSON Schema has no function type: a validator sees a function as no JSON type at all, which is what `not` below checks (data of any JSON type is refused). Row 307 (COMP-SUBAPP-ATTENTION-1) wires publishers and the inbox to it. An optional third argument `{unavailable: label}` says the source could not be read: the label shows in the inbox's unknown list (never as zero rows); with `rows` null the source's last good list stays, with a list it replaces as usual; a publish without the label clears the mark.",
-      "x-callable": "(source: string, rows: InboxRow[] | null, options?: { unavailable?: string }) => void",
+      "description": "The attention sink: a function `(source, rows) => void`. `source` names the publisher (`stratum`, `compose-gates`, ...); `rows` is that publisher's whole current list of inbox rows (each `#/definitions/inboxRow`) and replaces its last one, so an empty list clears it. JSON Schema has no function type: a validator sees a function as no JSON type at all, which is what `not` below checks (data of any JSON type is refused). Row 307 (COMP-SUBAPP-ATTENTION-1) wires publishers and the inbox to it. An optional third argument `{unavailable: label}` says the source could not be read: the label shows in the inbox's unknown list (never as zero rows); with `rows` null the source's last good list stays, with a list it replaces as usual; a publish without the label clears the mark. COMP-SUBAPP-ATTENTION-FU-2 (1.2.0): `options.scope` names what the list is the answer for (Compose: the workspace id its gates belong to; Stratum: none, its run ids are global). A list is the source's answer for that scope only: the host keeps one answer per source (`#/definitions/sinkAnswer`), and a list for another scope replaces it, so it never stands as an answer for the scope it replaced. A publisher that cannot say which scope its list is for publishes `{unavailable}` instead of a list.",
+      "x-callable": "(source: string, rows: InboxRow[] | null, options?: { unavailable?: string, scope?: string }) => void",
       "not": { "type": ["string", "number", "boolean", "null", "array", "object"] }
     }
   },
   "definitions": {
+    "sinkAnswer": {
+      "description": "COMP-SUBAPP-ATTENTION-FU-2: one entry of the host sink's `answered` list (host-internal: `attentionSink.readState().answered`, never on `host.attention`). The source's CURRENT list is its answer for `scope`, published at `at`. A dismissal of a gate row is released only on an answer from the row's own source for the row's own scope, made after the dismissal, while the source is not marked unavailable.",
+      "type": "object",
+      "required": ["source", "scope", "at"],
+      "additionalProperties": false,
+      "properties": {
+        "source": { "type": "string", "minLength": 1 },
+        "scope": { "type": ["string", "null"], "description": "The publish's `options.scope`, null when it had none." },
+        "at": { "type": "number", "description": "Epoch ms of the publish." }
+      }
+    },
     "workspace": {
       "description": "The Compose workspace the host is showing (COMP-SUBAPP-HOST-WORKSPACE-1, row 306b): the `{id, root}` of the `GET /api/workspace` body (server/workspace-routes.js; its `source` is not part of the contract). Optional: a standalone host has none, and Compose leaves it out while the workspace provider is loading or has failed, never an invented id. A changed `id` means the user switched workspace: each room re-reads its data and shows nothing from the old one. Which server reads are workspace-scoped differs per room (the wiki's reads follow the workspace root; Cadence's are fleet-wide), so a room does not claim to be filtered by it.",
       "type": "object",
@@ -67,7 +78,7 @@
       "type": "object",
       "required": ["key", "kind", "severity", "title", "sourceLabel"],
       "properties": {
-        "key": { "type": "string", "minLength": 1, "description": "Stable id; the notify state clears and answers rows by it." },
+        "key": { "type": "string", "minLength": 1, "description": "Stable id; the notify state clears and answers rows by it. A gate row's key names one gate instance, `<source>:<scope>:<gate>:<round>` (COMP-SUBAPP-ATTENTION-FU-2): `stratum-gate:<runId>:<stepId>:<round>`, `compose-gate:<workspaceId, URI-encoded>:<flowId>:<stepId>:<round>`." },
         "kind": { "type": "string", "minLength": 1 },
         "severity": { "enum": ["critical", "warn"], "description": "notifyLogic.js SEVERITY_RANK." },
         "title": { "type": "string", "minLength": 1 },

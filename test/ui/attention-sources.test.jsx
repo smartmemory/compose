@@ -48,7 +48,7 @@ function fakeServer({ alerts = [WALL] } = {}) {
 
 const publishBoth = () => act(() => {
   attentionSink.publish(STRATUM_SOURCE, stratumGateRows([PG]).rows);
-  publishComposeGates(attentionSink, { gates: [CG], connected: true, items: [{ id: 'item-1', title: 'Gate sources' }] });
+  publishComposeGates(attentionSink, { gates: [CG], connected: true, scope: 'ws-1', items: [{ id: 'item-1', title: 'Gate sources' }] });
 });
 
 const sidebarProps = {
@@ -84,7 +84,7 @@ const ROWS = [
     await waitFor(() => expect(listRows()).toHaveLength(3));
     expect(screen.getAllByTestId('needs-attention')).toHaveLength(1);
     // older wait first (Stratum 600 s, Compose 120 s), the ageless Cadence wall last
-    expect(listRows().map((r) => r.getAttribute('data-key'))).toEqual(['stratum-gate:run-a:review', 'compose-gate:flow-1:design:1', 'attention:seat2 5h']);
+    expect(listRows().map((r) => r.getAttribute('data-key'))).toEqual(['stratum-gate:run-a:review:0', 'compose-gate:ws-1:flow-1:design:1', 'attention:seat2 5h']);
     fireEvent.click(screen.getByTestId('notify-chip'));
     expect(trayKinds()).toEqual(['stratum-gate', 'compose-gate', 'attention']);
     expect(screen.getByTestId('needs-attention-count').textContent).toBe(String(screen.getAllByTestId('notify-row').length));
@@ -143,7 +143,7 @@ const ROWS = [
       await pollStratumGates({ client: { listGates: async () => [PG] }, sink: attentionSink, warn: () => {} });
       await pollStratumGates({ client: { listGates: async () => { throw new Error('HTTP 502'); } }, sink: attentionSink, warn: () => {} });
     });
-    await waitFor(() => expect(listRows().map((r) => r.getAttribute('data-key'))).toEqual(['stratum-gate:run-a:review']));
+    await waitFor(() => expect(listRows().map((r) => r.getAttribute('data-key'))).toEqual(['stratum-gate:run-a:review:0']));
     expect(screen.getByTestId('needs-attention-unknown').textContent).toBe('Also unavailable: stratum gates');
   }],
   ['a disconnected store names "compose gates"; with nothing waiting and every source up, no list at all', async () => {

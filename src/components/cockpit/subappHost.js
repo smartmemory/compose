@@ -107,15 +107,18 @@ const isRow = (r) => !!r && typeof r === 'object'
  * with a list it replaces as usual. Any publish without the label clears the mark, so `publish(source, [])` removes a source.
  * COMP-SUBAPP-ATTENTION-FU-1: `readState().answered` names the sources that have published a list and not been retired, so a
  * reader can tell a source that answered with no rows from one that never ran (or was stopped): `retire(source)` drops it.
+ * COMP-SUBAPP-ATTENTION-FU-2: an answer is per source AND scope. A publish carries `{scope}` (Compose: the workspace id; Stratum:
+ * none), and `answered` holds one `{source, scope, at}` per source: the scope and time (`now()`, epoch ms) of its CURRENT list.
+ * A list for another scope replaces it, so it never stands as an answer for the scope it replaced.
  */
-export function createAttentionSink({ warn = console.warn } = {}) {
+export function createAttentionSink({ warn = console.warn, now = () => Date.now() } = {}) {
   const bySource = new Map();
   const downBySource = new Map();
-  const answered = new Set();
+  const answered = new Map();
   const listeners = new Set();
   let snapshot = [];
   let state = { rows: snapshot, unavailable: [], answered: [] };
-  const publish = (source, rows, { unavailable = null } = {}) => {
+  const publish = (source, rows, { unavailable = null, scope = null } = {}) => {
     if (typeof source !== 'string' || source === '') { warn('[subapp-host] attention publish without a source name; rows dropped'); return; }
     const down = typeof unavailable === 'string' && unavailable !== '' ? unavailable : null;
     if (down) downBySource.set(source, down); else downBySource.delete(source);
@@ -125,12 +128,12 @@ export function createAttentionSink({ warn = console.warn } = {}) {
       if (good.length !== list.length || !Array.isArray(rows)) warn(`[subapp-host] ${source}: ${Array.isArray(rows) ? list.length - good.length : 'a non-list of'} attention rows dropped (not inbox rows)`);
       if (good.length) bySource.set(source, good); else bySource.delete(source);
     }
-    if (Array.isArray(rows)) answered.add(source);
+    if (Array.isArray(rows)) answered.set(source, { source, scope: typeof scope === 'string' && scope !== '' ? scope : null, at: now() });
     rebuild();
   };
   const rebuild = () => {
     snapshot = [...bySource.values()].flat();
-    state = { rows: snapshot, unavailable: [...new Set(downBySource.values())], answered: [...answered] };
+    state = { rows: snapshot, unavailable: [...new Set(downBySource.values())], answered: [...answered.values()] };
     for (const fn of listeners) fn(snapshot);
   };
   /** A source that went away: no longer "answered" (its rows and unavailable mark go too). */
@@ -145,7 +148,7 @@ export function createAttentionSink({ warn = console.warn } = {}) {
     retire,
     /** Every source's current rows, one flat list (a stable array between publishes). */
     read: () => snapshot,
-    /** `{rows, unavailable, answered}`: `read()`, the labels of the sources marked unavailable, and the names of the sources that have answered (a stable object between publishes). */
+    /** `{rows, unavailable, answered}`: `read()`, the labels of the sources marked unavailable, and `{source, scope, at}` for each source that has answered (a stable object between publishes). */
     readState: () => state,
     /** `fn(rows)` after each publish; returns the unsubscribe. */
     subscribe: (fn) => { listeners.add(fn); return () => listeners.delete(fn); },
