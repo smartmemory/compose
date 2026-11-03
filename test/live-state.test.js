@@ -359,6 +359,88 @@ test('key: eight processes adding one key at once create one order', () => {
   assert.equal(readStore(dataDir).live_orders.length, 1);
 });
 
+test('key: a second key on the add makes any one of them handled, also after a supersede', () => {
+  const { dataDir } = workspace();
+  const a = addOrder(dataDir, { text: 'freeze', source: 's#1', key: 'owner-ledger:aa', keys: ['owner-ledger:D-0099', 'owner-ledger:D-0099'] }, { now: NOW });
+  assert.equal(a.created, true);
+  assert.equal(a.order.key, 'owner-ledger:aa');
+  assert.deepEqual(a.order.keys, ['owner-ledger:D-0099'], 'duplicates collapse');
+  supersedeOrder(dataDir, { id: 'LO-1', superseded_by: 'manual' }, { now: NOW });
+  // a different line (new identity key), same decision key: handled, nothing stored
+  const b = addOrder(dataDir, { text: 'reworded', source: 's#2', key: 'owner-ledger:bb', keys: ['owner-ledger:D-0099'] }, { now: NOW });
+  assert.equal(b.handled, true);
+  assert.equal(b.order.id, 'LO-1');
+  // the decision key can also match as an order's FIRST key, and the first key as an extra
+  const c = addOrder(dataDir, { text: 'x', source: 's#3', key: 'cc', keys: ['owner-ledger:aa'] }, { now: NOW });
+  assert.equal(c.handled, true);
+  assert.equal(readStore(dataDir).live_orders.length, 1);
+  assert.equal(readStore(dataDir).next_seq, 2);
+});
+
+test('key: an order written with only `key` (before `keys`) still dedups, and an unmatched second key stores both', () => {
+  const { dataDir } = workspace();
+  addOrder(dataDir, { text: 'old', source: 's#1', key: 'owner-ledger:old' }, { now: NOW });
+  assert.equal('keys' in readStore(dataDir).live_orders[0], false);
+  assert.equal(addOrder(dataDir, { text: 'again', source: 's#2', key: 'owner-ledger:zz', keys: ['owner-ledger:old'] }, { now: NOW }).handled, true);
+  const n = addOrder(dataDir, { text: 'new', source: 's#3', key: 'owner-ledger:n', keys: ['owner-ledger:D-1'] }, { now: NOW });
+  assert.equal(n.created, true);
+  assert.deepEqual(readStore(dataDir).live_orders[1].keys, ['owner-ledger:D-1']);
+});
+
+test('key: an invalid or oversize `keys` is refused and writes nothing', () => {
+  const { dataDir } = workspace();
+  const bad = [['has space'], [''], [7], ['x'.repeat(129)], 'k2', Array.from({ length: 9 }, (_, i) => `k${i}`)];
+  for (const keys of bad) {
+    assert.throws(() => addOrder(dataDir, { text: 't', source: 's', key: 'k1', keys }, { now: NOW }),
+      (err) => err instanceof LiveStateError && err.code === 'invalid', `keys ${JSON.stringify(keys)}`);
+  }
+  assert.throws(() => addOrder(dataDir, { text: 't', source: 's', keys: ['k2'] }, { now: NOW }), (err) => err.code === 'invalid');
+  assert.equal(readStore(dataDir).live_orders.length, 0);
+});
+
+test('key CLI: --key repeats, and the add is handled when any one of them is known', () => {
+  const { root } = workspace();
+  const add = (...k) => JSON.parse(cliRun(['add', '--root', root, '--text', 'o' + k.join(), '--source', 'ledger.md#ef', ...k.flatMap((x) => ['--key', x])], { now: NOW }));
+  assert.equal(add('owner-ledger:ef', 'owner-ledger:D-0098').created, true);
+  JSON.parse(cliRun(['supersede', '--root', root, '--id', 'LO-1', '--by', 'manual'], { now: NOW }));
+  assert.equal(add('owner-ledger:gh', 'owner-ledger:D-0098').handled, true);
+  assert.equal(add('owner-ledger:ef').handled, true);
+  assert.equal(add('owner-ledger:ij').created, true, 'a single fresh key is as before');
+  assert.deepEqual(JSON.parse(cliRun(['read', '--root', root], { now: NOW })).view.orders.map((o) => o.id), ['LO-2']);
+});
+
+test('key: eight processes sharing only the decision key create one order', () => {
+  const { root, dataDir } = workspace();
+  const cli = join(REPO, 'lib', 'live-state-cli.js');
+  const env = { ...process.env };
+  delete env.COMPOSE_SESSION_PROFILE;
+  const script = `const {spawn}=require('node:child_process');let done=0;const out=[];
+    for(let i=0;i<8;i++){const c=spawn(process.execPath,[${JSON.stringify(cli)},'add','--root',${JSON.stringify(root)},'--text','race'+i,'--source','s'+i,'--key','id-'+i,'--key','owner-ledger:D-0097'],{env:process.env});
+      let b='';c.stdout.on('data',d=>b+=d);c.on('close',code=>{out.push([code,b.trim()]);if(++done===8)console.log(JSON.stringify(out));});}`;
+  const r = spawnSync(process.execPath, ['-e', script], { encoding: 'utf8', env });
+  assert.equal(r.status, 0, r.stderr);
+  const replies = JSON.parse(r.stdout);
+  assert.ok(replies.every(([code]) => code === 0), r.stdout);
+  assert.equal(replies.filter(([, b]) => JSON.parse(b).created).length, 1);
+  assert.equal(readStore(dataDir).live_orders.length, 1);
+});
+
+test('contract: an order with `keys` validates, a duplicate or malformed extra key does not', () => {
+  const schema = JSON.parse(readFileSync(join(REPO, 'contracts', 'live-state.schema.json'), 'utf8'));
+  const ajv = new Ajv({ strict: false, allErrors: true });
+  addFormats(ajv);
+  ajv.addSchema(schema);
+  const store = ajv.getSchema('live-state.schema.json#/$defs/Store');
+  const { dataDir } = workspace();
+  addOrder(dataDir, { text: 'a', source: 's', key: 'k1', keys: ['owner-ledger:D-0096'] }, { now: NOW });
+  const doc = readStore(dataDir);
+  assert.equal(store(doc), true, JSON.stringify(store.errors));
+  doc.live_orders[0].keys = ['k2', 'k2'];
+  assert.equal(store(doc), false);
+  doc.live_orders[0].keys = ['has space'];
+  assert.equal(store(doc), false);
+});
+
 // ── the contract ─────────────────────────────────────────────────────────────
 
 test('contract: the written store and the read view validate against live-state.schema.json', () => {

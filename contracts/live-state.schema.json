@@ -21,6 +21,7 @@
         "source": { "type": "string", "minLength": 1, "maxLength": 200, "description": "Where it was given: a ledger line id (`ledger.md:25713`) or the `OWNER (via s1-chat ...)` line." },
         "by": { "type": "string", "maxLength": 80, "description": "Who recorded it (a session name)." },
         "key": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9:._-]+$", "description": "Optional caller event identity (COMP-DOGFOOD-LIVE-STATE-KEY-1), e.g. `owner-ledger:<hash>`. A later add with the same key writes nothing, whether this order is still active or superseded." },
+        "keys": { "type": "array", "maxItems": 8, "uniqueItems": true, "items": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9:._-]+$" }, "description": "Optional extra event keys beside `key` (COMP-DOGFOOD-LIVE-STATE-KEY-1 step 5), e.g. `owner-ledger:D-0070`, the decision id. An add is handled if any of its keys equals any key (`key` or `keys`) of any order, active or superseded." },
         "added_at": { "type": "string", "format": "date-time" },
         "expires": { "type": ["string", "null"], "format": "date-time", "description": "After this instant the order is no longer active." },
         "superseded_by": { "type": ["string", "null"], "maxLength": 200, "description": "The order id (`LO-n`) or source that replaced it; non-null means inactive." },
