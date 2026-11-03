@@ -41,6 +41,12 @@ let _targetRoot = (() => {
   return findProjectRoot(process.cwd()) || process.cwd();
 })();
 
+// COMP-DOGFOOD-OWNER-GATE-SESSION-1 fix r1: the root this process resolved at startup. switchProject() reassigns
+// `_targetRoot`, so policy that a caller must not be able to move (who may answer an owner question) captures it here.
+const _startupRoot = _targetRoot;
+/** The root resolved at process startup (COMPOSE_TARGET, else the start cwd). Never changes, unlike getTargetRoot(). */
+export function getStartupRoot() { return _startupRoot; }
+
 let _dataDir = path.join(_targetRoot, '.compose', 'data');
 let _configCache = null;
 const projectContext = new AsyncLocalStorage();

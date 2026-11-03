@@ -9,7 +9,7 @@
 import './helpers/git-env-scrub.js';
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -204,6 +204,14 @@ describe('owner gates: one list on every surface', () => {
   });
 });
 
+/** Every file an owner-gate close could write: queue, notify spool, evidence store and each outbox file, with contents. */
+const channelFiles = () => {
+  const out = {};
+  for (const f of [QUEUE, process.env.NOTIFY_SPOOL, process.env.COMPOSE_EVIDENCE_STORE]) out[f] = existsSync(f) ? readFileSync(f, 'utf8') : null;
+  for (const f of existsSync(OUTBOX) ? readdirSync(OUTBOX).sort() : []) out[join(OUTBOX, f)] = readFileSync(join(OUTBOX, f), 'utf8');
+  return out;
+};
+
 // COMP-DOGFOOD-OWNER-GATE-SESSION-1: only an allow-listed session (default s1-chat) answers an owner question through MCP.
 describe('owner gate answers: who may speak for the owner', () => {
   const GATE = 'owner:STUDIO-PIN-FALLBACK';
@@ -214,27 +222,29 @@ describe('owner gate answers: who may speak for the owner', () => {
     try { return await fn(); } finally { process.env.COMPOSE_SESSION_NAME = saved; }
   };
   const gateVersion = () => og.readOwnerGates({ file: QUEUE, warn: () => {} }).gates.find((g) => g.id === GATE).version;
-  const withConfig = (extra, fn) => withProjectContext(
-    { targetRoot: TARGET, dataDir: join(TARGET, '.compose', 'data'), config: { version: 2, capabilities: { lifecycle: true }, ...extra } }, fn);
 
   it('a lane lead session (forge-main) is refused: OWNER_GATE_SESSION, the queue row untouched, no receipt', async () => {
     seedQueue();
     const queueBefore = readFileSync(QUEUE, 'utf8');
     const evBefore = evidenceText();
+    const channelsBefore = channelFiles();
     await asSession('forge-main', () => assert.rejects(
       tools.toolApproveGate({ gateId: GATE, option: 'a', version: gateVersion() }),
       (e) => e.code === 'OWNER_GATE_SESSION' && /"forge-main"/.test(e.message) && /\bs1-chat\b/.test(e.message)));
     assert.equal(readFileSync(QUEUE, 'utf8'), queueBefore, 'the queue file is byte-identical');
     assert.equal(evidenceText(), evBefore, 'no receipt was minted');
+    assert.deepEqual(channelFiles(), channelsBefore, 'the spool and every outbox file are byte-identical too');
   });
 
   it('an unnamed session is refused and the message says unnamed', async () => {
     seedQueue();
     const queueBefore = readFileSync(QUEUE, 'utf8');
+    const channelsBefore = channelFiles();
     await asSession(null, () => assert.rejects(
       tools.toolApproveGate({ gateId: GATE, option: 'a', version: gateVersion() }),
       (e) => e.code === 'OWNER_GATE_SESSION' && /unnamed/.test(e.message)));
     assert.equal(readFileSync(QUEUE, 'utf8'), queueBefore);
+    assert.deepEqual(channelFiles(), channelsBefore, 'queue, spool, outbox files and evidence store are byte-identical');
   });
 
   it('s1-chat (the default allow list) closes the row and the result names the relaying session', async () => {
@@ -247,15 +257,20 @@ describe('owner gate answers: who may speak for the owner', () => {
     seedQueue();
   });
 
-  it('ownerGateSessions in .compose/compose.json replaces the default list', async () => {
+  it('ownerGateSessions in the startup root\'s .compose/compose.json replaces the default list', async () => {
     seedQueue();
-    await withConfig({ ownerGateSessions: ['forge-main'] }, async () => {
+    const policyFile = join(TARGET, '.compose', 'compose.json');
+    const original = readFileSync(policyFile, 'utf8');
+    writeFileSync(policyFile, JSON.stringify({ ...JSON.parse(original), ownerGateSessions: ['forge-main'] }));
+    try {
+      const channelsBefore = channelFiles();
       await asSession('s1-chat', () => assert.rejects(
         tools.toolApproveGate({ gateId: GATE, option: 'a', version: gateVersion() }), (e) => e.code === 'OWNER_GATE_SESSION'));
+      assert.deepEqual(channelFiles(), channelsBefore, 'queue, spool, outbox files and evidence store are byte-identical');
       const r = await asSession('forge-main', () => tools.toolApproveGate({ gateId: GATE, option: 'a', version: gateVersion() }));
       assert.equal(r.closed, true);
       assert.equal(r.relayed_by, 'forge-main');
-    });
+    } finally { writeFileSync(policyFile, original); }
     seedQueue();
   });
 
@@ -277,5 +292,79 @@ describe('owner gate answers: who may speak for the owner', () => {
         assert.doesNotMatch(String(e.message), /OWNER_GATE_SESSION/);
       }
     });
+  });
+});
+
+// COMP-DOGFOOD-OWNER-GATE-SESSION-1 fix r1: the allow list is read from the root the server started in, never from a
+// workspace a caller can select (set_workspace) or a per-call project context.
+describe('owner gate answers: the allow list comes from the startup root only', () => {
+  const GATE = 'owner:STUDIO-PIN-FALLBACK';
+  const LANE = join(TARGET, 'lane');
+  const POLICY = join(TARGET, '.compose', 'compose.json');
+  const BASE = { version: 2, workspaceId: 'ogs1-root', capabilities: { lifecycle: true, phaseScopedTools: true } };
+  const policyOriginal = readFileSync(POLICY, 'utf8');
+  const gateVersion = () => og.readOwnerGates({ file: QUEUE, warn: () => {} }).gates.find((g) => g.id === GATE).version;
+  const setPolicy = (extra) => writeFileSync(POLICY, JSON.stringify({ ...BASE, ...extra }));
+  const asForgeMain = async (fn) => {
+    process.env.COMPOSE_SESSION_NAME = 'forge-main';
+    try { return await fn(); } finally { process.env.COMPOSE_SESSION_NAME = 's1-chat'; }
+  };
+
+  before(() => {
+    mkdirSync(join(LANE, '.compose', 'data'), { recursive: true });
+    writeFileSync(join(LANE, '.compose', 'compose.json'), JSON.stringify({ ...BASE, workspaceId: 'ogs1-lane', ownerGateSessions: ['forge-main'] }));
+  });
+  after(() => writeFileSync(POLICY, policyOriginal));
+
+  it('F1: forge-main selects a workspace that lists it through set_workspace and is still refused, every channel byte-identical', async () => {
+    setPolicy({});
+    seedQueue();
+    const cwd = process.cwd();
+    process.chdir(TARGET);
+    try {
+      const sel = tools.toolSetWorkspace({ workspaceId: 'ogs1-lane' });
+      assert.equal(sel.id, 'ogs1-lane');
+      const before = channelFiles();
+      await asForgeMain(() => assert.rejects(
+        tools.toolApproveGate({ gateId: GATE, option: 'a', version: gateVersion() }),
+        (e) => e.code === 'OWNER_GATE_SESSION'));
+      assert.deepEqual(channelFiles(), before, 'queue, spool, outbox files and evidence store are byte-identical');
+    } finally {
+      tools.toolSetWorkspace({ workspaceId: 'ogs1-root' });
+      process.chdir(cwd);
+    }
+  });
+
+  it('a per-call project context that lists forge-main is ignored too', async () => {
+    setPolicy({});
+    seedQueue();
+    const before = channelFiles();
+    await withProjectContext({ targetRoot: LANE, dataDir: join(LANE, '.compose', 'data'), config: { ...BASE, ownerGateSessions: ['forge-main'] } },
+      () => asForgeMain(() => assert.rejects(
+        tools.toolApproveGate({ gateId: GATE, option: 'a', version: gateVersion() }), (e) => e.code === 'OWNER_GATE_SESSION')));
+    assert.deepEqual(channelFiles(), before);
+  });
+
+  it('the startup root listing a name still allows it', async () => {
+    setPolicy({ ownerGateSessions: ['forge-main'] });
+    seedQueue();
+    const r = await asForgeMain(() => tools.toolApproveGate({ gateId: GATE, option: 'a', version: gateVersion() }));
+    assert.equal(r.closed, true);
+    assert.equal(r.relayed_by, 'forge-main');
+    setPolicy({});
+    seedQueue();
+  });
+
+  it('a malformed value at the startup root falls back to the default: forge-main refused, s1-chat allowed', async () => {
+    setPolicy({ ownerGateSessions: 'forge-main' });
+    seedQueue();
+    const before = channelFiles();
+    await asForgeMain(() => assert.rejects(
+      tools.toolApproveGate({ gateId: GATE, option: 'a', version: gateVersion() }), (e) => e.code === 'OWNER_GATE_SESSION'));
+    assert.deepEqual(channelFiles(), before);
+    const r = await tools.toolApproveGate({ gateId: GATE, option: 'a', version: gateVersion() });
+    assert.equal(r.relayed_by, 's1-chat');
+    setPolicy({});
+    seedQueue();
   });
 });

@@ -11,7 +11,7 @@ import path from 'node:path';
 import { ArtifactManager, artifactKeysForMode } from './artifact-manager.js';
 import { readFeature, updateFeature } from '../lib/feature-json.js';
 import { loadFeaturesDir } from '../lib/project-paths.js';
-import { getTargetRoot, getDataDir, resolveProjectPath, switchProject, setCurrentWorkspaceId, getCurrentWorkspaceId, loadProjectConfig, isLifecycleEnabled } from './project-root.js';
+import { getStartupRoot, getTargetRoot, getDataDir, resolveProjectPath, switchProject, setCurrentWorkspaceId, getCurrentWorkspaceId, loadProjectConfig, isLifecycleEnabled } from './project-root.js';
 import { resolveProfile, isToolAllowed, ownerOrderWriterDenial } from './mcp-tool-policy.js';
 import { getRoadmap } from '../lib/get-roadmap.js';
 
@@ -976,6 +976,37 @@ export async function toolApproveGate(args = {}) {
     () => _postGate(gateId, 'resolve', { outcome, comment }));
 }
 
+const _ignoredPolicyWarned = new Set();
+/**
+ * The config that decides who may answer an owner question: the `.compose/compose.json` of the root the server process
+ * started in, never the per-call project context or a `set_workspace` selection (a session could list itself in a
+ * workspace it can write and select). A selected workspace that sets `ownerGateSessions` is ignored with one WARNING per
+ * path; an unreadable or malformed policy file gives the default list (narrower, never wider) with a WARNING.
+ */
+function _ownerGatePolicyConfig() {
+  const startup = getStartupRoot();
+  const file = path.join(startup, '.compose', 'compose.json');
+  let policy = null;
+  try {
+    policy = JSON.parse(fs.readFileSync(file, 'utf-8'));
+    if (!policy || typeof policy !== 'object' || Array.isArray(policy)) throw new Error('not a JSON object');
+  } catch (e) {
+    policy = null;
+    if (e?.code !== 'ENOENT') console.warn(`[owner-gates] WARNING cannot read the owner-gate policy ${file} (${e.message}); using the default allow list`);
+  }
+  const current = getTargetRoot();
+  if (path.resolve(current) !== path.resolve(startup)) {
+    const other = path.join(current, '.compose', 'compose.json');
+    let sets = false;
+    try { sets = loadProjectConfig()?.ownerGateSessions !== undefined; } catch { sets = false; }
+    if (sets && !_ignoredPolicyWarned.has(other)) {
+      _ignoredPolicyWarned.add(other);
+      console.warn(`[owner-gates] WARNING ownerGateSessions in ${other} is ignored: only ${file} (the root this server started in) decides who may answer an owner question`);
+    }
+  }
+  return policy;
+}
+
 /**
  * approve_gate on `owner:<qid>`: close the queue row (`owner_queue.py close --channel mcp --if-version`, lib/owner-gates.js
  * closeOwnerGate), then mint the receipt the evidence rule asks for: a `log` receipt on the closed record's line, minted
@@ -984,9 +1015,10 @@ export async function toolApproveGate(args = {}) {
  */
 async function _answerOwnerGate(args) {
   // COMP-DOGFOOD-OWNER-GATE-SESSION-1: who may speak for the owner is checked before anything is read or written.
+  const relayedBy = assertOwnerGateSession(process.env.COMPOSE_SESSION_NAME, _ownerGatePolicyConfig());
+  // the evidence rule is the selected workspace's own setting; only the allow list is pinned to the startup root
   let sessionConfig = null;
   try { sessionConfig = loadProjectConfig(); } catch { sessionConfig = null; }
-  const relayedBy = assertOwnerGateSession(process.env.COMPOSE_SESSION_NAME, sessionConfig);
   const closed = closeOwnerGate({ gateId: args.gateId, option: args.option, version: args.version });
   const result = { gateId: closed.gateId, qid: closed.qid, option: closed.option, answer: closed.answer, closed: true, relayed_by: relayedBy };
   const { evidenceRequired, checkEvidence, recordEvidence } = await import('../lib/evidence.js');
