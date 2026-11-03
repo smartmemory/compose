@@ -9,7 +9,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { attachRibbonRoutes } from '../server/ribbon-routes.js';
-import { buildRibbon, etaWithPrev, holdBands, parseGateLog } from '../lib/ribbon-feed.js';
+import { buildRibbon, computeHistory, etaWithPrev, holdBands, parseGateLog } from '../lib/ribbon-feed.js';
 import { buildDecisions, parseLedger, queueDecisions } from '../lib/decisions-ledger.js';
 
 const D = (s) => Date.parse(`2026-10-31T${s}:00Z`);
@@ -210,4 +210,15 @@ describe('GET /api/ribbon', () => {
     } finally { server.close(); }
   });
   it('remote mode mounts nothing', () => assert.equal(attachRibbonRoutes(express(), { remote: true }), false));
+});
+
+describe('COMP-RIBBON-FEED-OVERFLOW-1: history scan over a very large snapshot log', () => {
+  it('200k snapshot timestamps give the right earliest and count without a stack overflow', () => {
+    const base = 1_700_000_000;
+    const snapshots = Array.from({ length: 200_000 }, (_, i) => ({ ts: base + ((i * 7919) % 200_000) }));
+    snapshots.push({ ts: 'bad' }, null); // not numeric: skipped, not counted
+    const h = computeHistory({ snapshots });
+    assert.equal(h.quota.count, 200_000);
+    assert.equal(h.quota.earliest, new Date(base * 1000).toISOString());
+  });
 });
