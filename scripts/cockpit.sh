@@ -15,6 +15,12 @@ ENTRY="${COCKPIT_ENTRY:-server/supervisor.js}"  # relative to the repo root; tes
 NODE="${COCKPIT_NODE:-$HOME/.nvm/versions/node/v22.22.3/bin/node}"
 if [ -x "$NODE" ]; then PATH="$(dirname "$NODE"):$PATH"; export PATH
 else echo "cockpit.sh: WARNING pinned node $NODE not found, falling back to $(command -v node) from PATH" >&2; NODE=node; fi
+# Our Python scripts (sm_status, owner_queue, usage_watch, estimate, notify_client) need 3.12+, and a bare `python3` on the
+# cockpit's PATH is Apple's /usr/bin 3.9 (owner 2026-11-03 "we're on 3.13 across the board"). Every server reader and the notify
+# gate take COMPOSE_FLEET_PYTHON (fleet-routes.js, ribbon-routes.js, usage-routes.js, ops-status-routes.js, notify-gate.js).
+PY="${COMPOSE_FLEET_PYTHON:-$HOME/miniconda3/bin/python3}"
+if [ -x "$PY" ]; then COMPOSE_FLEET_PYTHON="$PY"; export COMPOSE_FLEET_PYTHON
+else echo "cockpit.sh: WARNING python $PY not found, the fleet readers fall back to $(command -v python3) from PATH" >&2; fi
 
 alive() { [ -n "${1:-}" ] && kill -0 "$1" 2>/dev/null; }
 sup_pid() { [ -f "$PIDFILE" ] && cat "$PIDFILE"; }
