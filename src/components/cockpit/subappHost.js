@@ -102,24 +102,36 @@ const isRow = (r) => !!r && typeof r === 'object'
  * The attention sink (the host's `attention`). Each publisher (`source`) owns one current list of inbox rows
  * (notifyLogic.js row type, contract `#/definitions/inboxRow`); a publish replaces that source's list, `[]` clears it.
  * A malformed row is dropped with one WARNING naming the source and how many, never silently. Row 307 makes the inbox read it.
+ * COMP-SUBAPP-ATTENTION-1: a third argument `{unavailable: '<label>'}` says the source could not be read. It is never "no rows":
+ * the label shows in the inbox's unknown list, and with `rows` null the source's last good list stays (stale, so marked);
+ * with a list it replaces as usual. Any publish without the label clears the mark, so `publish(source, [])` removes a source.
  */
 export function createAttentionSink({ warn = console.warn } = {}) {
   const bySource = new Map();
+  const downBySource = new Map();
   const listeners = new Set();
   let snapshot = [];
-  const publish = (source, rows) => {
+  let state = { rows: snapshot, unavailable: [] };
+  const publish = (source, rows, { unavailable = null } = {}) => {
     if (typeof source !== 'string' || source === '') { warn('[subapp-host] attention publish without a source name; rows dropped'); return; }
-    const list = Array.isArray(rows) ? rows : [];
-    const good = list.filter(isRow);
-    if (good.length !== list.length || !Array.isArray(rows)) warn(`[subapp-host] ${source}: ${Array.isArray(rows) ? list.length - good.length : 'a non-list of'} attention rows dropped (not inbox rows)`);
-    if (good.length) bySource.set(source, good); else bySource.delete(source);
+    const down = typeof unavailable === 'string' && unavailable !== '' ? unavailable : null;
+    if (down) downBySource.set(source, down); else downBySource.delete(source);
+    if (!(down && rows == null)) {
+      const list = Array.isArray(rows) ? rows : [];
+      const good = list.filter(isRow);
+      if (good.length !== list.length || !Array.isArray(rows)) warn(`[subapp-host] ${source}: ${Array.isArray(rows) ? list.length - good.length : 'a non-list of'} attention rows dropped (not inbox rows)`);
+      if (good.length) bySource.set(source, good); else bySource.delete(source);
+    }
     snapshot = [...bySource.values()].flat();
+    state = { rows: snapshot, unavailable: [...new Set(downBySource.values())] };
     for (const fn of listeners) fn(snapshot);
   };
   return {
     publish,
     /** Every source's current rows, one flat list (a stable array between publishes). */
     read: () => snapshot,
+    /** `{rows, unavailable}`: `read()` plus the labels of the sources marked unavailable (a stable object between publishes). */
+    readState: () => state,
     /** `fn(rows)` after each publish; returns the unsubscribe. */
     subscribe: (fn) => { listeners.add(fn); return () => listeners.delete(fn); },
   };

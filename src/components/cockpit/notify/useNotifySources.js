@@ -2,14 +2,17 @@
  * useNotifySources.js — COMP-COCKPIT-NOTIFY-CHIP-1: the chip and the banner share ONE read. sm_status comes from the shared
  * `useFleet()` loop. Cadence's outage, attention and review screens are polled here every 60 s, paused while the document is
  * hidden (the fleet poller's rule), by one loop however many components are mounted. No other fetch.
+ * COMP-SUBAPP-ATTENTION-1: the host attention sink (`attentionSink`, fed by gatePublishers.js) is read too, by subscription:
+ * its rows and unavailable labels go into `collect` beside Cadence's, so gates rank with them under the one rule.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { useFleet } from '../../../lib/fleetPoller.js';
 import { createCadenceDataClient } from '../../../lib/clients/cadence.js';
 import { collect, chipState } from './notifyLogic.js';
 import { smPanel } from '../fleetLogic.js';
 import { releaseKeys } from './notifyState.js';
 import { useNotifyState, releaseOnce } from './useNotifyState.js';
+import { attentionSink } from '../subappHost.js';
 
 export const NOTIFY_POLL_MS = 60_000;
 
@@ -83,12 +86,13 @@ export function useNotifySources() {
   const { data: fleet, loading: fleetLoading, error: fleetError } = useFleet();
   const [cad, setCad] = useState(state);
   useEffect(() => subscribeCadence(setCad), []);
+  const sink = useSyncExternalStore(attentionSink.subscribe, attentionSink.readState);
   const notify = useNotifyState();
   const loading = (fleetLoading && !fleet) || cad.outage === null;
   const out = useMemo(() => {
-    const collected = { ...collect({ fleet, fleetError, outage: cad.outage, attention: cad.attention, review: cad.review }, Date.now(), notify.state), stateUnavailable: notify.unavailable };
+    const collected = { ...collect({ fleet, fleetError, outage: cad.outage, attention: cad.attention, review: cad.review, sink }, Date.now(), notify.state), stateUnavailable: notify.unavailable };
     return { loading, collected, chip: chipState(collected), notify };
-  }, [fleet, fleetError, cad, loading, notify]);
+  }, [fleet, fleetError, cad, sink, loading, notify]);
   useEffect(() => {
     if (out.loading || !notify.state) return;
     const keys = releaseKeys(out.collected, notify.state, smPanel(fleet, 'queue')?.value);

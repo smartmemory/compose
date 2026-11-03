@@ -10,6 +10,7 @@
 import { ctxLevel, smPanel, readerUp, DISK_RED_GB, fmtAge } from '../fleetLogic.js';
 import { groupOf, stripTag } from '../../../../lib/owner-queue-class.js';
 import { isCleared, clearedOf, answeredOf, securityAck, fnv1a } from './notifyState.js';
+import { ageSince, mergeGateRows, GATE_KINDS, STRATUM_LABEL, COMPOSE_LABEL } from './gatePublishers.js';
 
 // COMP-COCKPIT-NOTIFY-ACTIONS-1: the classifier moved verbatim to lib/ (the server's answer route needs it and the published
 // package does not ship src/). Re-exported so every import of it from here keeps working: still ONE classifier.
@@ -131,10 +132,6 @@ export function diskAdapter(fleet) {
   return { rows, unavailable };
 }
 
-const ageSince = (iso, now) => {
-  const t = Date.parse(iso ?? '');
-  return Number.isFinite(t) ? Math.max(0, (now - t) / 1000) : null;
-};
 
 /** cadence outage screen: only `state: 'outage'` is a row. `ok` is clear. `stale` and `unknown` mean cadence cannot say, so the source is unavailable, never clear. */
 export function outageAdapter(outage, now = Date.now()) {
@@ -209,11 +206,25 @@ export function reviewAdapter(review, now = Date.now()) {
   return { rows, unavailable: null };
 }
 
+/**
+ * COMP-SUBAPP-ATTENTION-1: the host attention sink's snapshot (`attentionSink.readState()`: `{rows, unavailable}`) -> its rows,
+ * Stratum and Compose gates merged to one row per gate (gatePublishers.js `mergeGateRows`), each re-aged from its `sinceAt`
+ * so a row published an hour ago does not read "just now". `unavailable` is every label a publisher marked; a missing
+ * snapshot (no sink wired) is no source, not an unknown one.
+ */
+export function sinkAdapter(sink, now = Date.now()) {
+  if (!sink) return { rows: [], unavailable: null };
+  const rows = mergeGateRows(Array.isArray(sink.rows) ? sink.rows : [])
+    .map((r) => (r.sinceAt ? { ...r, since: ageSince(r.sinceAt, now) } : r));
+  return { rows, unavailable: Array.isArray(sink.unavailable) && sink.unavailable.length ? sink.unavailable : null };
+}
+
 const SEVERITY_RANK = { critical: 0, warn: 1 };
 export const FLEET_UNREADABLE = 'fleet unreadable';
 
 /**
- * `sources` = `{fleet, outage, attention, review}` (fleet is the /api/fleet body; the others `{value, error}`).
+ * `sources` = `{fleet, outage, attention, review, sink}` (fleet is the /api/fleet body; `sink` the attention sink's
+ * `readState()`, COMP-SUBAPP-ATTENTION-1; the others `{value, error}`).
  * NOTIFY-ACTIONS-1: `state` is Compose's notify list (`notifyState.js`). Rows it clears move out of `rows` into `cleared`
  * (each flagged `cleared: {action, at, until?}`), so the chip and the tray count open rows only. `state === undefined`
  * or `null` hides nothing; `stateUnavailable` is set by the caller when the state read failed.
@@ -226,6 +237,7 @@ export function collect(sources, now = Date.now(), state = null) {
     outageAdapter(sources.outage, now),
     attentionAdapter(sources.attention),
     reviewAdapter(sources.review, now),
+    sinkAdapter(sources.sink, now),
   ];
   const defaults = results.flatMap((r) => r.defaults ?? []);
   const all = results.flatMap((r) => r.rows)
@@ -236,7 +248,7 @@ export function collect(sources, now = Date.now(), state = null) {
     if (state && isCleared(r.key, r, state, now)) cleared.push({ ...r, cleared: clearedOf(r.key, r, state, now) });
     else rows.push(r);
   }
-  const unknown = [...new Set(results.map((r) => r.unavailable).filter(Boolean))];
+  const unknown = [...new Set(results.flatMap((r) => r.unavailable ?? []).filter(Boolean))];
   // A failed refresh keeps the last good fleet body on screen (fleetPoller): its rows may be stale, so the chip cannot say "All clear".
   if (sources.fleet && sources.fleetError != null && !unknown.includes(FLEET_UNREADABLE)) unknown.push(FLEET_UNREADABLE);
   return { rows, cleared, unknown, defaults };
@@ -244,7 +256,33 @@ export function collect(sources, now = Date.now(), state = null) {
 
 /** The row kinds that wait on the owner: the count `ownerAsks` makes (the chip, WHAT and the NOW drawer show this one number). */
 const OWNER_KINDS = new Set(['security', 'ask', 'ask-overdue']);
-const OTHER_WORD = { context: 'context', disk: 'disk', outage: 'outage', attention: 'Cadence', review: 'review' };
+const OTHER_WORD = { context: 'context', disk: 'disk', outage: 'outage', attention: 'Cadence', review: 'review', 'stratum-gate': 'gates', 'compose-gate': 'gates' };
+
+/**
+ * COMP-SUBAPP-ATTENTION-1: what a row's click opens, ONE rule for the chip's tray and the sidebar's list:
+ * `{to: 'room', room, focus}` | `{to: 'gate', id}` | `{to: 'view', view}` | `{to: 'inbox'}` | `{to: 'fleet'}`.
+ * A Stratum gate opens the Stratum room's Gates pane at its run and step; a Compose gate opens that gate; Cadence rows open Cadence.
+ */
+export function rowTarget(row) {
+  if (row?.kind === 'stratum-gate') return { to: 'room', room: 'stratum', focus: { kind: 'gates', runId: row.runId, stepId: row.stepId } };
+  if (row?.kind === 'compose-gate') return { to: 'gate', id: row.gateId };
+  if (row?.action === 'inbox') return { to: 'inbox' };
+  if (row?.action === 'cadence') return { to: 'view', view: 'cadence' };
+  return { to: 'fleet' };
+}
+
+/** The sources the sidebar's "Needs attention" list draws from: the gate publishers and Cadence's three screens. */
+export const ATTENTION_LIST_SOURCES = [STRATUM_LABEL, COMPOSE_LABEL, 'cadence attention', 'cadence outage', 'post-land review'];
+
+/**
+ * The sidebar's one ranked list: the open inbox rows that are gates or Cadence's (`collect` order and keys, so it agrees
+ * with the chip's tray row for row), plus which of those sources did not answer (named, never "nothing needs attention").
+ */
+export function attentionList(collected) {
+  const rows = (collected?.rows ?? []).filter((r) => GATE_KINDS.has(r.kind) || r.action === 'cadence');
+  const unknown = (collected?.unknown ?? []).filter((l) => ATTENTION_LIST_SOURCES.includes(l));
+  return { rows, unknown };
+}
 
 /**
  * `all-clear` (every source answered, no rows) | `alerts` | `unknown` (no rows, a source is down).

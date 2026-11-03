@@ -12,6 +12,7 @@
  *   • View navigation (all existing views preserved)
  *   • Agent telemetry panel (preserved from AppSidebar)
  *   • PROJECTS (FleetProjectsSection) in every room (COMP-COCKPIT-FLEET-PROJECTS-2; GROUPS moved to the Roadmap graph toolbar)
+ *   • Needs attention (COMP-SUBAPP-ATTENTION-1): the inbox's Stratum gate, Compose gate and Cadence rows, one ranked list
  */
 
 import React from 'react';
@@ -30,6 +31,11 @@ import StatusBadge from './shared/StatusBadge.jsx';
 import PhaseTag from './shared/PhaseTag.jsx';
 import { useIdeaboxStore } from './useIdeaboxStore.js';
 import FleetProjectsSection from './FleetProjectsSection.jsx';
+import { useNotifySources } from '../cockpit/notify/useNotifySources.js';
+import { attentionList } from '../cockpit/notify/notifyLogic.js';
+import { openRow } from '../cockpit/notify/NotifyChip.jsx';
+import { useNavigation } from '../../lib/navigation.jsx';
+import { fmtAge } from '../cockpit/fleetLogic.js';
 
 // ---------------------------------------------------------------------------
 // Sub-components
@@ -109,6 +115,64 @@ function AttentionQueueSection({ items, gates, onSelectItem, storageScope }) {
         >
           {expanded ? 'Show less' : `+${overflow} more`}
         </button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * NeedsAttentionSection — COMP-SUBAPP-ATTENTION-1 (row 307): ONE ranked list of the inbox's gate and Cadence rows. It reads
+ * the chip's own `useNotifySources()` (one shared read), so its rows, order and keys are the tray's (`attentionList`), and a
+ * row opens what the tray's Open opens (`openRow`). A source that did not answer is named; the list never says nothing waits.
+ * "Blocked features" above stays the roadmap items it was.
+ */
+export function NeedsAttentionSection({ onViewChange }) {
+  const { loading, collected } = useNotifySources();
+  const nav = useNavigation();
+  const [expanded, setExpanded] = React.useState(false);
+  const { rows, unknown } = React.useMemo(() => attentionList(collected), [collected]);
+  if (loading || (rows.length === 0 && unknown.length === 0)) return null;
+  const visible = expanded ? rows : rows.slice(0, 5);
+  const overflow = rows.length - 5;
+  return (
+    <div className="px-2 mb-2" data-testid="needs-attention">
+      <p className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wider px-2 mb-1" style={{ color: 'hsl(var(--muted-foreground))' }}>
+        Needs attention
+        <span className="ml-auto tabular-nums" data-testid="needs-attention-count">{rows.length}</span>
+      </p>
+      {visible.map((r) => (
+        <button
+          type="button"
+          data-testid="needs-attention-row"
+          data-key={r.key}
+          data-kind={r.kind}
+          key={r.key}
+          onClick={() => openRow(r, { nav, onNavigate: onViewChange })}
+          className="flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors hover:bg-sidebar-accent/50"
+          style={{ color: 'hsl(var(--muted-foreground))' }}
+          title={[r.title, r.sourceLabel, r.detail].filter(Boolean).join(' · ')}
+        >
+          {r.kind === 'stratum-gate' || r.kind === 'compose-gate'
+            ? <Shield className="h-3 w-3 shrink-0" style={{ color: 'hsl(var(--warning))' }} />
+            : <Bell className="h-3 w-3 shrink-0" style={{ color: r.severity === 'critical' ? 'hsl(var(--destructive))' : 'hsl(var(--warning))' }} />}
+          <span className="truncate flex-1 text-left">{r.title}</span>
+          {r.since != null && <span className="shrink-0 text-[9px] tabular-nums">{fmtAge(r.since)}</span>}
+        </button>
+      ))}
+      {overflow > 0 && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="flex w-full items-center px-2 py-0.5 text-[10px] rounded-md hover:bg-sidebar-accent/50 transition-colors"
+          style={{ color: 'hsl(var(--muted-foreground))' }}
+        >
+          {expanded ? 'Show less' : `+${overflow} more`}
+        </button>
+      )}
+      {unknown.length > 0 && (
+        <div data-testid="needs-attention-unknown" className="px-2 py-0.5 text-[10px]" style={{ color: 'hsl(var(--muted-foreground))' }}>
+          {rows.length ? 'Also unavailable' : 'Could not read'}: {unknown.join(', ')}
+        </div>
       )}
     </div>
   );
@@ -237,6 +301,9 @@ function AttentionQueueSidebar({
         spawnedAgents={spawnedAgents}
         agentRelays={agentRelays}
       />
+
+      {/* ── Needs attention: gates and Cadence rows, the inbox's rank (COMP-SUBAPP-ATTENTION-1) ── */}
+      <NeedsAttentionSection onViewChange={onViewChange} />
 
       {/* ── Attention queue (blocked + pending gates + decisions) ── */}
       {stats.attentionCount > 0 && (

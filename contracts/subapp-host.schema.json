@@ -16,8 +16,8 @@
       "$ref": "#/definitions/workspace"
     },
     "attention": {
-      "description": "The attention sink: a function `(source, rows) => void`. `source` names the publisher (`stratum`, `compose-gates`, ...); `rows` is that publisher's whole current list of inbox rows (each `#/definitions/inboxRow`) and replaces its last one, so an empty list clears it. JSON Schema has no function type: a validator sees a function as no JSON type at all, which is what `not` below checks (data of any JSON type is refused). Row 307 (COMP-SUBAPP-ATTENTION-1) wires publishers and the inbox to it.",
-      "x-callable": "(source: string, rows: InboxRow[]) => void",
+      "description": "The attention sink: a function `(source, rows) => void`. `source` names the publisher (`stratum`, `compose-gates`, ...); `rows` is that publisher's whole current list of inbox rows (each `#/definitions/inboxRow`) and replaces its last one, so an empty list clears it. JSON Schema has no function type: a validator sees a function as no JSON type at all, which is what `not` below checks (data of any JSON type is refused). Row 307 (COMP-SUBAPP-ATTENTION-1) wires publishers and the inbox to it. An optional third argument `{unavailable: label}` says the source could not be read: the label shows in the inbox's unknown list (never as zero rows); with `rows` null the source's last good list stays, with a list it replaces as usual; a publish without the label clears the mark.",
+      "x-callable": "(source: string, rows: InboxRow[] | null, options?: { unavailable?: string }) => void",
       "not": { "type": ["string", "number", "boolean", "null", "array", "object"] }
     }
   },
@@ -74,7 +74,8 @@
         "detail": { "type": ["string", "null"] },
         "since": { "type": ["number", "null"], "description": "Age in seconds, null when unknown." },
         "sourceLabel": { "type": "string", "minLength": 1, "description": "The source's name in the tray (`cadence attention`)." },
-        "action": { "type": ["string", "null"], "description": "The cockpit view a click opens (`cadence`, `fleet`, `inbox`)." }
+        "action": { "type": ["string", "null"], "description": "The cockpit view a click opens (`cadence`, `fleet`, `inbox`; the gate rows of COMP-SUBAPP-ATTENTION-1: `stratum`, the Stratum room's Gates pane at the row's `runId`/`stepId`, and `gate`, Compose's gate `gateId`). A row carries the ids its click needs and never anything that acts (no `gateToken`)." },
+        "sinceAt": { "type": ["string", "null"], "description": "COMP-SUBAPP-ATTENTION-1: the ISO time `since` was measured from, so the inbox re-ages a published row at read time." }
       }
     }
   }

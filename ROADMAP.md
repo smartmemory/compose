@@ -1687,11 +1687,11 @@ OWNER DECISION D-0018 (2026-11-02, ops ledger `c798bfe19d52`): Stratum, Cadence 
 - [ ] Switching workspace in the cockpit re-scopes all three rooms (the rooms' re-read on a changed host workspace id is tested; the switch in the live cockpit is not run)
 
 **307 COMP-SUBAPP-ATTENTION-1: acceptance**
-- [ ] Stratum `GatesInbox` rows (`stratum/ui/src/components/GatesInbox.tsx`, existing) publish through the host attention sink
-- [ ] Compose pending gates (`src/components/vision/DashboardView.jsx` `PendingGates`, existing) publish through the same sink
-- [ ] Both arrive as typed rows next to Cadence's `attentionAdapter` rows in `src/components/cockpit/notify/notifyLogic.js` (existing)
-- [ ] `src/components/vision/AttentionQueueSidebar.jsx` (existing) shows one ranked list across all three sources
-- [ ] Each row opens its room (Stratum gate, Compose gate, Cadence unit)
+- [x] Stratum `GatesInbox` rows (`stratum/ui/src/components/GatesInbox.tsx`, existing) publish through the host attention sink (the same `listGates` read GatesInbox makes, polled by Compose on the notify cadence whichever room is open, so no package change: `src/components/cockpit/notify/gatePublishers.js` (new); mapper `test/notify-gate-sources.test.js:42`, a failed read keeps the last rows and is named unknown `:95`, Stratum absent is no source `:132`)
+- [x] Compose pending gates (`src/components/vision/DashboardView.jsx` `PendingGates`, existing) publish through the same sink (App publishes the store's gates on change, PendingGates' own pending rule; `test/notify-gate-sources.test.js:59`, a disconnected store is named unknown `:121`, one row per gate when both sources hold it `:76`)
+- [x] Both arrive as typed rows next to Cadence's `attentionAdapter` rows in `src/components/cockpit/notify/notifyLogic.js` (existing) (`sinkAdapter` in `collect`, kinds `stratum-gate`/`compose-gate`, one ranked order `test/notify-gate-sources.test.js:206`; the owner count unchanged `:214`)
+- [x] `src/components/vision/AttentionQueueSidebar.jsx` (existing) shows one ranked list across all three sources ("Needs attention", the tray's rows and order: `test/ui/attention-sources.test.jsx:79`; a lost source is named `:132`, `:149`; not yet seen on the live cockpit)
+- [x] Each row opens its room (Stratum gate, Compose gate, Cadence unit) (the tray `test/ui/attention-sources.test.jsx:97`, the sidebar `:117`; Cadence rows open the Cadence room, not a unit: the attention rows name a wall, not a unit)
 
 **308 COMP-SUBAPP-CONTEXT-1: acceptance**
 - [x] `src/components/cockpit/ContextPanel.jsx` (existing) shows, for the selected feature: roadmap item, wiki hub, last Stratum run, Cadence unit (rendered by `ContextItemDetail`, which mounts inside the panel: `src/components/cockpit/ContextSources.jsx` (new) on the overview tab; mounted data row `test/ui/context-sources.test.jsx:70`, the links `:176`; not yet seen on the live cockpit)

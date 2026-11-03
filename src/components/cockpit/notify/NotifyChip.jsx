@@ -11,7 +11,8 @@ import React from 'react';
 import { fmtAge } from '../fleetLogic.js';
 import useDismissable from '../useDismissable.js';
 import { useNotifySources } from './useNotifySources.js';
-import { chipLabel, unknownLine, defaultsLine, jumpOf, tryJump } from './notifyLogic.js';
+import { chipLabel, unknownLine, defaultsLine, jumpOf, tryJump, rowTarget } from './notifyLogic.js';
+import { useNavigation } from '../../../lib/navigation.jsx';
 import InboxDrawer from './InboxDrawer.jsx';
 import NotifyActions, { useRowKeys } from './NotifyActions.jsx';
 import { CLEARED_WORD } from './notifyState.js';
@@ -29,7 +30,22 @@ const TONE = {
   critical: 'hsl(var(--destructive))',
 };
 
+/**
+ * COMP-SUBAPP-ATTENTION-1: run a row's click (notifyLogic.js `rowTarget`, one rule for the tray and the sidebar list). A gate
+ * row only opens a room or a gate, never resolves anything; without a navigation provider it falls back to the old routing.
+ */
+export function openRow(row, { nav, onNavigate, onOpenFleet }) {
+  const t = rowTarget(row);
+  if (t.to === 'room' && nav?.openRoom) nav.openRoom(t.room, t.focus);
+  else if (t.to === 'room') onNavigate?.(t.room);
+  else if (t.to === 'gate' && nav?.openGate) nav.openGate(t.id);
+  else if (t.to === 'inbox') openInbox(onOpenFleet);
+  else if (t.to === 'view') onNavigate?.(t.view);
+  else onOpenFleet?.();
+}
+
 export default function NotifyChip({ onOpenFleet, onNavigate, dayActive = false }) {
+  const nav = useNavigation();
   const { loading, collected, chip, notify } = useNotifySources();
   const [open, setOpen] = React.useState(false);
   const [showCleared, setShowCleared] = React.useState(false);
@@ -49,9 +65,7 @@ export default function NotifyChip({ onOpenFleet, onNavigate, dayActive = false 
 
   const act = (row) => {
     setOpen(false);
-    if (row.action === 'inbox') openInbox(onOpenFleet);
-    else if (row.action === 'cadence') onNavigate?.('cadence');
-    else onOpenFleet?.();
+    openRow(row, { nav, onNavigate, onOpenFleet });
   };
 
   // COMP-COCKPIT-RIBBON-METER-1: on Day, a row about a seat or a lane flashes it; if Day does not take it the row's own action runs.
