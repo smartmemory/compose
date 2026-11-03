@@ -1,4 +1,4 @@
-/** WIKI-PAGED-CURSOR-FU-1: usePagedCall + Pager through the real hook (fake `run`, no fetch). */
+/** WIKI-PAGED-CURSOR-FU-1 and -FU-2: usePagedCall + Pager through the real hook (fake `run`, no fetch). */
 import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
@@ -75,5 +75,36 @@ describe.skipIf(!linked)('usePagedCall', () => {
     expect(screen.getByTestId('state').textContent).toBe('index=0 loading=false');
     expect(run.mock.calls.at(-1)[0]).toEqual({ workspace: 'A', size: 50 });
     await waitFor(() => expect(nextBtn().disabled).toBe(false));
+  });
+
+  it('FU-2: going back to a key while the other key is still loading keeps Next locked until the fresh first page arrives', async () => {
+    const dB = deferred();
+    const dA2 = deferred();
+    let aCalls = 0;
+    const run = vi.fn(async (a) => {
+      if (a.workspace === 'B') return dB.promise;
+      if (a.cursor) return page('A old page 2', null);
+      aCalls += 1;
+      return aCalls === 1 ? page('A old page 1', 'A-old-next') : dA2.promise;
+    });
+    const { rerender } = render(<Probe ws="A" run={run} />);
+    await screen.findByText('A old page 1');
+    rerender(<Probe ws="B" run={run} />);
+    await waitFor(() => expect(run).toHaveBeenCalledTimes(2));
+    rerender(<Probe ws="A" run={run} />);
+    await waitFor(() => expect(run).toHaveBeenCalledTimes(3));
+    await act(async () => {});
+    expect(nextBtn().disabled).toBe(true); // the cached A page may show, but the fresh request is pending
+    expect(prevBtn().disabled).toBe(true);
+    fireEvent.click(nextBtn());
+    await act(async () => {});
+    expect(run).toHaveBeenCalledTimes(3); // no call with the stale cursor
+    await act(async () => { dA2.resolve(page('A fresh page 1', 'A-fresh-next')); });
+    await screen.findByText('A fresh page 1'); // the fresh page is shown, not dropped
+    expect(screen.getByTestId('state').textContent).toBe('index=0 loading=false');
+    await waitFor(() => expect(nextBtn().disabled).toBe(false));
+    expect(run.mock.calls.map((c) => c[0])).toEqual([{ workspace: 'A', size: 50 }, { workspace: 'B', size: 50 }, { workspace: 'A', size: 50 }]);
+    await act(async () => { dB.resolve(page('B page 1', null, 1)); }); // the abandoned B answer changes nothing
+    expect(screen.getByText('A fresh page 1')).toBeTruthy();
   });
 });
