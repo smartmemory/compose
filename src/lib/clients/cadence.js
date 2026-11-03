@@ -18,6 +18,14 @@ async function getJson(path) {
   return res.json();
 }
 
+/** A query object as `?k=v&...` from every defined key (a later key needs no edit here); an undefined, null or empty value is left out. */
+function queryString(query) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) if (value !== undefined && value !== null && value !== '') params.set(key, String(value));
+  const qs = params.toString();
+  return qs ? `?${qs}` : '';
+}
+
 export function createCadenceDataClient() {
   return {
     getBelt: () => getJson('/belt'),
@@ -33,11 +41,7 @@ export function createCadenceDataClient() {
     getGates: () => getJson('/gates'),
     getVitals: () => getJson('/vitals'),
     getDiary(query = {}) {
-      const params = new URLSearchParams();
-      if (query.family) params.set('family', query.family);
-      if (query.limit != null) params.set('limit', String(query.limit));
-      const qs = params.toString();
-      return getJson(`/diary${qs ? `?${qs}` : ''}`);
+      return getJson(`/diary${queryString(query)}`);
     },
   };
 }

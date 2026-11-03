@@ -81,6 +81,17 @@ describe('Compose cadence DataClient', () => {
     expect(calls.every(([, m]) => m === 'GET')).toBe(true);
   });
 
+  // CADENCE-UI-LINKS-1-FU-2: the Diary's unit filter must reach the server (M1), and any later key rides along without an edit
+  it('sends the diary unit, every defined key, and leaves out undefined and empty ones', async () => {
+    const calls = [];
+    vi.stubGlobal('fetch', vi.fn(async (url) => { calls.push(String(url)); return { ok: true, status: 200, json: async () => ({}) }; }));
+    const client = createCadenceDataClient();
+    await client.getDiary({ family: 'all', limit: 200, unit: 'U-1' });
+    await client.getDiary({ family: undefined, limit: undefined, unit: '' });
+    await client.getDiary({ later: 'x' });
+    expect(calls).toEqual(['/api/cadence-ui/diary?family=all&limit=200&unit=U-1', '/api/cadence-ui/diary', '/api/cadence-ui/diary?later=x']);
+  });
+
   it('throws the server message on an error status', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 400, json: async () => ({ error: { message: 'family must be one of' } }) })));
     await expect(createCadenceDataClient().getDiary({ family: 'x' })).rejects.toThrow('family must be one of');
