@@ -112,6 +112,21 @@ describe('F2: a scratch-queue MCP close cannot reach the live owner channels', (
     assert.equal(readFileSync(QUEUE, 'utf8'), before);
   });
 
+  for (const [name, extra, unset] of [
+    ['only the outbox', () => ({ OWNER_QUEUE_OUTBOX: OUTBOX }), 'NOTIFY_SPOOL'],
+    ['only the notify spool', () => ({ NOTIFY_SPOOL: join(SCRATCH, 'spool.jsonl') }), 'OWNER_QUEUE_OUTBOX'],
+  ]) {
+    it(`refuses a scratch queue when ${name} is redirected (COMP-DOGFOOD-OWNER-QUEUE-SINKS-1), names the unset sink, and writes nothing`, () => {
+      seed();
+      const before = readFileSync(QUEUE, 'utf8');
+      assert.throws(
+        () => og.closeOwnerGate({ gateId: 'owner:ASK-1', option: 'a', env: closeEnv(extra()) }),
+        (e) => e.code === 'OWNER_GATE_SCRATCH_UNGUARDED' && e.message.includes(`${unset} is not set`) && /set both NOTIFY_SPOOL and OWNER_QUEUE_OUTBOX/.test(e.message) && !/scratch HOME/.test(e.message),
+      );
+      assert.equal(readFileSync(QUEUE, 'utf8'), before);
+    });
+  }
+
   it('still closes a scratch queue when NOTIFY_SPOOL and OWNER_QUEUE_OUTBOX are set', () => {
     seed();
     const env = closeEnv({ NOTIFY_SPOOL: join(SCRATCH, 'spool.jsonl'), OWNER_QUEUE_OUTBOX: OUTBOX });

@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- **COMP-DOGFOOD-OWNER-QUEUE-SINKS-1: an MCP close of a non-live owner queue is refused unless BOTH `NOTIFY_SPOOL` and `OWNER_QUEUE_OUTBOX` are redirected** (post-land review F1 MEDIUM of COMP-DOGFOOD-OWNER-QUEUE-FU-1). The guard in `closeOwnerGate` (`lib/owner-gates.js`) now refuses on either sink unset (was: both unset), names the unset one, and no longer suggests a scratch HOME. The real fix is at the producer: ops `owner_queue.py` decides the live queue once from `--file` or `$SM_OWNER_QUEUE` and refuses the notifier, outbox and notify spool a scratch queue has not redirected. Tests: two one-sink rows in `test/owner-queue-fu1.test.js`.
+
 - **COMP-DOGFOOD-EVIDENCE-DEFAULT-BRANCH-1: a `sha` receipt that names the repo's own default branch passes like one that names no branch** (an honest `{"branch":"main"}` receipt on a repo whose default is main was refused as an undeclared land branch, so shadow `claim_check` marked it WOULD-REFUSE). When `branch` equals the branch `gitOnDefaultBranch` resolves (origin/HEAD, else main, else master), the default-branch check and success text apply; any other name still needs `land_branches`. No second resolver. Tests: `test/evidence-branch.test.js` (5 rows).
 
 - **COMP-DOGFOOD-EVIDENCE-GATE-1 writer tests: the completion and feature writer end-to-end tests cite a `command` receipt, a kind COMPLETE accepts, so the pre-push gate is green again** (test fixtures only, no product code; they cited `log`, which fix r1 refuses for COMPLETE with `EVIDENCE_WRONG_KIND`)
