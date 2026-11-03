@@ -160,6 +160,7 @@ export default function WhatLine({ onOpenFleet, onNavigate, onCountOpen }) {
           data-testid="what-state"
           className="font-semibold underline decoration-dotted underline-offset-4 outline-none"
           aria-describedby="what-rules"
+          title={rule.reason ? `Unknown because ${rule.reason}` : undefined}
         >
           {rule.state}
         </button>

@@ -23,12 +23,15 @@ export const FLEET_SEATS_POLL_MS = 60_000;
 
 /**
  * Re-read the seats at most once per `FLEET_SEATS_POLL_MS`, riding the shared fleet poll's ticks (fleetPoller.js): that loop
- * already pauses while the tab is hidden and fetches at once on return, so a hidden tab makes no seats call and a visible
- * one refreshes on its first tick back. No timer of our own, hence no second visibility scheduler.
+ * pauses while the tab is hidden and fetches at once on return. A request still pending when the tab hides can settle while it
+ * is hidden, so this checks visibility itself: no seats call while hidden, one on the first tick after it is visible again.
+ * A hung fleet request is cut at `FLEET_TIMEOUT_MS` and emits a stale snapshot, so the ticks (and the seats) keep coming.
+ * No timer of our own, hence no second scheduler.
  */
 export function useSeatsTick(reload, fleet) {
   const last = useRef(Date.now());
   useEffect(() => {
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
     if (Date.now() - last.current < FLEET_SEATS_POLL_MS) return;
     last.current = Date.now();
     reload();

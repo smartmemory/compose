@@ -13,7 +13,7 @@ vi.mock('../../src/components/vision/useVisionStore.js', () => ({
 const { default: AttentionQueueSidebar, attentionCollapsedKey } = await import('../../src/components/vision/AttentionQueueSidebar.jsx');
 const { HeaderCounters, AgentStatusPill } = await import('../../src/components/cockpit/HeaderStatus.jsx');
 const { default: WhatLine, countWords } = await import('../../src/components/cockpit/what/WhatLine.jsx');
-const { WHAT_RULES, LAST_VISIT_KEY, whatState, whatCounts } = await import('../../src/components/cockpit/what/whatRules.js');
+const { WHAT_RULES, LAST_VISIT_KEY, whatState, whatCounts, whatInputs, whatRule } = await import('../../src/components/cockpit/what/whatRules.js');
 const { resetFleetPoller } = await import('../../src/lib/fleetPoller.js');
 const { resetUnitIndex } = await import('../../src/lib/useUnitIndex.js');
 
@@ -67,7 +67,20 @@ const STATE_ROWS = [
   ['Idle, not Stalled: only decided and fyi rows are open (they never count)', raw({ fleet: fleetBodyRows([{ id: 'd', text: 'APPLIED: done' }, { id: 'f', text: 'FYI: note' }]) }), 'Idle'],
   ['Stalled: one security row is open', raw({ fleet: fleetBodyRows([{ id: 's', text: 'SECURITY: x' }]) }), 'Stalled'],
   ['Idle: nothing running, nothing waiting, last landing 3 h ago', raw({ index: indexOf([unit('A', { landedAt: hoursAgo(3) })]) }), 'Idle'],
-  ['Idle, not Unknown: the index is down but sm_status answers quiet', raw({ index: null }), 'Idle'],
+  ['Unknown, not Idle: the index is down but sm_status answers quiet (UNKNOWN-FU-1: was Idle)', raw({ index: null }), 'Unknown'],
+];
+
+// COMP-COCKPIT-UNKNOWN-FU-1: unknown index (null) or unknown fleet x what else is known. A positive known signal still wins.
+const UNKNOWN_ROWS = [
+  ['unknown index, fleet quiet', raw({ index: null }), 'Unknown'],
+  ['unknown index, agent running', raw({ index: null, agent: { status: 'working', category: 'writing' } }), 'Working, nothing landed'],
+  ['unknown index, a job running', raw({ index: null, fleet: fleetBody({ jobs: 1 }) }), 'Working, nothing landed'],
+  ['unknown index, owner ask open', raw({ index: null, fleet: fleetBody({ queue: 1 }) }), 'Stalled'],
+  ['known index, a landing 1 h ago', raw({ index: indexOf([unit('A', { landedAt: hoursAgo(1) })]) }), 'Moving'],
+  ['known index with a landing, fleet down', raw({ fleet: FLEET_DOWN, index: indexOf([unit('A', { landedAt: hoursAgo(1) })]) }), 'Moving'],
+  ['known quiet index, fleet down (running and owner asks unknown)', raw({ fleet: FLEET_DOWN, index: indexOf([]) }), 'Unknown'],
+  ['known index waiting on review, fleet down', raw({ fleet: FLEET_DOWN, index: indexOf([unit('A', { waiting: 'review' })]) }), 'Stalled'],
+  ['control: everything known and quiet', raw({ index: indexOf([]) }), 'Idle'],
 ];
 
 const ROWS = [
@@ -86,6 +99,15 @@ const ROWS = [
   ['WHAT_RULES first match per state: one row per state', () => {
     expect(WHAT_RULES.map((r) => r.state)).toEqual(['Unknown', 'Moving', 'Working, nothing landed', 'Stalled', 'Idle']);
     expect(STATE_ROWS.map(([name, r]) => [name, whatState(r)])).toEqual(STATE_ROWS.map(([name, , want]) => [name, want]));
+  }],
+  ['unknown inputs: no rule concludes from a null; Unknown names what is unknown', () => {
+    expect(UNKNOWN_ROWS.map(([name, r]) => [name, whatState(r)])).toEqual(UNKNOWN_ROWS.map(([name, , want]) => [name, want]));
+    const i = whatInputs(raw({ index: null }));
+    expect([i.landedInWindow, i.waitingAny, i.isRunning]).toEqual([null, null, false]);
+    expect(whatRule(raw({ index: null })).reason).toMatch(/unit index/);
+    expect(whatRule(raw({ index: indexOf([]) })).reason).toBeUndefined();
+    const k = whatInputs(raw({ index: indexOf([]) }));
+    expect([k.landedInWindow, k.waitingAny, k.isRunning]).toEqual([false, false, false]);
   }],
   ['whatCounts: working sums sessions, jobs and the agent; unknown sources are null, never 0', () => {
     const lastVisitAt = NOW - 2 * 3_600_000;
@@ -137,6 +159,16 @@ const ROWS = [
     expect(counts.join(' ')).not.toMatch(/\b0\b|error|timed out|\?/i);
     expect(screen.getByTestId('what-line').textContent).not.toContain('?');
     expect(screen.getByTestId('what-count-working').getAttribute('data-known')).toBe('false');
+  }],
+  ['an incomplete unit index through the real poller: the status word is Unknown, never Idle, and says why', async () => {
+    resetPollers();
+    routeFetch({ '/api/fleet': fleetBody(), '/api/units/index': { units: [], error: 'queues dir unreadable (ENOTDIR)' } });
+    render(<WhatLine onOpenFleet={vi.fn()} onNavigate={vi.fn()} />);
+    await screen.findByTestId('what-line');
+    expect(screen.getByTestId('what-state').textContent).not.toBe('Idle');
+    expect(screen.getByTestId('what-state').textContent).toBe('Unknown');
+    expect(screen.getByTestId('what-state').getAttribute('title')).toMatch(/unit index is incomplete/);
+    expect(screen.getByTestId('what-count-review').getAttribute('data-known')).toBe('false');
   }],
   ['an unknown count with an earlier reading shows that value and its age, muted (C6)', () => {
     const w = countWords({ n: null, label: 'waiting on you', why: 'owner queue not reachable, retrying', last: { n: 1, at: NOW - 4 * 60_000 }, now: NOW });

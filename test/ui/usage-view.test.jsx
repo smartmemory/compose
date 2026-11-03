@@ -309,6 +309,46 @@ describe('COMP-FLEET-USAGE-FU-1', () => {
     await waitFor(() => expect(client.getSeats).toHaveBeenCalledTimes(2));
   });
 
+  // COMP-COCKPIT-UNKNOWN-FU-1: the reviewer's probes. setTimeout is faked too (the poller's request deadline), so no waitFor here.
+  const FAKE = { toFake: ['setInterval', 'clearInterval', 'setTimeout', 'clearTimeout', 'Date'] };
+  const settle = (ms = 0) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
+  const surfaces = [['Usage > Seats and fleet', (c) => <FleetUsage client={c} now={NOW} />], ['Home glance', (c) => <HomeFleetGlance client={c} />]];
+  for (const [name, el] of surfaces) {
+    it(`M1: ${name}: a fleet request that never answers does not stop the seats (3 reads in 180 s)`, async () => {
+      vi.useFakeTimers(FAKE);
+      let n = 0;
+      vi.stubGlobal('fetch', vi.fn((url) => (++n === 1 ? Promise.resolve({ ok: true, status: 200, json: async () => FLEET_BODY }) : new Promise(() => {}))));
+      resetFleetPoller();
+      const client = seatsClient();
+      render(el(client));
+      await settle(0);
+      expect(client.getSeats).toHaveBeenCalledTimes(1);
+      for (let t = 0; t < 180_000; t += 5_000) await settle(5_000); // one act per step: React flushes effects between snapshots
+      expect(n).toBeGreaterThan(2); // the loop kept polling past the hung request
+      expect(client.getSeats.mock.calls.length).toBeGreaterThanOrEqual(3);
+    });
+
+    it(`L1: ${name}: a fleet request that settles after the tab hid starts no seats call; the first visible tick does`, async () => {
+      vi.useFakeTimers(FAKE);
+      let release;
+      vi.stubGlobal('fetch', vi.fn(() => new Promise((r) => { release = () => r({ ok: true, status: 200, json: async () => FLEET_BODY }); })));
+      resetFleetPoller();
+      const client = seatsClient();
+      render(el(client));
+      await settle(0);
+      expect(client.getSeats).toHaveBeenCalledTimes(1);
+      await act(async () => { setVisibility('hidden'); });
+      await settle(61_000); // the pending request is cut at its deadline while hidden and emits a stale snapshot
+      await act(async () => { release(); });
+      expect(client.getSeats).toHaveBeenCalledTimes(1);
+      await act(async () => { setVisibility('visible'); });
+      await settle(0);
+      await act(async () => { release(); });
+      await settle(0);
+      expect(client.getSeats).toHaveBeenCalledTimes(2);
+    });
+  }
+
   for (const [name, el] of [['Usage > Seats and fleet', (c) => <FleetUsage client={c} now={NOW} />], ['Home glance', (c) => <HomeFleetGlance client={c} />]]) {
     it(`SOURCE-FAULTS M2: ${name} says the dollars are old after one good read and a failed refresh`, async () => {
       vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] });

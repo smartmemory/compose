@@ -12,13 +12,14 @@ const ITEM = { id: 'i1', type: 'feature', title: 'Has docs', status: 'planned', 
 const MSG = wikiUnavailableMessage(DOC);
 
 let settleWiki;
-function mockFetch(wiki) {
+function mockFetch(wiki, { fleet = null } = {}) {
   global.fetch = vi.fn((url) => {
     const json = (body) => ({ ok: true, status: 200, json: async () => body, text: async () => '' });
     if (String(url).includes('/api/wiki/available')) {
       if (wiki === 'pending') return new Promise((resolve) => { settleWiki = (body) => resolve(json(body)); });
       return Promise.resolve(json(wiki));
     }
+    if (fleet && String(url).includes('/api/fleet')) return Promise.resolve(json(fleet));
     return Promise.resolve(json({}));
   });
 }
@@ -29,6 +30,7 @@ async function renderApp(search) {
   const { default: App } = await import('../../src/App.jsx');
   return render(<App />);
 }
+const FLEET = { generated: '2026-11-03T08:00:00Z', sources: { sm_status: { value: { sessions: { value: [{ name: 's1', busy: true }], error: null }, jobs: { value: [], error: null }, queue: { value: [], error: null } }, error: null, ts: 1, stale: false } } };
 const row = (container) => container.querySelector('[data-item-id="i1"]');
 
 beforeEach(() => { Element.prototype.scrollIntoView = vi.fn(); localStorage.clear(); sessionStorage.clear(); vi.spyOn(console, 'warn').mockImplementation(() => {}); });
@@ -68,7 +70,7 @@ describe('App: a refused doc request says why', () => {
 
 describe('App: the Sessions pane follows its own view', () => {
   it('L1: ?view=wiki&pane=ledger, then Sessions: the Fleet body and pane=fleet in the URL', async () => {
-    mockFetch({ available: true, workspace: 'wiki-eng', frameBase: 'http://127.0.0.1:1' });
+    mockFetch({ available: true, workspace: 'wiki-eng', frameBase: 'http://127.0.0.1:1' }, { fleet: FLEET });
     await renderApp('?view=wiki&pane=ledger');
     await waitFor(() => expect(window.location.search).toContain('view=wiki'));
     const { useVisionStore } = await import('../../src/components/vision/useVisionStore.js');
@@ -76,5 +78,6 @@ describe('App: the Sessions pane follows its own view', () => {
     await waitFor(() => expect(window.location.search).toContain('view=sessions'));
     expect(window.location.search).toContain('pane=fleet');
     expect(window.location.search).not.toContain('pane=ledger');
+    expect((await screen.findByTestId('fleet-readers')).textContent).toMatch(/readers up: .*sm/i); // the Fleet body itself, not only the URL
   }, 30000);
 });

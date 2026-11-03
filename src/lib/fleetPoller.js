@@ -11,6 +11,8 @@ import { wsFetch } from './wsFetch.js';
 import { INITIAL_SOURCE, sourceFromBody, sourceFail } from './sourceState.js';
 
 export const FLEET_POLL_MS = 15_000;
+/** A fleet request still pending after this long is abandoned as a failure (COMP-COCKPIT-UNKNOWN-FU-1), well under the poll interval. */
+export const FLEET_TIMEOUT_MS = 10_000;
 
 const subscribers = new Set();
 let state = INITIAL_SOURCE;
@@ -25,13 +27,26 @@ function emit(next) {
 async function poll() {
   if (inflight) return;
   inflight = true;
+  const ctrl = new AbortController();
+  let timer_;
+  const deadline = new Promise((_, reject) => {
+    timer_ = setTimeout(() => { ctrl.abort(); reject(new Error(`fleet request timed out after ${FLEET_TIMEOUT_MS / 1000}s`)); }, FLEET_TIMEOUT_MS);
+  });
   try {
-    const res = await wsFetch('/api/fleet');
-    if (!res.ok) throw new Error(`fleet route ${res.status}`);
-    emit(sourceFromBody(await res.json()));
+    // The race also covers a transport that ignores the abort signal: the loop must not hang on one request.
+    const body = await Promise.race([
+      (async () => {
+        const res = await wsFetch('/api/fleet', { signal: ctrl.signal });
+        if (!res.ok) throw new Error(`fleet route ${res.status}`);
+        return res.json();
+      })(),
+      deadline,
+    ]);
+    emit(sourceFromBody(body));
   } catch (error) {
     emit(sourceFail(state, error)); // the last good data stays, marked stale (sourceState.js)
   } finally {
+    clearTimeout(timer_);
     inflight = false;
   }
 }
@@ -69,9 +84,10 @@ export function subscribeFleet(fn) {
   };
 }
 
-/** Test seam: forget the last result so a fresh mount starts loading again. */
+/** Test seam: forget the last result (and any request still pending) so a fresh mount starts loading again. */
 export function resetFleetPoller() {
   state = INITIAL_SOURCE;
+  inflight = false;
 }
 
 /** React hook: the shared loop's source state, `{data, error, stale, fetchedAt, errorSince, loading}` (sourceState.js). */
