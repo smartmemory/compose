@@ -89,10 +89,13 @@ test('CONTRACT: the live partition matches the authored classification', () => {
   const inv = loadToolInventory(TOOLS);
   // Pinned 2026-09-08 after retiring `canon_override_grant`. These counts are a tripwire:
   // adding a tool SHOULD break this, forcing an explicit classification review.
-  assert.equal(TOOLS.length, 51, 'tool count changed — re-review the classification');
+  // 2026-11-04 COMP-DOGFOOD-LIVE-STATE-1 (+4): live_state_get is read; live_order_add,
+  // live_order_supersede and live_state_configure mutate .compose/data/live-state.json
+  // (no canon id) and sit in IMPLEMENTER_DENY.
+  assert.equal(TOOLS.length, 55, 'tool count changed — re-review the classification');
   assert.equal(inv.setup.length, 4);
-  assert.equal(inv.read.length, 21);
-  assert.equal(inv.mutating.length, 26);
+  assert.equal(inv.read.length, 22);
+  assert.equal(inv.mutating.length, 29);
 });
 
 test('CONTRACT: the retired canon override grant is absent from the live MCP surface', () => {

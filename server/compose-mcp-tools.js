@@ -183,7 +183,8 @@ export function assertTerminalStatusAuthorized(args, toolName, capsOverride) {
   throw e;
 }
 import { resolveWorkspace } from '../lib/resolve-workspace.js';
-import { discoverWorkspaces } from '../lib/discover-workspaces.js';
+import { discoverWorkspaces, deriveId } from '../lib/discover-workspaces.js';
+import { addOrder, supersedeOrder, configureLiveState, buildLiveState, formatLiveStateSection } from '../lib/live-state.js';
 import { resolvePort } from '../lib/resolve-port.js';
 
 export function getVisionFile() { return path.join(getDataDir(), 'vision-state.json'); }
@@ -338,7 +339,15 @@ export function toolGetBlockedItems() {
   return { count: blocked.length, blocked };
 }
 
+// COMP-DOGFOOD-LIVE-STATE-1: every get_current_session answer carries the
+// workspace's live owner orders and hard rules under `live_state`
+// (contracts/live-state.schema.json View), bound or not, so a runner that just
+// lost its context to a compaction re-reads them from one call.
 export async function toolGetCurrentSession({ featureCode } = {}) {
+  return { ...(await _sessionPart(featureCode)), live_state: _liveStateView() };
+}
+
+async function _sessionPart(featureCode) {
   if (featureCode) {
     // Delegate to REST API for live session + lifecycle context
     try {
@@ -1029,6 +1038,60 @@ function sessionContext() {
 }
 
 export function _getSessionProfile() { return sessionContext().profile; }
+
+// ---------------------------------------------------------------------------
+// Live state — COMP-DOGFOOD-LIVE-STATE-1 (lib/live-state.js). Owner orders are
+// written only by tools the implementer and reviewer profiles may not call
+// (IMPLEMENTER_DENY, REVIEWER_ALLOW in mcp-tool-policy.js): an order is injected into every session after a compaction, so a
+// forged one would steer the fleet.
+// ---------------------------------------------------------------------------
+
+function _liveStateRoot() {
+  const root = getTargetRoot();
+  // .compose/compose.json, not .compose/: prepareProject() makes .compose/data for any root
+  return root && fs.existsSync(path.join(root, '.compose', 'compose.json')) ? root : null;
+}
+
+function _liveStateView() {
+  const root = _liveStateRoot();
+  const boundFeature = sessionContext().featureCode || null;
+  try {
+    return buildLiveState({
+      root, dataDir: root ? getDataDir() : null,
+      workspaceId: root ? (getCurrentWorkspaceId() || _binding?.id || deriveId({ root }).id) : null,
+      boundFeature,
+    });
+  } catch (err) {
+    // never let the live block cost the session answer; say what was lost
+    return {
+      workspace: root ? { id: null, root } : null, bound: Boolean(boundFeature), bound_feature: boundFeature,
+      orders: [], hard_rules: { dir: null, files: [], error: 'not read' }, read_at: new Date().toISOString(),
+      warnings: [`WARNING live state unreadable: ${err.message}`],
+    };
+  }
+}
+
+function _liveStateDataDir() {
+  if (!_liveStateRoot()) throw new Error(`not a Compose workspace: ${getTargetRoot()}`);
+  return getDataDir();
+}
+
+export function toolLiveStateGet({ format } = {}) {
+  const view = _liveStateView();
+  return format === 'text' ? { live_state: view, section: formatLiveStateSection(view) } : { live_state: view };
+}
+
+export function toolLiveOrderAdd({ text, source, by, at, expires, supersedes } = {}) {
+  return addOrder(_liveStateDataDir(), { text, source, by, at, expires, supersedes });
+}
+
+export function toolLiveOrderSupersede({ id, superseded_by, reason } = {}) {
+  return supersedeOrder(_liveStateDataDir(), { id, superseded_by, reason });
+}
+
+export function toolLiveStateConfigure({ rules_dir } = {}) {
+  return configureLiveState(_liveStateDataDir(), { root: _liveStateRoot(), rules_dir });
+}
 export function _getBoundFeatureCode() { return sessionContext().featureCode; }
 /** @internal test seam */
 export function _testOnly_setSessionContext({ profile, boundFeatureCode } = {}) {

@@ -103,6 +103,59 @@ export const TOOLS = [
     },
   },
   {
+    name: 'live_state_get',
+    effect: 'read',
+    description: "The workspace's live owner orders (active only, newest first) and its hard-rules block read fresh from disk. format 'text' adds the markdown section a runner injects after a compaction. get_current_session carries the same view under live_state.",
+    inputSchema: {
+      type: 'object',
+      properties: { format: { type: 'string', enum: ['json', 'text'], description: "'text' adds `section`, the injected markdown" } },
+    },
+  },
+  {
+    name: 'live_order_add',
+    effect: 'mutating',
+    writes: [],
+    description: 'Record an owner order verbatim in the workspace live-state store (.compose/data/live-state.json). Every session re-reads active orders after a compaction. The same text from the same source is added once. supersedes retires older orders in the same write.',
+    inputSchema: {
+      type: 'object',
+      required: ['text', 'source'],
+      properties: {
+        text: { type: 'string', description: 'The order verbatim (max 4000 chars)' },
+        source: { type: 'string', description: 'Where it was given: a ledger line id (ledger.md:25713) or the OWNER (via s1-chat ...) line' },
+        by: { type: 'string', description: 'Session that recorded it' },
+        at: { type: 'string', description: 'ISO time the order was given (default now)' },
+        expires: { type: 'string', description: 'ISO time after which it is no longer active' },
+        supersedes: { type: 'array', items: { type: 'string' }, description: 'Order ids (LO-n) this one replaces' },
+      },
+    },
+  },
+  {
+    name: 'live_order_supersede',
+    effect: 'mutating',
+    writes: [],
+    description: 'Retire a live owner order: it stays in the store with superseded_by and drops out of every read.',
+    inputSchema: {
+      type: 'object',
+      required: ['id', 'superseded_by'],
+      properties: {
+        id: { type: 'string', description: 'Order id, LO-n' },
+        superseded_by: { type: 'string', description: 'The replacing order id (LO-m) or a source (ledger line id)' },
+        reason: { type: 'string' },
+      },
+    },
+  },
+  {
+    name: 'live_state_configure',
+    effect: 'mutating',
+    writes: [],
+    description: "Set where the workspace's hard-rules files live (rules_dir, inside the workspace root). Only files whose H1 says 'core' are read.",
+    inputSchema: {
+      type: 'object',
+      required: ['rules_dir'],
+      properties: { rules_dir: { type: 'string', description: 'Directory relative to the workspace root, e.g. smart-memory-ops/claude/rules' } },
+    },
+  },
+  {
     name: 'bind_session',
     effect: 'setup',
     description: 'Bind the current agent session to a lifecycle feature. Call once per session after creating/identifying the feature. Binding is one-shot — calling again on a bound session returns already_bound.',

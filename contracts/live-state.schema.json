@@ -1,0 +1,86 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "live-state.schema.json",
+  "_source": "smart-memory-ops/units/COMP-DOGFOOD-LIVE-STATE-1/brief.md",
+  "_roadmap": "COMP-DOGFOOD-LIVE-STATE-1",
+  "title": "LiveState",
+  "description": "A workspace's live owner orders, kept by Compose in <root>/.compose/data/live-state.json (lib/live-state.js), and the read view get_current_session returns under `live_state` (the hard-rules block read fresh from disk beside the active orders). Any runner reads the same view: the MCP tool `live_state_get`, or `node lib/live-state-cli.js read --root <workspace>`.",
+  "oneOf": [
+    { "$ref": "#/$defs/Store" },
+    { "$ref": "#/$defs/View" }
+  ],
+  "$defs": {
+    "Order": {
+      "type": "object",
+      "required": ["id", "text", "at", "source", "added_at", "expires", "superseded_by", "superseded_at"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^LO-[1-9][0-9]*$", "description": "Store-assigned, monotonic, never reused." },
+        "text": { "type": "string", "minLength": 1, "maxLength": 4000, "description": "The order verbatim, as the owner said it or as the ledger line records it." },
+        "at": { "type": "string", "format": "date-time", "description": "When the order was given." },
+        "source": { "type": "string", "minLength": 1, "maxLength": 200, "description": "Where it was given: a ledger line id (`ledger.md:25713`) or the `OWNER (via s1-chat ...)` line." },
+        "by": { "type": "string", "maxLength": 80, "description": "Who recorded it (a session name)." },
+        "added_at": { "type": "string", "format": "date-time" },
+        "expires": { "type": ["string", "null"], "format": "date-time", "description": "After this instant the order is no longer active." },
+        "superseded_by": { "type": ["string", "null"], "maxLength": 200, "description": "The order id (`LO-n`) or source that replaced it; non-null means inactive." },
+        "superseded_at": { "type": ["string", "null"], "format": "date-time" },
+        "supersede_reason": { "type": "string", "maxLength": 500 }
+      }
+    },
+    "Store": {
+      "type": "object",
+      "required": ["version", "next_seq", "live_orders"],
+      "additionalProperties": false,
+      "properties": {
+        "version": { "const": 1 },
+        "rules_dir": { "type": ["string", "null"], "description": "Directory of the hard-rules files, relative to the workspace root (or absolute inside it). Only files whose H1 carries the word `core` are read." },
+        "next_seq": { "type": "integer", "minimum": 1 },
+        "live_orders": { "type": "array", "items": { "$ref": "#/$defs/Order" } }
+      }
+    },
+    "RuleFile": {
+      "type": "object",
+      "required": ["file", "title", "bullets"],
+      "additionalProperties": false,
+      "properties": {
+        "file": { "type": "string", "description": "Basename, e.g. `evidence.md`." },
+        "title": { "type": "string" },
+        "bullets": { "type": "array", "items": { "type": "string" }, "description": "Each top-level bullet whole, continuation lines included, read from disk at the time of the read." }
+      }
+    },
+    "HardRules": {
+      "type": "object",
+      "required": ["dir", "files", "error"],
+      "additionalProperties": false,
+      "properties": {
+        "dir": { "type": ["string", "null"] },
+        "files": { "type": "array", "items": { "$ref": "#/$defs/RuleFile" } },
+        "error": { "type": ["string", "null"], "description": "Why the block is missing or partial; never silently empty." }
+      }
+    },
+    "View": {
+      "type": "object",
+      "required": ["workspace", "bound", "orders", "hard_rules", "read_at", "warnings"],
+      "additionalProperties": false,
+      "properties": {
+        "workspace": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "required": ["id", "root"],
+              "additionalProperties": false,
+              "properties": { "id": { "type": ["string", "null"] }, "root": { "type": "string" } }
+            }
+          ]
+        },
+        "bound": { "type": "boolean", "description": "Whether this session is bound to a feature (bind_session). An unbound session still gets the workspace's orders." },
+        "bound_feature": { "type": ["string", "null"] },
+        "orders": { "type": "array", "items": { "$ref": "#/$defs/Order" }, "description": "Active orders only (not superseded, not expired), newest `at` first." },
+        "hard_rules": { "$ref": "#/$defs/HardRules" },
+        "read_at": { "type": "string", "format": "date-time" },
+        "warnings": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}

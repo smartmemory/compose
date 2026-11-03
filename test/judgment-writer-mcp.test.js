@@ -189,7 +189,7 @@ const ratifiedGoalCut = {
 };
 
 describe('compose-mcp judgment registry parity', () => {
-  test('has 51 tool definitions, 51 dispatch cases, and ten exact judgment names', () => {
+  test('has 55 tool definitions, 55 dispatch cases, and ten exact judgment names', () => {
     const source = readFileSync(MCP_SERVER, 'utf8');
     const defsSource = readFileSync(MCP_TOOL_DEFS, 'utf8');
     const toolsStart = defsSource.indexOf('export const TOOLS = [');
@@ -206,8 +206,8 @@ describe('compose-mcp judgment registry parity', () => {
       ...source.slice(switchStart, switchEnd).matchAll(/^\s*case '([^']+)'/gm),
     ].map((match) => match[1]);
 
-    assert.equal(definitionNames.length, 51, 'TOOLS definition count');
-    assert.equal(dispatchNames.length, 51, 'dispatch case count');
+    assert.equal(definitionNames.length, 55, 'TOOLS definition count');
+    assert.equal(dispatchNames.length, 55, 'dispatch case count');
     assert.deepEqual(
       [...definitionNames].sort(),
       [...dispatchNames].sort(),
@@ -434,7 +434,7 @@ describe('compose-mcp judgment writer (end-to-end)', () => {
 });
 
 describe('COMP-JUDGMENT-GOAL-MIGRATE S3 — MCP reachability', () => {
-  test('judgment_goal_write advertises migrate on the existing 51/51 registry', async () => {
+  test('judgment_goal_write advertises migrate on the existing 55/55 registry', async () => {
     const source = readFileSync(MCP_SERVER, 'utf8');
     const defsSource = readFileSync(MCP_TOOL_DEFS, 'utf8');
     const toolsStart = defsSource.indexOf('export const TOOLS = [');
@@ -451,8 +451,8 @@ describe('COMP-JUDGMENT-GOAL-MIGRATE S3 — MCP reachability', () => {
     // Adding an op must not add a tool: the registry stays at its pinned size.
     // The invariant is unchanged; this was re-pinned after retiring the
     // unrelated canon_override_grant tool on 2026-09-08.
-    assert.equal(definitionNames.length, 51, 'TOOLS definition count');
-    assert.equal(dispatchNames.length, 51, 'dispatch case count');
+    assert.equal(definitionNames.length, 55, 'TOOLS definition count');
+    assert.equal(dispatchNames.length, 55, 'dispatch case count');
     assert.deepEqual(
       definitionNames.filter((name) => name.startsWith('judgment_') || name.startsWith('get_judgment_')).sort(),
       [...JUDGMENT_TOOLS].sort(),
@@ -674,12 +674,13 @@ describe('mcp-tool-policy — judgment entries', () => {
 });
 
 describe('COMPOSE-UX-SIMPLIFY-2 — tools/list surfaces', () => {
-  // 51 defined; core hides the 16 parked tools, lean lists the 15 builder+setup tools, full lists all.
+  // 55 defined (COMP-DOGFOOD-LIVE-STATE-1 added four live-state tools to core); core hides the 16
+  // parked tools, lean lists the 15 builder+setup tools, full lists all.
   const rows = [
-    { surface: undefined, expected: 35, label: 'default (core)' },
-    { surface: 'core', expected: 35, label: 'core' },
+    { surface: undefined, expected: 39, label: 'default (core)' },
+    { surface: 'core', expected: 39, label: 'core' },
     { surface: 'lean', expected: 15, label: 'lean' },
-    { surface: 'full', expected: 51, label: 'full' },
+    { surface: 'full', expected: 55, label: 'full' },
   ];
   for (const { surface, expected, label } of rows) {
     test(`tools/list on ${label} surface lists ${expected} tools`, async () => {

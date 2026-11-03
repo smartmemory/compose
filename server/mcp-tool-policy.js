@@ -51,6 +51,9 @@ const IMPLEMENTER_DENY = [
   'backfill_completion',
   // ── added by COMP-COVERAGE-GATE C4 ──
   'roadmap_xref_push',
+  // COMP-DOGFOOD-LIVE-STATE-1: owner orders are re-injected into every session
+  // after a compaction; an implementer must not be able to write one.
+  'live_order_add', 'live_order_supersede', 'live_state_configure',
 ];
 
 /** Reviewer (read-only) may call only these. */
@@ -62,6 +65,7 @@ const REVIEWER_ALLOW = [
   'set_workspace', 'get_workspace', 'bind_session',
   'get_judgment_state', // COMP-JUDGMENT-WRITER: read-only; the eight judgment write tools stay reviewer-denied
   'get_judgment_trace', // COMP-JUDGMENT-PRECEDENT: read-only ancestry walk
+  'live_state_get', // COMP-DOGFOOD-LIVE-STATE-1: read-only; the three live-state writers stay reviewer-denied
 ];
 
 export const PROFILE_POLICY = {
@@ -144,9 +148,9 @@ export function isToolAllowed({ tool, profile, phase, targetMatchesBoundFeature 
 // still goes through the profile×phase gate unchanged (nothing is deleted).
 //
 // Surfaces:
-//   core (default) — everything except PARKED_TOOLS (35 of 51)
+//   core (default) — everything except PARKED_TOOLS (39 of 55)
 //   lean           — LEAN_TOOLS only: 12 builder tools + 3 setup tools (opt-in for now)
-//   full           — all 51 tools (the pre-SIMPLIFY-2 behaviour)
+//   full           — all 55 tools (the pre-SIMPLIFY-2 behaviour)
 //
 // Selected by env COMPOSE_TOOL_SURFACE, else .compose/compose.json
 // capabilities.toolSurface, else 'core'. Unknown values fall back to 'core'.

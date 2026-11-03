@@ -9,11 +9,11 @@
  * Register in .mcp.json:
  *   { "mcpServers": { "compose": { "command": "node", "args": ["server/compose-mcp.js"] } } }
  *
- * Tools: 51, defined in server/mcp-tool-defs.js (the single source; the
+ * Tools: 55, defined in server/mcp-tool-defs.js (the single source; the
  * dispatch switch below must match it). tools/list is trimmed twice:
  *   1. tool surface (COMPOSE-UX-SIMPLIFY-2, server/mcp-tool-policy.js):
- *      core (default, 35 tools: hides the 16 judgment/backfill/xref/resume
- *      tools nobody calls), lean (12 builder tools + 3 setup), full (all 51).
+ *      core (default, 39 tools: hides the 16 judgment/backfill/xref/resume
+ *      tools nobody calls), lean (12 builder tools + 3 setup), full (all 55).
  *      Pick with COMPOSE_TOOL_SURFACE or capabilities.toolSurface.
  *   2. profile x phase (COMP-MCP-ENFORCE-1) when phaseScopedTools is on.
  * A hidden tool is still callable by name; only the menu shrinks.
@@ -43,6 +43,10 @@ import {
   toolApproveGate,
   toolGetPendingGates,
   toolBindSession,
+  toolLiveStateGet,
+  toolLiveOrderAdd,
+  toolLiveOrderSupersede,
+  toolLiveStateConfigure,
   toolIterationStart,
   toolIterationReport,
   toolIterationAbort,
@@ -157,6 +161,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         case 'get_blocked_items':   result = toolGetBlockedItems(); break;
         case 'get_current_session': result = await toolGetCurrentSession(args); break;
         case 'bind_session':             result = await toolBindSession(args); break;
+        case 'live_state_get':           result = toolLiveStateGet(args); break;
+        case 'live_order_add':           result = toolLiveOrderAdd(args); break;
+        case 'live_order_supersede':     result = toolLiveOrderSupersede(args); break;
+        case 'live_state_configure':     result = toolLiveStateConfigure(args); break;
         case 'set_workspace':            result = toolSetWorkspace(args); break;
         case 'get_workspace':            result = toolGetWorkspace(); break;
         case 'get_feature_lifecycle':    result = toolGetFeatureLifecycle(args); break;
