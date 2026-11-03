@@ -8,7 +8,7 @@ import { createServer } from 'node:http';
 import assert from 'node:assert/strict';
 import express from 'express';
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { attachStratumSpecRoutes, MARKER, resolveStratumEngineDist } from '../server/stratum-spec-routes.js';
 
@@ -121,7 +121,10 @@ describe('stratum spec routes', { skip: !engineDist && 'no built Stratum engine'
           assert.equal(res.status, 409, name);
           const body = await res.json();
           assert.equal(body.code, 'RESERVED_NAME', name);
-          assert.match(body.message, new RegExp(`^${name} is the ${kind} pipeline at .*; pick another name$`), name);
+          const at = { bundled: `bundled/${name}.stratum.yaml`, preset: `presets/${name}.stratum.yaml`, 'init-provisioned': `pipelines/${name}.stratum.yaml` }[kind];
+          assert.equal(body.message, `${name} is the ${kind} pipeline at ${at}; pick another name`, name);
+          assert.ok(!JSON.stringify(body).includes(homedir()), `${name}: no home path in the body`);
+          assert.ok(!/at \//.test(body.message), `${name}: no absolute path`);
           assert.equal(body.error, body.message);
         }
         assert.throws(() => readdirSync(join(fresh, 'pipelines')), /ENOENT/); // nothing created, not even the folder

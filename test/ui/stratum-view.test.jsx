@@ -1,7 +1,7 @@
 /** COMPOSE-STRAT-TAB-1: the Stratum tab renders @smartmemory/stratum-ui screens from a fake DataClient (no fetch). */
 import React from 'react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
 import StratumView from '../../src/components/cockpit/StratumView.jsx';
 import { createStratumDataClient } from '../../src/lib/clients/stratum.js';
 import { locateView } from '../../lib/view-keys.js';
@@ -144,6 +144,51 @@ describe('Stratum New pipeline pane', () => {
     await waitFor(() => expect(client.saveSpec).toHaveBeenCalledTimes(1), { timeout: 3000 });
     const steps = client.saveSpec.mock.calls[0][1].flows.main.steps;
     expect(steps.length).toBeGreaterThan(0);
+  });
+
+  it.skipIf(!linked)('FU-2 M1: a step ID typed, paused past the debounce, then blurred into Save saves the new ID', async () => {
+    const client = clientWith(vi.fn(async (name) => ({ ok: true, name, created: true })));
+    render(<StratumView client={client} />);
+    await openPane();
+    fireEvent.change(screen.getByTestId('builder-save-name'), { target: { value: 'renamed' } });
+    fireEvent.click(screen.getByRole('button', { name: 'New' }));
+    fireEvent.click(screen.getByRole('button', { name: 'add set step' }));
+    const field = await screen.findByLabelText('field id', {}, { timeout: 3000 });
+    field.focus();
+    fireEvent.change(field, { target: { value: 'renamed_step' } }); // a draft: it commits on blur
+    await new Promise((resolve) => setTimeout(resolve, 650)); // past the 400 ms export of everything before it
+    fireEvent.blur(field); // the commit the reviewer's sequence slipped past
+    fireEvent.click(screen.getByTestId('builder-save')); // at once
+    await waitFor(() => expect(client.saveSpec).toHaveBeenCalledTimes(1), { timeout: 3000 });
+    expect(client.saveSpec.mock.calls[0][1].flows.main.steps.map((step) => step.id)).toContain('renamed_step');
+  });
+
+  it.skipIf(!linked)('FU-2 M1: Save blurs the focused builder field itself, so a keyboard Save commits the draft too', async () => {
+    const client = clientWith(vi.fn(async (name) => ({ ok: true, name, created: true })));
+    render(<StratumView client={client} />);
+    await openPane();
+    fireEvent.change(screen.getByTestId('builder-save-name'), { target: { value: 'kbd' } });
+    fireEvent.click(screen.getByRole('button', { name: 'New' }));
+    fireEvent.click(screen.getByRole('button', { name: 'add set step' }));
+    const field = await screen.findByLabelText('field id', {}, { timeout: 3000 });
+    field.focus();
+    fireEvent.change(field, { target: { value: 'kbd_step' } });
+    await new Promise((resolve) => setTimeout(resolve, 650));
+    expect(document.activeElement).toBe(field); // still focused: only Save's own blur can commit it
+    await act(async () => { screen.getByTestId('builder-save').click(); }); // a click that does not move focus
+    await waitFor(() => expect(client.saveSpec).toHaveBeenCalledTimes(1), { timeout: 3000 });
+    expect(client.saveSpec.mock.calls[0][1].flows.main.steps.map((step) => step.id)).toContain('kbd_step');
+  });
+
+  it.skipIf(!linked)('FU-2: Save with no edit saves straight away, with no wait for an export', async () => {
+    const client = clientWith(vi.fn(async (name) => ({ ok: true, name, created: true })));
+    render(<StratumView client={client} />);
+    await openPane();
+    fireEvent.change(screen.getByTestId('builder-save-name'), { target: { value: 'idle' } });
+    const t0 = Date.now();
+    fireEvent.click(screen.getByTestId('builder-save'));
+    await waitFor(() => expect(client.saveSpec).toHaveBeenCalledTimes(1), { timeout: 3000 });
+    expect(Date.now() - t0).toBeLessThan(300);
   });
 
   it.skipIf(!linked)('L2: a rejected saveSpec shows "save failed: <message>" and leaves no unhandled rejection', async () => {

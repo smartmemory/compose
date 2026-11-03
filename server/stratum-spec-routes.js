@@ -140,9 +140,11 @@ export function attachStratumSpecRoutes(app, { remote = false, engineDist = reso
     if (owner === 'absent') {
       // Ask the resolver builds use (never a copy of its name list): a path outside this workspace's pipelines/ is a shipped pipeline.
       const resolved = resolveTemplatePath(name, rootOf(req));
+      // Named by kind and package-relative path, never the absolute one (it carries the home directory onto the screen).
+      const kind = basename(dirname(resolved)) === 'presets' ? 'preset' : 'bundled';
       const shipped = resolve(resolved).startsWith(`${resolve(dir)}${sep}`)
         ? null
-        : { kind: basename(dirname(resolved)) === 'presets' ? 'preset' : 'bundled', at: resolved };
+        : { kind, at: `${kind === 'preset' ? 'presets' : 'bundled'}/${basename(resolved)}` };
       const init = INIT_PROVISIONED_SPECS.includes(name) ? { kind: 'init-provisioned', at: `pipelines/${name}${SUFFIX}` } : null;
       const owned = shipped ?? init;
       if (owned) {
