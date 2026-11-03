@@ -162,5 +162,6 @@ export function startStratumGatePoller({ client, sink, intervalMs, warn = consol
     clearInterval(timer);
     doc?.removeEventListener?.('visibilitychange', onVisibility);
     sink.publish(STRATUM_SOURCE, []);
+    sink.retire?.(STRATUM_SOURCE); // gone is not "answered with no rows": releaseKeys must keep Stratum dismissals
   };
 }

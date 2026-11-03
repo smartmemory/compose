@@ -105,13 +105,16 @@ const isRow = (r) => !!r && typeof r === 'object'
  * COMP-SUBAPP-ATTENTION-1: a third argument `{unavailable: '<label>'}` says the source could not be read. It is never "no rows":
  * the label shows in the inbox's unknown list, and with `rows` null the source's last good list stays (stale, so marked);
  * with a list it replaces as usual. Any publish without the label clears the mark, so `publish(source, [])` removes a source.
+ * COMP-SUBAPP-ATTENTION-FU-1: `readState().answered` names the sources that have published a list and not been retired, so a
+ * reader can tell a source that answered with no rows from one that never ran (or was stopped): `retire(source)` drops it.
  */
 export function createAttentionSink({ warn = console.warn } = {}) {
   const bySource = new Map();
   const downBySource = new Map();
+  const answered = new Set();
   const listeners = new Set();
   let snapshot = [];
-  let state = { rows: snapshot, unavailable: [] };
+  let state = { rows: snapshot, unavailable: [], answered: [] };
   const publish = (source, rows, { unavailable = null } = {}) => {
     if (typeof source !== 'string' || source === '') { warn('[subapp-host] attention publish without a source name; rows dropped'); return; }
     const down = typeof unavailable === 'string' && unavailable !== '' ? unavailable : null;
@@ -122,15 +125,27 @@ export function createAttentionSink({ warn = console.warn } = {}) {
       if (good.length !== list.length || !Array.isArray(rows)) warn(`[subapp-host] ${source}: ${Array.isArray(rows) ? list.length - good.length : 'a non-list of'} attention rows dropped (not inbox rows)`);
       if (good.length) bySource.set(source, good); else bySource.delete(source);
     }
+    if (Array.isArray(rows)) answered.add(source);
+    rebuild();
+  };
+  const rebuild = () => {
     snapshot = [...bySource.values()].flat();
-    state = { rows: snapshot, unavailable: [...new Set(downBySource.values())] };
+    state = { rows: snapshot, unavailable: [...new Set(downBySource.values())], answered: [...answered] };
     for (const fn of listeners) fn(snapshot);
+  };
+  /** A source that went away: no longer "answered" (its rows and unavailable mark go too). */
+  const retire = (source) => {
+    bySource.delete(source);
+    downBySource.delete(source);
+    answered.delete(source);
+    rebuild();
   };
   return {
     publish,
+    retire,
     /** Every source's current rows, one flat list (a stable array between publishes). */
     read: () => snapshot,
-    /** `{rows, unavailable}`: `read()` plus the labels of the sources marked unavailable (a stable object between publishes). */
+    /** `{rows, unavailable, answered}`: `read()`, the labels of the sources marked unavailable, and the names of the sources that have answered (a stable object between publishes). */
     readState: () => state,
     /** `fn(rows)` after each publish; returns the unsubscribe. */
     subscribe: (fn) => { listeners.add(fn); return () => listeners.delete(fn); },

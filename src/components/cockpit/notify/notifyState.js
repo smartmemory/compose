@@ -10,6 +10,7 @@
  * its acknowledgement only hides the banner until the row's text changes (`escalated`).
  */
 import { groupOf } from '../../../../lib/owner-queue-class.js';
+import { STRATUM_SOURCE, STRATUM_LABEL, COMPOSE_LABEL } from './gatePublishers.js';
 
 export const NOTIFY_KEY_PREFIXES = ['security:', 'ask:', 'queue:', 'ctx:', 'attention:'];
 export const NOTIFY_KEYS_EXACT = ['disk', 'outage'];
@@ -131,13 +132,16 @@ export function snoozePresets(row, seats, now = Date.now()) {
 }
 
 /** Which collected-source label owns a key: the release flow only fires when that source answered. */
-function sourceDown(key, unknown) {
+function sourceDown(key, unknown, answered) {
   const has = (l) => unknown.includes(l);
   if (/^(security|ask|queue):/.test(key)) return has('sm_status') || has('sm_status queue');
   if (key.startsWith('ctx:')) return has('sm_status') || has('sm_status sessions');
   if (key === 'disk') return has('sm_status') || has('sm_status df');
   if (key === 'outage') return has('cadence outage');
   if (key.startsWith('attention:')) return has('cadence attention');
+  // Stratum has no source at all when it is absent or stopped (App.jsx): only a published list says it answered.
+  if (key.startsWith('stratum-gate:')) return !answered.includes(STRATUM_SOURCE) || has(STRATUM_LABEL);
+  if (key.startsWith('compose-gate:')) return has(COMPOSE_LABEL);
   return true;
 }
 
@@ -148,12 +152,13 @@ function sourceDown(key, unknown) {
 export function releaseKeys(collected, state, queueRows) {
   const entries = state?.entries ?? {};
   const unknown = collected?.unknown ?? [];
+  const answered = collected?.answered ?? [];
   const present = new Set([...(collected?.rows ?? []), ...(collected?.cleared ?? [])].map((r) => r.key));
   const ids = new Set((Array.isArray(queueRows) ? queueRows : []).map((q) => String(q?.id ?? '')));
   const out = [];
   for (const [key, e] of Object.entries(entries)) {
     if (e?.action !== 'ack' && e?.action !== 'dismiss') continue;
-    if (sourceDown(key, unknown)) continue;
+    if (sourceDown(key, unknown, answered)) continue;
     if (/^(security|ask|queue):/.test(key)) {
       if (!Array.isArray(queueRows) || ids.has(key.slice(key.indexOf(':') + 1))) continue;
     } else if (present.has(key)) continue;

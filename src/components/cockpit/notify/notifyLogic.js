@@ -207,7 +207,7 @@ export function reviewAdapter(review, now = Date.now()) {
 }
 
 /**
- * COMP-SUBAPP-ATTENTION-1: the host attention sink's snapshot (`attentionSink.readState()`: `{rows, unavailable}`) -> its rows,
+ * COMP-SUBAPP-ATTENTION-1: the host attention sink's snapshot (`attentionSink.readState()`: `{rows, unavailable, answered}`; `answered` passes through to `collect`) -> its rows,
  * Stratum and Compose gates merged to one row per gate (gatePublishers.js `mergeGateRows`), each re-aged from its `sinceAt`
  * so a row published an hour ago does not read "just now". `unavailable` is every label a publisher marked; a missing
  * snapshot (no sink wired) is no source, not an unknown one.
@@ -216,7 +216,11 @@ export function sinkAdapter(sink, now = Date.now()) {
   if (!sink) return { rows: [], unavailable: null };
   const rows = mergeGateRows(Array.isArray(sink.rows) ? sink.rows : [])
     .map((r) => (r.sinceAt ? { ...r, since: ageSince(r.sinceAt, now) } : r));
-  return { rows, unavailable: Array.isArray(sink.unavailable) && sink.unavailable.length ? sink.unavailable : null };
+  return {
+    rows,
+    unavailable: Array.isArray(sink.unavailable) && sink.unavailable.length ? sink.unavailable : null,
+    answered: Array.isArray(sink.answered) ? sink.answered : [],
+  };
 }
 
 const SEVERITY_RANK = { critical: 0, warn: 1 };
@@ -251,7 +255,8 @@ export function collect(sources, now = Date.now(), state = null) {
   const unknown = [...new Set(results.flatMap((r) => r.unavailable ?? []).filter(Boolean))];
   // A failed refresh keeps the last good fleet body on screen (fleetPoller): its rows may be stale, so the chip cannot say "All clear".
   if (sources.fleet && sources.fleetError != null && !unknown.includes(FLEET_UNREADABLE)) unknown.push(FLEET_UNREADABLE);
-  return { rows, cleared, unknown, defaults };
+  const answered = [...new Set(results.flatMap((r) => r.answered ?? []))];
+  return { rows, cleared, unknown, defaults, answered };
 }
 
 /** The row kinds that wait on the owner: the count `ownerAsks` makes (the chip, WHAT and the NOW drawer show this one number). */
