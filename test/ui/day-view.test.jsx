@@ -106,11 +106,11 @@ describe('Day front page (COMP-COCKPIT-RIBBON-TOP-1)', () => {
     ];
     for (const p of parts) expect(p.has, p.part).toBe(true);
     expect(screen.queryByTestId('day-skeleton')).toBeNull();
-    // The meter sits in a capped box so the ribbon keeps its height; the toggle opens it fully.
-    const toggle = screen.getByTestId('day-meter-toggle');
-    expect([toggle.getAttribute('aria-expanded'), screen.getByTestId('day-meter-box').className.includes('max-h-[176px]')]).toEqual(['false', true]);
-    fireEvent.click(toggle);
-    expect([toggle.getAttribute('aria-expanded'), screen.getByTestId('day-meter-box').className.includes('max-h-[40vh]')]).toEqual(['true', true]);
+    // COMP-DAYVIEW-SPLIT-1 (owner 2026-11-03): the meter is full size with no scroll inside it, so the toggle that opened the
+    // old capped box is gone; the upper panel is the resizable one, and the page (the root) scrolls.
+    const box = screen.getByTestId('day-meter-box');
+    expect([screen.queryByTestId('day-meter-toggle'), /max-h-|overflow-y-auto|overflow-auto/.test(box.className), !!box.querySelector('[data-testid="cost-meter"]')]).toEqual([null, false, true]);
+    expect(screen.getByTestId('day-view').className.split(/\s+/)).toContain('overflow-y-auto');
     fireEvent.click(screen.getByTestId('day-link-process'));
     fireEvent.click(screen.getByTestId('day-link-ops'));
     expect(onNavigate.mock.calls.map((c) => c[0])).toEqual(['process', 'ops']);

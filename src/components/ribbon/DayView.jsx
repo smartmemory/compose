@@ -24,6 +24,7 @@ import NowDrawer from './now/NowDrawer.jsx';
 import DayPhone from './now/DayPhone.jsx';
 import { usePhoneLayout } from './now/usePhoneLayout.js';
 import RibbonMeterLayer from './meter/RibbonMeterLayer.jsx';
+import { SplitHandle, useUpperHeight } from './DaySplit.jsx';
 
 /**
  * DayView — the front page (COMP-COCKPIT-RIBBON-TOP-1): the WHAT line, the range bar, the ribbon and the cost meter on one
@@ -135,7 +136,10 @@ export default function DayView({ onOpenFleet, onNavigate, active = true }) {
     };
   }, [alerts, win.window.from, win.window.to, win.now]);
   const openAlertTray = useCallback(() => { document.querySelector('[data-testid="notify-chip"]')?.click(); }, []);
-  const [meterOpen, setMeterOpen] = useState(false);
+  // COMP-DAYVIEW-SPLIT-1: the upper panel's height is the viewer's (dragged, remembered); the page scrolls past the meter.
+  const rootRef = useRef(null);
+  const upperRef = useRef(null);
+  const split = useUpperHeight(upperRef, rootRef);
   // RIBBON-NOW-1: the WHAT counts open "now" lists here; the phone layout drops the ribbon.
   const phone = usePhoneLayout();
   const fleet = useFleet().data;
@@ -206,7 +210,6 @@ export default function DayView({ onOpenFleet, onNavigate, active = true }) {
   );
   const [pickersOpen, setPickersOpen] = useState(false);
   phoneRef.current = phone;
-  const link = 'text-[12px] text-muted-foreground hover:text-foreground hover:underline focus-visible:underline outline-none';
   // U3 (AD#18): the two questions down read as links: the accent ink at the body size, underlined on hover and focus.
   const footLink = 'text-[length:var(--type-body)] text-[color:var(--rb-accent)] hover:underline focus-visible:underline underline-offset-2 outline-none';
 
@@ -221,7 +224,7 @@ export default function DayView({ onOpenFleet, onNavigate, active = true }) {
   }
 
   return (
-    <div className="h-full min-h-0 flex flex-col gap-2 p-3 overflow-hidden" data-testid="day-view">
+    <div ref={rootRef} className="h-full min-h-0 flex flex-col gap-2 p-3 overflow-y-auto" data-testid="day-view">
       <div className="sticky top-0 z-10 bg-background" data-testid="day-what">
         <WhatLine onOpenFleet={onOpenFleet} onNavigate={onNavigate} onCountOpen={setNowKind} />
       </div>
@@ -237,7 +240,8 @@ export default function DayView({ onOpenFleet, onNavigate, active = true }) {
         alertChip={alertChip}
         onAlertChip={openAlertTray}
       />
-      <div className="flex-1 min-h-0 flex flex-col gap-1 relative">
+      {/* COMP-DAYVIEW-SPLIT-1: a fixed, dragged height (never flex-1), so a tall meter below pushes the page, not the ribbon. */}
+      <div ref={upperRef} className="shrink-0 min-h-0 flex flex-col gap-1 relative" style={{ height: split.height }} data-testid="day-upper">
         {/* TOP M1 + U3: a failed read says whether it is read again; a failed refresh over kept data says so (the ribbon
             stays, marked old); the Now feed and the unit index say the same here as on the phone and in the drawer. */}
         <DaySourceNotes sources={sources} />
@@ -272,15 +276,13 @@ export default function DayView({ onOpenFleet, onNavigate, active = true }) {
         <RibbonLaneLayer data={ribbonData} from={win.window.from} to={win.window.to} now={win.now} />
         <DayMissingSources sources={sources} />
       </div>
-      {/* The shared meter's full form is ~470 px tall and would squeeze the ribbon to a thumbnail at 1440x900, so it sits in a
-          capped, scrollable box that opens fully on request. Nothing is dropped; the ribbon keeps the height. */}
+      <SplitHandle {...split} />
+      {/* COMP-DAYVIEW-SPLIT-1 (owner 2026-11-03): the meter at its full height, every seat and dollar row, no scroll inside it.
+          When the upper panel and the meter do not fit, the page (this root) scrolls. */}
       <div className="shrink-0 flex flex-col gap-1" data-testid="day-meter">
-        <div className={meterOpen ? 'max-h-[40vh] overflow-y-auto' : 'max-h-[176px] overflow-y-auto'} data-testid="day-meter-box">
+        <div data-testid="day-meter-box">
           <RibbonMeterLayer meter={meter} flashSeat={flashSeat} onNavigate={onNavigate} />
         </div>
-        <button type="button" className={`${link} self-start`} aria-expanded={meterOpen} data-testid="day-meter-toggle" onClick={() => setMeterOpen((v) => !v)}>
-          {meterOpen ? 'Show less ▴' : 'Show all seats and dollars ▾'}
-        </button>
       </div>
       <RibbonMarksLayer lanes={feed.data?.lanes} seats={seats} now={win.now} onNavigate={onNavigate} />
       <div className="flex items-center gap-4 shrink-0" data-testid="day-footer">
