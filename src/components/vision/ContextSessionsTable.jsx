@@ -7,6 +7,7 @@
  *   items       {array}   all items (to match feature code to item ids)
  */
 import React, { useState, useMemo } from 'react';
+import EntityLink from '../shared/EntityLink.jsx';
 
 function relativeTime(ts) {
   if (!ts) return '';
@@ -92,9 +93,11 @@ export default function ContextSessionsTable({ featureCode, sessions = [], items
                 {relativeTime(s.startedAt || s.createdAt)}
               </span>
             </button>
-            {isExpanded && s.summary && (
-              <div className="px-3 py-1.5 text-[10px] text-muted-foreground bg-muted/10 rounded mx-1 mb-1">
-                {s.summary}
+            {isExpanded && (
+              <div className="px-3 py-1.5 text-[10px] text-muted-foreground bg-muted/10 rounded mx-1 mb-1 flex items-center gap-2" data-testid="context-session-detail">
+                {s.summary && <span className="flex-1 min-w-0">{s.summary}</span>}
+                {/* COMP-UI-LINKS-2: the session list lives in the Sessions view */}
+                <EntityLink kind="view" id="sessions" label="Open in Sessions" className="text-[10px] shrink-0" />
               </div>
             )}
           </div>

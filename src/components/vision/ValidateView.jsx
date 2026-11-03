@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import EntityLink, { LinkedText } from '../shared/EntityLink.jsx';
 import { ShieldCheck } from 'lucide-react';
 import { wsFetch } from '../../lib/wsFetch.js';
 import EmptyState from './shared/EmptyState.jsx';
@@ -128,10 +129,10 @@ export default function ValidateView({ featureCode }) {
                   <div className="flex items-center gap-2">
                     <span className="text-[11px] font-mono text-foreground">{f.kind}</span>
                     {f.feature_code && (
-                      <span className="text-[10px] font-mono text-blue-400">{f.feature_code}</span>
+                      <EntityLink kind="feature" id={f.feature_code} className="text-[10px]" />
                     )}
                   </div>
-                  <p className="text-[11px] text-muted-foreground">{f.detail}</p>
+                  <p className="text-[11px] text-muted-foreground"><LinkedText text={f.detail} /></p>
                 </div>
               </div>
             ))}

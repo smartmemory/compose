@@ -7,6 +7,7 @@
  *   items       {array}   all items (to match feature code to item ids)
  */
 import React, { useState, useMemo } from 'react';
+import EntityLink from '../shared/EntityLink.jsx';
 import { CheckCircle } from 'lucide-react';
 
 function relativeTime(ts) {
@@ -64,8 +65,8 @@ export default function ContextErrorLog({ featureCode, errors = [], items = [] }
       {displayErrors.map((e, i) => {
         const isExpanded = expandedIdx === i;
         return (
+          <React.Fragment key={i}>
           <button
-            key={i}
             onClick={() => setExpandedIdx(isExpanded ? null : i)}
             className="flex flex-col w-full px-2 py-1.5 text-left rounded hover:bg-destructive/5 transition-colors"
           >
@@ -87,6 +88,14 @@ export default function ContextErrorLog({ featureCode, errors = [], items = [] }
               </div>
             )}
           </button>
+          {isExpanded && (
+            // COMP-UI-LINKS-2: outside the row button (a button cannot hold a button); the file only when the error names one
+            <div className="flex items-center gap-3 px-7 pb-1" data-testid="context-error-links">
+              {(e.file || e.path) && <EntityLink kind="file" id={e.file || e.path} className="text-[10px]" />}
+              <EntityLink kind="view" id="sessions" label="Open in Sessions" className="text-[10px]" />
+            </div>
+          )}
+          </React.Fragment>
         );
       })}
       {!showAll && filtered.length > MAX_DISPLAY && (

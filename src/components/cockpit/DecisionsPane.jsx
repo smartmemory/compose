@@ -17,6 +17,7 @@
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useProjectModel } from '../../lib/fleetProjects.js';
+import EntityLink from '../shared/EntityLink.jsx';
 import {
   DECIDER_KEYS, DECIDER_LABELS, STANDING_LEGEND, decisionsUrl, projectOfRoot, rowSource, rowTags, rowWhen, statusLabel, toggleDecider,
 } from './decisionsPaneLogic.js';
@@ -57,7 +58,19 @@ function LineRef({ line, openLine, children, testid, className = 'font-mono', li
   );
 }
 
-function DecisionRow({ row, openLine, openQueue }) {
+/** COMP-UI-LINKS-2: a chip that narrows the list to rows mentioning its text (fills the search box: a view filter, nothing is written). */
+function FilterChip({ text, onFilter, className, testid, children }) {
+  if (!onFilter) return <span className={className} data-testid={testid}>{children ?? text}</span>;
+  return (
+    <button type="button" className={`${className} cursor-pointer hover:underline focus-visible:underline focus-visible:outline focus-visible:outline-1 focus-visible:outline-accent`}
+      title={`show decisions mentioning "${text}"`} data-testid={testid} onClick={() => onFilter(text)}>{children ?? text}</button>
+  );
+}
+
+/** A reference that is a repo path opens in the wiki; any other kind (a commit hash, a queue id) has no doc to open. */
+const looksLikePath = (v) => typeof v === 'string' && /^[\w.-]+(\/[\w.#-]+)+$/.test(v);
+
+function DecisionRow({ row, openLine, openQueue, onOpenFile, onFilter }) {
   const [open, setOpen] = useState(false);
   const src = rowSource(row);
   const status = statusLabel(row);
@@ -75,9 +88,9 @@ function DecisionRow({ row, openLine, openQueue }) {
         })()}
       </div>
       <div className="mt-1 flex flex-wrap items-center gap-1.5 pl-[7.5rem] text-[10px] text-muted-foreground">
-        {row.by ? <span className="font-mono">{row.by}{row.via ? ` via ${row.via}` : ''}</span> : null}
-        {rowTags(row).map((t) => <span key={t} className={`${CHIP} border-border`} data-testid="decision-tag">{t}</span>)}
-        {(row.projects ?? []).map((p) => <span key={p} className={`${CHIP} border-border`}>{p}</span>)}
+        {row.by ? <FilterChip text={row.by} onFilter={onFilter} className="font-mono" testid="decision-by">{row.by}{row.via ? ` via ${row.via}` : ''}</FilterChip> : null}
+        {rowTags(row).map((t) => <FilterChip key={t} text={t} onFilter={onFilter} className={`${CHIP} border-border`} testid="decision-tag" />)}
+        {(row.projects ?? []).map((p) => <FilterChip key={p} text={p} onFilter={onFilter} className={`${CHIP} border-border`} testid="decision-project" />)}
         {src.kind === 'queue'
           ? (openQueue
             ? <button type="button" className={DOC_LINK} title="open the owner queue in the wiki" data-testid="decision-source" onClick={openQueue}>{src.label}</button>
@@ -88,10 +101,12 @@ function DecisionRow({ row, openLine, openQueue }) {
         <div className="mt-1.5 pl-[7.5rem] text-[11px] text-muted-foreground space-y-1" data-testid="decision-premises">
           <div className="whitespace-pre-wrap break-words text-foreground/80">{row.text}</div>
           {row.reverse ? <div>To reverse: {row.reverse}</div> : null}
-          {row.units?.length ? <div>Units: <span className="font-mono">{row.units.join(', ')}</span></div> : null}
+          {row.units?.length ? <div data-testid="decision-units">Units: {joined(row.units.map((u) => <EntityLink key={u} kind="unit" id={u} className="text-[11px]" />))}</div> : null}
           {row.refs?.length ? <div>Refs: {joined(row.refs.map((r, i) => (r.kind === 'line'
             ? <LineRef key={i} line={Number(r.value)} openLine={openLine}>{`ledger :${r.value}`}</LineRef>
-            : <span key={i} className="font-mono">{`${r.kind} ${r.value}`}</span>)))}</div> : null}
+            : (onOpenFile && looksLikePath(r.value)
+              ? <EntityLink key={i} kind="file" id={r.value} label={`${r.kind} ${r.value}`} className="text-[11px]" />
+              : <span key={i} className="font-mono" title="No target: this reference is not a repo path">{`${r.kind} ${r.value}`}</span>))))}</div> : null}
           {row.echoes?.length ? <div>Echoes: {joined(row.echoes.map((e, i) => <LineRef key={i} line={e.line} openLine={openLine}>{`L${e.line}${e.by ? ` ${e.by}` : ''}`}</LineRef>))}</div> : null}
           {row.maybe?.length ? <div>Maybe changed by: {joined(row.maybe.map((l, i) => <LineRef key={i} line={l} openLine={openLine}>{`L${l}`}</LineRef>))}</div> : null}
         </div>
@@ -183,7 +198,7 @@ export default function DecisionsPane({ projectRoot, onOpenFile }) {
       {data && !rows.length && !error ? <div className="text-[12px] text-muted-foreground italic" data-testid="decisions-empty">No decisions match these filters.</div> : null}
       {!data && !error ? <div className="text-[12px] text-muted-foreground">Loading…</div> : null}
 
-      <ul data-testid="decisions-list">{rows.map((r) => <DecisionRow key={r.id} row={r} openLine={openLine} openQueue={openQueue} />)}</ul>
+      <ul data-testid="decisions-list">{rows.map((r) => <DecisionRow key={r.id} row={r} openLine={openLine} openQueue={openQueue} onOpenFile={onOpenFile} onFilter={setQ} />)}</ul>
 
       {data?.nextCursor ? (
         <button type="button" className={`mt-2 ${pill(false)} border border-border`} disabled={loading} onClick={() => load(data.nextCursor)} data-testid="decisions-more">

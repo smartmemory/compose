@@ -9,6 +9,7 @@ import { workingNow, waitingNow, landedSince, agoWords, sinceWords } from './now
 import { smPanel } from '../../cockpit/fleetLogic.js';
 import { ownerAsks } from '../../cockpit/notify/notifyLogic.js';
 import { useNotifyState } from '../../cockpit/notify/useNotifyState.js';
+import EntityLink from '../../shared/EntityLink.jsx';
 
 const UNAVAILABLE = 'source unavailable';
 const sec = 'text-[11px] font-semibold uppercase tracking-wide text-muted-foreground m-0 mb-1';
@@ -16,6 +17,16 @@ const rowCls = 'flex flex-col gap-0.5 py-1.5 border-b border-border last:border-
 const sub = 'text-[12px] text-muted-foreground';
 
 const unitText = (r) => [r.unit, r.title].filter(Boolean).join(' · ') || 'no unit named';
+// COMP-UI-LINKS-2: the unit id opens the unit in the Cadence room; a row with no unit stays text.
+function UnitText({ r }) {
+  if (!r.unit) return <>{unitText(r)}</>;
+  return (
+    <>
+      <EntityLink kind="unit" id={r.unit} className="text-[13px] font-sans" />
+      {r.title ? ` · ${r.title}` : ''}
+    </>
+  );
+}
 
 function Unavailable({ why = UNAVAILABLE, loading = false }) {
   if (loading) return <p className={`m-0 ${sub}`} role="status" data-testid="now-loading">Loading…</p>;
@@ -29,7 +40,7 @@ function Working({ rows, now, loading }) {
     <ul className="m-0 p-0 list-none" data-testid="now-rows">
       {rows.map((r, i) => (
         <li key={`${r.kind}-${r.lane}-${r.unit}-${i}`} className={rowCls} data-testid="now-row">
-          <span><b>{r.lane}</b>: {unitText(r)}</span>
+          <span><b>{r.lane}</b>: <UnitText r={r} /></span>
           <span className={sub}>{r.kind === 'job' ? 'job' : r.kind === 'compose' ? 'agent' : 'session'} · {r.since === null ? 'start not recorded' : `running ${agoWords(r.since, now)}`}</span>
         </li>
       ))}
@@ -49,7 +60,7 @@ function Waiting({ lists, now }) {
             <ul className="m-0 p-0 list-none">
               {rows.map((r) => (
                 <li key={r.unit} className={rowCls} data-testid="now-row">
-                  <span><b>{r.lane ?? '?'}</b>: {unitText(r)}</span>
+                  <span><b>{r.lane ?? '?'}</b>: <UnitText r={r} /></span>
                   <span className={sub}>{r.since === null ? 'time not recorded' : `waiting ${agoWords(r.since, now)}`}</span>
                 </li>
               ))}
@@ -71,7 +82,7 @@ function Landed({ data, now, sinceMs, loading }) {
           <ul className="m-0 p-0 list-none">
             {data.rows.map((r) => (
               <li key={r.unit} className={rowCls} data-testid="now-row">
-                <span><b>{r.lane ?? '?'}</b>: {unitText(r)}</span>
+                <span><b>{r.lane ?? '?'}</b>: <UnitText r={r} /></span>
                 <span className={sub}>{r.state} · landed {sinceWords(r.landedAt, now)}</span>
               </li>
             ))}
@@ -84,7 +95,7 @@ function Landed({ data, now, sinceMs, loading }) {
           <ul className="m-0 p-0 list-none">
             {data.also.map((m, i) => (
               <li key={`${m.kind}-${m.at}-${i}`} className={rowCls} data-testid="now-also-row">
-                <span><b>{m.kind === 'decide' ? 'Decision' : m.kind === 'deployFail' ? 'Deploy failed' : 'Deployed'}</b> · {m.lane}: {m.text || unitText(m)}</span>
+                <span><b>{m.kind === 'decide' ? 'Decision' : m.kind === 'deployFail' ? 'Deploy failed' : 'Deployed'}</b> · {m.lane}: {m.text || <UnitText r={m} />}</span>
                 <span className={sub}>{sinceWords(m.at, now)}</span>
               </li>
             ))}

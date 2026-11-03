@@ -10,7 +10,7 @@ function formatElapsed(ms) {
   return `${hrs}h ${totalMin % 60}m`;
 }
 
-export default function AgentCard({ agent, toolCount, errorCount, currentTool, currentCategory, onStop }) {
+export default function AgentCard({ agent, toolCount, errorCount, currentTool, currentCategory, onStop, onOpen }) {
   const isRunning = agent.status === 'running';
   const isKilled = agent.status === 'killed';
   const isFailed = agent.status === 'failed' || agent.status === 'error' || isKilled;
@@ -38,9 +38,17 @@ export default function AgentCard({ agent, toolCount, errorCount, currentTool, c
     <div className="px-3 py-2 rounded border border-border bg-muted/20">
       {/* Line 1: agent type (left), status + dot + elapsed (right) */}
       <div className="flex items-center justify-between gap-2">
-        <span className="text-[11px] text-foreground font-medium truncate">
-          {agentLabel}
-        </span>
+        {/* COMP-UI-LINKS-2: `onOpen` makes the label a link (Dashboard hands it the Sessions view); no handler, plain text */}
+        {onOpen ? (
+          <button type="button" onClick={onOpen} title="Open in Sessions" data-testid="agent-card-open"
+            className="text-[11px] text-foreground font-medium truncate text-left hover:underline focus-visible:underline focus-visible:outline focus-visible:outline-1 focus-visible:outline-blue-400 cursor-pointer">
+            {agentLabel}
+          </button>
+        ) : (
+          <span className="text-[11px] text-foreground font-medium truncate">
+            {agentLabel}
+          </span>
+        )}
         <span className="flex items-center gap-1.5 shrink-0">
           <span
             className={cn(

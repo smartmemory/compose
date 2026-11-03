@@ -1236,6 +1236,9 @@ function AppInner() {
       case 'feature': return items.some(i =>
         i.featureCode === id || i.feature_code === id || i.lifecycle?.featureCode === id);
       case 'view': return true;
+      // COMP-UI-LINKS-2: a Cadence unit, a Fleet session and a repo doc path are resolved by the room they open (an unknown
+      // one lands on an empty selection, not a crash), so only an empty id is unresolvable.
+      case 'unit': case 'session': case 'file': case 'step': return typeof id === 'string' && id.length > 0;
       default: return false;
     }
   }, [gates, items]);

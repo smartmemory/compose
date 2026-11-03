@@ -8,6 +8,8 @@
 import { groupOf, tagOf, stripTag } from './notifyLogic.js';
 
 /** Display order; `folded` is the drawer's default (decided and FYI start closed). */
+import { entityParts } from '../../../lib/entityParts.js';
+
 export const GROUPS = [
   { id: 'security', label: 'Security', folded: false, oldestFirst: true },
   { id: 'asks', label: 'Asks', folded: false, oldestFirst: true },
@@ -76,4 +78,12 @@ export function linkParts(text) {
   }
   if (last < text.length) out.push({ text: text.slice(last) });
   return out;
+}
+
+/**
+ * COMP-UI-LINKS-2: `linkParts` with the plain-text parts split once more into entity parts: `{entity: 'feature'|'file', text}`.
+ * URL parts and the text around them are unchanged. Whether an entity part has a target is the renderer's call.
+ */
+export function entityLinkParts(text) {
+  return linkParts(text).flatMap((p) => (p.href ? [p] : entityParts(p.text).map((e) => (e.kind === 'text' ? { text: e.value } : { entity: e.kind, text: e.value }))));
 }

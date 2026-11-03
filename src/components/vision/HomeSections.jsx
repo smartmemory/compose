@@ -8,6 +8,7 @@ import RelativeTime from './shared/RelativeTime.jsx';
 import PhaseTimeline from './PhaseTimeline.jsx';
 import HomeFleetGlance from './HomeFleetGlance.jsx';
 import { needsYouCount } from './homeSectionsState.js';
+import { useNavigation } from '@/lib/navigation.jsx';
 
 /**
  * HomeSections — the project-wide sections of Home (COMP-AUDIT-18, design §4.2).
@@ -29,16 +30,18 @@ function Section({ id, title, count, children }) {
   );
 }
 
-function Row({ icon, children, onClick, testId, trailing }) {
+// COMP-UI-LINKS-2: a Row with no `onClick` is plain text, and `title` says why (a row that looks dead explains itself).
+function Row({ icon, children, onClick, testId, trailing, title }) {
   const Tag = onClick ? 'button' : 'div';
   return (
     <Tag
       type={onClick ? 'button' : undefined}
       onClick={onClick}
       data-testid={testId}
+      title={title}
       className={cn(
         'flex w-full items-center gap-2 px-2 py-1.5 rounded text-left text-[11px] text-foreground',
-        onClick && 'hover:bg-muted/50 cursor-pointer transition-colors',
+        onClick && 'hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:outline focus-visible:outline-1 focus-visible:outline-blue-400 cursor-pointer transition-colors',
       )}
     >
       {icon}
@@ -57,6 +60,10 @@ export default function HomeSections({
   onSelect, onJumpToGate, onStopAgent, onNavigate,
 }) {
   const { needsYou, running, inProgress, recentlyChanged, recentBuilds } = sections;
+  const nav = useNavigation();
+  const noGate = 'No gate view is available here';
+  // A build's feature code opens its feature when Compose holds it, else the Past builds list it came from.
+  const openBuild = (code) => (nav?.canNavigate?.('feature', code) && nav.openFeature ? () => nav.openFeature(code) : (onNavigate ? () => onNavigate('build-history') : undefined));
   const needs = needsYouCount(needsYou);
 
   return (
@@ -69,7 +76,8 @@ export default function HomeSections({
                 key={`gate-${gate.id}`}
                 testId="home-gate-row"
                 icon={<Shield className="w-3 h-3 shrink-0 text-amber-400" />}
-                onClick={() => (onJumpToGate || (() => {}))(gate.id)}
+                onClick={onJumpToGate ? () => onJumpToGate(gate.id) : undefined}
+                title={onJumpToGate ? undefined : noGate}
                 trailing={<span className="text-[10px] text-muted-foreground shrink-0">{gateLabel(gate)}</span>}
               >
                 {item?.title ?? 'Unknown'}
@@ -89,6 +97,9 @@ export default function HomeSections({
               <Row
                 key={`e-${e.timestamp}-${i}`}
                 icon={<AlertTriangle className="w-3 h-3 shrink-0 text-destructive" />}
+                testId="home-error-row"
+                onClick={onNavigate ? () => onNavigate('sessions') : undefined}
+                title={onNavigate ? 'Open Sessions' : 'No Sessions view is available here'}
                 trailing={<span className="text-[10px] text-muted-foreground shrink-0">agent error</span>}
               >
                 {e.message || e.errorType || 'Agent error'}
@@ -104,6 +115,8 @@ export default function HomeSections({
             {running.build && (
               <Row
                 testId="home-build-row"
+                onClick={onNavigate ? () => onNavigate('pipeline') : undefined}
+                title={onNavigate ? 'Open the Pipeline' : 'No Pipeline view is available here'}
                 icon={<Zap className="w-3 h-3 shrink-0 text-blue-400" />}
                 trailing={(
                   <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">
@@ -131,7 +144,17 @@ export default function HomeSections({
                   </Button>
                 )}
               >
-                {a.agentType || 'agent'}
+                {onNavigate ? (
+                  <button
+                    type="button"
+                    onClick={() => onNavigate('sessions')}
+                    title="Open Sessions"
+                    data-testid="home-agent-link"
+                    className="hover:underline focus-visible:underline focus-visible:outline focus-visible:outline-1 focus-visible:outline-blue-400 text-left"
+                  >
+                    {a.agentType || 'agent'}
+                  </button>
+                ) : (a.agentType || 'agent')}
               </Row>
             ))}
           </div>
@@ -194,6 +217,8 @@ export default function HomeSections({
               <Row
                 key={`${b.featureCode}-${b.completedAt || i}`}
                 testId="home-build-history-row"
+                onClick={openBuild(b.featureCode)}
+                title={openBuild(b.featureCode) ? undefined : 'No Past builds view is available here'}
                 icon={<CircleDot className={cn('w-3 h-3 shrink-0', b.status === 'complete' ? 'text-emerald-400' : 'text-destructive')} />}
                 trailing={<span className="text-[10px] text-muted-foreground shrink-0">{b.status}</span>}
               >

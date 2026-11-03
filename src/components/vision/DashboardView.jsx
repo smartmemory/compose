@@ -8,6 +8,7 @@ import { LIFECYCLE_PHASE_LABELS, LIFECYCLE_PHASE_ARTIFACTS, GATE_STEP_LABELS } f
 import ArtifactDiff from '../shared/ArtifactDiff.jsx';
 import AgentCard from '../shared/AgentCard.jsx';
 import EntityLink from '../shared/EntityLink.jsx';
+import { useNavigation } from '@/lib/navigation.jsx';
 import EventTimeline from './EventTimeline.jsx';
 import PhaseTimeline, { PHASES } from './PhaseTimeline.jsx';
 import HomeSections from './HomeSections.jsx';
@@ -28,6 +29,8 @@ function relativeTime(isoString) {
 }
 
 function ActiveAgents({ spawnedAgents, activeBuild, sessionState, agentActivity }) {
+  const nav = useNavigation();
+  const openSessions = typeof nav?.openView === 'function' ? () => nav.openView('sessions') : undefined;
   const running = (spawnedAgents || []).filter(a => a.status === 'running');
   const recent = (spawnedAgents || [])
     .filter(a => a.status !== 'running')
@@ -62,6 +65,7 @@ function ActiveAgents({ spawnedAgents, activeBuild, sessionState, agentActivity 
             <AgentCard
               key={a.agentId || i}
               agent={a}
+              onOpen={openSessions}
               toolCount={sessionState?.toolCount || 0}
               errorCount={sessionState?.errorCount || 0}
               currentTool={agentActivity?.tool}
@@ -72,6 +76,7 @@ function ActiveAgents({ spawnedAgents, activeBuild, sessionState, agentActivity 
             <AgentCard
               key={a.agentId || `r-${i}`}
               agent={a}
+              onOpen={openSessions}
             />
           ))}
         </div>
@@ -84,9 +89,14 @@ function ActiveAgents({ spawnedAgents, activeBuild, sessionState, agentActivity 
           {artifacts.map(art => (
             <div key={art.name} className="flex items-center gap-2">
               <FileText className={cn('w-3 h-3', art.done ? 'text-emerald-400' : 'text-muted-foreground/40')} />
-              <span className={cn('text-[11px] font-mono', art.done ? 'text-foreground' : 'text-muted-foreground/50')}>
-                {art.name}
-              </span>
+              {/* COMP-UI-LINKS-2: a written artifact opens in the wiki; one not written yet (or no feature) says why */}
+              {art.done && activeBuild?.featureCode ? (
+                <EntityLink kind="file" id={`docs/features/${activeBuild.featureCode}/${art.name}`} label={art.name} className="text-[11px]" />
+              ) : (
+                <span className="text-[11px] font-mono text-muted-foreground/50" title={art.done ? 'No feature code on this build, so no path to open' : 'Not written yet'}>
+                  {art.name}
+                </span>
+              )}
             </div>
           ))}
         </div>

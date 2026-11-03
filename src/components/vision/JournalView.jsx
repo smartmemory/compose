@@ -2,8 +2,8 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { BookOpen, Plus, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils.js';
 import EmptyState from './shared/EmptyState.jsx';
-import MarkdownViewer from './shared/MarkdownViewer.jsx';
-import EntityLink from '../shared/EntityLink.jsx';
+import LinkedMarkdown from './shared/LinkedMarkdown.jsx';
+import EntityLink, { LinkedText } from '../shared/EntityLink.jsx';
 import { wsFetch } from '../../lib/wsFetch.js';
 import { withComposeToken } from '../../lib/compose-api.js';
 import { notify } from '../cockpit/NotificationBar.jsx';
@@ -268,20 +268,20 @@ function JournalEntry({ entry }) {
         )}
       </div>
       {entry.summary && (
-        <div className="text-xs text-foreground mt-0.5 font-medium">{entry.summary}</div>
+        <div className="text-xs text-foreground mt-0.5 font-medium"><LinkedText text={entry.summary} /></div>
       )}
       <div className="mt-1.5 space-y-1.5">
         {SECTION_META.map(([key, label]) => (
           entry.sections?.[key] ? (
             <div key={key}>
               <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
-              <MarkdownViewer content={entry.sections[key]} className="prose prose-invert prose-sm max-w-none text-xs" />
+              <LinkedMarkdown content={entry.sections[key]} className="prose prose-invert prose-sm max-w-none text-xs" />
             </div>
           ) : null
         ))}
       </div>
       {entry.closing_line && (
-        <div className="mt-1.5 text-[11px] italic text-muted-foreground">{entry.closing_line}</div>
+        <div className="mt-1.5 text-[11px] italic text-muted-foreground"><LinkedText text={entry.closing_line} /></div>
       )}
     </div>
   );
@@ -295,11 +295,11 @@ function ChangelogEntry({ entry }) {
         {entry.code && <EntityLink kind="feature" id={entry.code} />}
       </div>
       {entry.summary && (
-        <div className="text-xs text-foreground mt-0.5 font-medium">{entry.summary}</div>
+        <div className="text-xs text-foreground mt-0.5 font-medium"><LinkedText text={entry.summary} /></div>
       )}
       {entry.body && (
         <div className="mt-1">
-          <MarkdownViewer content={entry.body} className="prose prose-invert prose-sm max-w-none text-xs" />
+          <LinkedMarkdown content={entry.body} className="prose prose-invert prose-sm max-w-none text-xs" />
         </div>
       )}
     </div>

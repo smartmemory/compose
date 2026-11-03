@@ -11,7 +11,10 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import { useFleet } from '../../../lib/fleetPoller.js';
 import { fmtAge, smPanel } from '../fleetLogic.js';
-import { groupInbox, linkParts, reverseText } from './inboxLogic.js';
+import { groupInbox, entityLinkParts, reverseText } from './inboxLogic.js';
+import EntityLink from '../../shared/EntityLink.jsx';
+import { useNavigation } from '@/lib/navigation.jsx';
+import { canOpenEntity } from '../../shared/EntityLink.jsx';
 import NotifyActions, { useRowKeys } from './NotifyActions.jsx';
 import { useNotifyState } from './useNotifyState.js';
 import { isCleared, securityAck, answeredOf, answerHolds, answeredFold, fnv1a, keyOf, hhmm } from './notifyState.js';
@@ -21,12 +24,25 @@ const asOf = (fleet) => {
   return Number.isFinite(t) ? new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : null;
 };
 
+// COMP-UI-LINKS-2: a feature code opens its feature when Compose holds it, else (the queue is Cadence-fed) the Cadence unit of that
+// name; a repo path opens in the wiki. An entity with no way to open stays plain text.
+function entityTarget(nav, p) {
+  if (p.entity === 'file') return canOpenEntity(nav, 'file', p.text) ? 'file' : null;
+  if (canOpenEntity(nav, 'feature', p.text)) return 'feature';
+  return canOpenEntity(nav, 'unit', p.text) ? 'unit' : null;
+}
+
 function FullText({ text, tone }) {
+  const nav = useNavigation();
   return (
     <div data-testid="inbox-full" className="mt-1 whitespace-pre-wrap break-words" style={{ color: tone ? 'hsl(var(--destructive))' : undefined }}>
-      {linkParts(text).map((p, i) => (p.href
-        ? <a key={i} href={p.href} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">{p.text}</a>
-        : <React.Fragment key={i}>{p.text}</React.Fragment>))}
+      {entityLinkParts(text).map((p, i) => {
+        if (p.href) return <a key={i} href={p.href} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">{p.text}</a>;
+        const kind = p.entity ? entityTarget(nav, p) : null;
+        return kind
+          ? <EntityLink key={i} kind={kind} id={p.text} className="text-[inherit]" />
+          : <React.Fragment key={i}>{p.text}</React.Fragment>;
+      })}
     </div>
   );
 }

@@ -163,19 +163,18 @@ function SessionRow({ session, items, onSelectItem }) {
             {workType}
           </span>
         )}
-        {featureCode && (
+        {/* COMP-UI-LINKS-2: a feature code with no roadmap item is text that says why, never a dead button */}
+        {featureCode && (featureItem ? (
           <button
-            onClick={() => featureItem && onSelectItem?.(featureItem.id)}
-            className={cn(
-              'text-[10px] font-mono',
-              featureItem
-                ? 'text-blue-400 hover:underline cursor-pointer'
-                : 'text-muted-foreground cursor-default'
-            )}
+            type="button"
+            onClick={() => onSelectItem?.(featureItem.id)}
+            className="text-[10px] font-mono text-blue-400 hover:underline focus-visible:underline focus-visible:outline focus-visible:outline-1 focus-visible:outline-blue-400 cursor-pointer"
           >
             {featureCode}
           </button>
-        )}
+        ) : (
+          <span className="text-[10px] font-mono text-muted-foreground" title="No roadmap item for this feature code">{featureCode}</span>
+        ))}
         <RelativeTime date={startedAt} className="ml-auto text-[10px] shrink-0" />
       </div>
 

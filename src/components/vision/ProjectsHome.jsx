@@ -112,7 +112,8 @@ export default function ProjectsHome({ focus = null }) {
                 {p.modules.map((m) => {
                   const note = moduleNote(m);
                   return (
-                    <li key={m.name} className="flex items-center gap-2 text-[11px]" data-testid={`projects-home-module-${p.name}-${m.name}`}>
+                    <li key={m.name} className="flex items-center gap-2 text-[11px]" data-testid={`projects-home-module-${p.name}-${m.name}`}
+                        title="No target: a module opens only by binding the cockpit to it (the Projects selector), which this card never does">
                       <span>▸ {m.name}</span>
                       {m.outsideRoot ? <span className="text-[10px]" style={MUTED}>outside root</span> : null}
                       {note ? <span className="text-[10px]" style={m.error ? WARN : MUTED}>{note}</span> : null}

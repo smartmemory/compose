@@ -12,7 +12,7 @@ import CompletionBadge from './shared/CompletionBadge.jsx';
 import BranchComparePanel from './BranchComparePanel.jsx';
 import DriftRibbon from './DriftRibbon.jsx';
 import StartBuildPopover from './StartBuildPopover.jsx';
-import EntityLink from '../shared/EntityLink.jsx';
+import EntityLink, { LinkedText } from '../shared/EntityLink.jsx';
 import { useVisionStore } from './useVisionStore.js';
 import { wsFetch } from '../../lib/wsFetch.js';
 import { notify } from '../cockpit/NotificationBar.jsx';
@@ -198,6 +198,8 @@ function SessionHistory({ featureCode }) {
     <div>
       <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1.5">
         Sessions ({sessions.length})
+        {/* COMP-UI-LINKS-2 */}
+        <EntityLink kind="view" id="sessions" label="Open in Sessions" className="ml-2 normal-case tracking-normal text-[10px]" />
       </div>
       <div className="space-y-2">
         {sessions.map(s => (
@@ -640,7 +642,7 @@ export default function ItemDetailPanel({ item, items, connections, gates, onUpd
                       <p className="text-[10px] text-muted-foreground mb-0.5">History</p>
                       <div className="flex flex-wrap gap-x-1 gap-y-0.5">
                         {lc.phaseHistory.map((entry, i) => (
-                          <span key={i} className={cn(
+                          <span key={i} title="No target: a phase has no page of its own (the Event Timeline lists its events)" className={cn(
                             'text-[10px]',
                             entry.phase === lc.currentPhase ? 'text-foreground font-medium' : 'text-muted-foreground',
                           )}>
@@ -727,7 +729,7 @@ export default function ItemDetailPanel({ item, items, connections, gates, onUpd
                 {item.evidence.stratumViolations.map((msg, i) => (
                   <div key={i} className="flex items-start gap-2 px-2 py-1 rounded bg-destructive/10">
                     <div className="w-1.5 h-1.5 rounded-full shrink-0 mt-1" style={{ background: 'hsl(var(--destructive))' }} />
-                    <span className="text-[10px] text-destructive leading-relaxed">{msg}</span>
+                    <span className="text-[10px] text-destructive leading-relaxed"><LinkedText text={msg} /></span>
                   </div>
                 ))}
               </div>
@@ -747,7 +749,12 @@ export default function ItemDetailPanel({ item, items, connections, gates, onUpd
                 {(item.evidence.stratumTrace.trace || []).map((step) => (
                   <div key={step.step_id} className="flex items-center gap-2 px-2 py-1 rounded bg-muted/30">
                     <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: 'hsl(var(--success))' }} />
-                    <span className="text-[10px] font-mono text-foreground truncate flex-1">{step.step_id}</span>
+                    {/* COMP-UI-LINKS-2: the step opens in the Stratum room when the item knows its flow (run id); else text with the reason */}
+                    <span className="text-[10px] font-mono text-foreground truncate flex-1">
+                      {item.stratumFlowId
+                        ? <EntityLink kind="step" id={`${item.stratumFlowId}#${step.step_id}`} label={step.step_id} />
+                        : <span title="No target: this item records no Stratum flow id">{step.step_id}</span>}
+                    </span>
                     {step.attempts > 1 && (
                       <span className="text-[10px] text-amber-400 shrink-0">{step.attempts}x</span>
                     )}

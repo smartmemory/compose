@@ -10,8 +10,10 @@
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { wsFetch } from '../../lib/wsFetch.js';
+import EntityLink from '../shared/EntityLink.jsx';
 
-function RouteList({ testid, label, routes, empty }) {
+// COMP-UI-LINKS-2: `files` rows are repo paths and open in the wiki; route rows are app URLs with no page in the cockpit.
+function RouteList({ testid, label, routes, empty, files = false }) {
   return (
     <div className="mt-3 first:mt-0" data-testid={testid}>
       <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">
@@ -21,7 +23,11 @@ function RouteList({ testid, label, routes, empty }) {
         <div className="text-[11px] text-muted-foreground italic">{empty}</div>
       ) : (
         <ul className="text-[12px] font-mono space-y-0.5">
-          {routes.map(r => <li key={r}>{r}</li>)}
+          {routes.map(r => (
+            <li key={r} title={files ? undefined : 'No target: an app route has no page in the cockpit'}>
+              {files ? <EntityLink kind="file" id={r} className="text-[12px]" /> : r}
+            </li>
+          ))}
         </ul>
       )}
     </div>
@@ -149,7 +155,7 @@ export default function QaScopeView({ featureCode }) {
           </div>
           <RouteList testid="qa-scope-affected" label="Affected routes" routes={data.affected || []} empty="(none — no code files mapped to known routes)" />
           <RouteList testid="qa-scope-adjacent" label="Adjacent routes" routes={data.adjacent || []} empty="(none)" />
-          <RouteList testid="qa-scope-unmapped" label="Unmapped files" routes={data.unmappedFiles || []} empty="(none)" />
+          <RouteList testid="qa-scope-unmapped" label="Unmapped files" files routes={data.unmappedFiles || []} empty="(none)" />
         </>
       )}
     </div>

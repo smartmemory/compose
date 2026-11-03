@@ -17,6 +17,12 @@ import { cn } from '@/lib/utils.js';
 import { Badge } from '@/components/ui/badge.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { useIdeaboxStore } from './useIdeaboxStore.js';
+import EntityLink, { LinkedText } from '../shared/EntityLink.jsx';
+
+// COMP-UI-LINKS-2: the feature a promoted idea became, from its status (`PROMOTED (→ FEAT-X)`); null for any other status.
+export const promotedFeature = (status) => /^PROMOTED\s*\(\s*(?:→|->)?\s*([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+)\s*\)/.exec(status || '')?.[1] ?? null;
+const filterTag = (tag) => useIdeaboxStore.getState().updateFilters({ tag });
+const TAG_BTN = 'cursor-pointer hover:underline focus-visible:underline focus-visible:outline focus-visible:outline-1 focus-visible:outline-accent';
 import IdeaboxTriagePanel from './IdeaboxTriagePanel.jsx';
 import IdeaboxPromoteDialog from './IdeaboxPromoteDialog.jsx';
 import IdeaboxMatrixView from './IdeaboxMatrixView.jsx';
@@ -104,6 +110,7 @@ function IdeaCard({ idea, selected, onClick, onDragStart, onDragEnd }) {
           {idea.id}
         </Badge>
         <StatusDot status={idea.status} />
+        {promotedFeature(idea.status) && <EntityLink kind="feature" id={promotedFeature(idea.status)} className="text-[9px]" />}
         <div className="flex-1" />
         <PriorityBadge priority={idea.priority} />
       </div>
@@ -117,9 +124,11 @@ function IdeaCard({ idea, selected, onClick, onDragStart, onDragEnd }) {
       {idea.tags?.length > 0 && (
         <div className="flex flex-wrap gap-1 mb-1">
           {idea.tags.slice(0, 4).map(tag => (
-            <span key={tag} className="text-[9px] text-muted-foreground/70 font-mono">
+            <button key={tag} type="button" title={`Show ideas tagged ${tag}`} data-testid="idea-tag"
+              onClick={(e) => { e.stopPropagation(); filterTag(tag); }}
+              className={cn('text-[9px] text-muted-foreground/70 font-mono', TAG_BTN)}>
               {tag}
-            </span>
+            </button>
           ))}
           {idea.tags.length > 4 && (
             <span className="text-[9px] text-muted-foreground/50">+{idea.tags.length - 4}</span>
@@ -130,7 +139,7 @@ function IdeaCard({ idea, selected, onClick, onDragStart, onDragEnd }) {
       {/* Source */}
       {idea.source && (
         <p className="text-[10px] text-muted-foreground/60 truncate">
-          {idea.source}
+          <LinkedText text={idea.source} />
         </p>
       )}
     </div>
@@ -170,7 +179,11 @@ function IdeaDetailPanel({ idea, onClose, onPromote, onKill, onSetPriority, onAd
           {idea.id}
         </Badge>
         <StatusDot status={idea.status} />
-        <span className="text-[11px] text-muted-foreground flex-1 truncate">{idea.status}</span>
+        <span className="text-[11px] text-muted-foreground flex-1 truncate" data-testid="idea-status">
+          {promotedFeature(idea.status)
+            ? <>PROMOTED → <EntityLink kind="feature" id={promotedFeature(idea.status)} className="text-[11px]" /></>
+            : idea.status}
+        </span>
         <button
           onClick={onClose}
           className="text-muted-foreground/60 hover:text-foreground text-xs px-1"
@@ -196,14 +209,16 @@ function IdeaDetailPanel({ idea, onClose, onPromote, onKill, onSetPriority, onAd
         {idea.source && (
           <div>
             <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Source</p>
-            <p className="text-[11px] text-muted-foreground">{idea.source}</p>
+            <p className="text-[11px] text-muted-foreground"><LinkedText text={idea.source} /></p>
           </div>
         )}
 
         {idea.cluster && (
           <div>
             <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Cluster</p>
-            <p className="text-[11px] text-muted-foreground">{idea.cluster}</p>
+            <button type="button" title={`Show ideas in ${idea.cluster}`} data-testid="idea-cluster"
+              onClick={() => useIdeaboxStore.getState().updateFilters({ search: idea.cluster })}
+              className={cn('text-[11px] text-muted-foreground', TAG_BTN)}>{idea.cluster}</button>
           </div>
         )}
 
@@ -212,9 +227,10 @@ function IdeaDetailPanel({ idea, onClose, onPromote, onKill, onSetPriority, onAd
             <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Tags</p>
             <div className="flex flex-wrap gap-1">
               {idea.tags.map(tag => (
-                <span key={tag} className="text-[10px] bg-muted/50 px-1.5 py-0.5 rounded font-mono text-muted-foreground">
+                <button key={tag} type="button" title={`Show ideas tagged ${tag}`} data-testid="idea-detail-tag" onClick={() => filterTag(tag)}
+                  className={cn('text-[10px] bg-muted/50 px-1.5 py-0.5 rounded font-mono text-muted-foreground', TAG_BTN)}>
                   {tag}
-                </span>
+                </button>
               ))}
             </div>
           </div>
@@ -249,7 +265,7 @@ function IdeaDetailPanel({ idea, onClose, onPromote, onKill, onSetPriority, onAd
                     </span>
                     <span className="text-[9px] text-muted-foreground/50">{entry.date}</span>
                   </div>
-                  <p className="text-[10px] text-muted-foreground leading-relaxed">{entry.text}</p>
+                  <p className="text-[10px] text-muted-foreground leading-relaxed"><LinkedText text={entry.text} /></p>
                 </div>
               ))}
             </div>
@@ -358,7 +374,7 @@ function IdeaDetailPanel({ idea, onClose, onPromote, onKill, onSetPriority, onAd
 // GraveyardSection
 // ---------------------------------------------------------------------------
 
-function GraveyardSection({ killed, onResurrect }) {
+function GraveyardSection({ killed, onResurrect, onSelect }) {
   const [open, setOpen] = useState(false);
 
   if (killed.length === 0) return null;
@@ -386,9 +402,10 @@ function GraveyardSection({ killed, onResurrect }) {
                     <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 font-mono shrink-0 opacity-60">
                       {idea.id}
                     </Badge>
-                    <p className="text-[11px] text-muted-foreground/70 line-clamp-1 font-medium">
+                    <button type="button" onClick={() => onSelect?.(idea.id)} title="Open this idea" data-testid="killed-idea-open"
+                      className={cn('text-[11px] text-muted-foreground/70 line-clamp-1 font-medium text-left', TAG_BTN)}>
                       {idea.title}
-                    </p>
+                    </button>
                   </div>
                   {idea.killedDate && (
                     <p className="text-[10px] text-muted-foreground/50">
@@ -468,7 +485,7 @@ export default function IdeaboxView() {
       if (filters.priority && idea.priority !== filters.priority) return false;
       if (filters.search) {
         const q = filters.search.toLowerCase();
-        const haystack = `${idea.title} ${idea.description} ${idea.id} ${(idea.tags || []).join(' ')}`.toLowerCase();
+        const haystack = `${idea.title} ${idea.description} ${idea.id} ${(idea.tags || []).join(' ')} ${idea.cluster || ''}`.toLowerCase();
         if (!haystack.includes(q)) return false;
       }
       return true;
@@ -760,7 +777,7 @@ export default function IdeaboxView() {
 
           {/* Graveyard — cards mode only */}
           {viewMode === 'cards' && (
-            <GraveyardSection killed={killed} onResurrect={resurrectIdea} />
+            <GraveyardSection killed={killed} onResurrect={resurrectIdea} onSelect={setSelectedIdea} />
           )}
         </div>
       </div>

@@ -5,6 +5,7 @@
 import React from 'react';
 import { cn } from '@/lib/utils.js';
 import { SEVERITY_COLORS, TIMELINE_CATEGORY_COLORS } from './constants.js';
+import { useNavigation } from '@/lib/navigation.jsx';
 
 const CATEGORY_ICONS = {
   phase: '\u2192',     // →
@@ -30,9 +31,22 @@ export default function TimelineEvent({ event, onSelectItem, style }) {
   const icon = CATEGORY_ICONS[event.category] || '\u25CF';
   const iconColor = TIMELINE_CATEGORY_COLORS[event.category] || 'text-zinc-400';
   const severityColor = SEVERITY_COLORS[event.severity] || 'text-zinc-400';
+  // COMP-UI-LINKS-2: a gate event opens its gate (meta.gateId), an event that names an item opens that item (meta.itemId, through
+  // `onSelectItem`). A session or error event carries neither, so it is text and `title` says so.
+  const nav = useNavigation();
+  const gateId = event.meta?.gateId;
+  const itemId = event.meta?.itemId;
+  const canGate = gateId && typeof nav?.openGate === 'function' && (nav.canNavigate?.('gate', gateId) ?? true);
+  const open = canGate ? () => nav.openGate(gateId) : (itemId && onSelectItem ? () => onSelectItem(itemId) : null);
+  const Tag = open ? 'button' : 'div';
   return (
-    <div
-      className="flex items-start gap-2 px-2 py-1.5 rounded"
+    <Tag
+      type={open ? 'button' : undefined}
+      onClick={open ?? undefined}
+      title={open ? (canGate ? 'Open this gate' : 'Open this item') : 'No target: this event names no gate or item'}
+      data-testid="timeline-event"
+      className={cn('flex w-full items-start gap-2 px-2 py-1.5 rounded text-left',
+        open && 'cursor-pointer hover:bg-muted/40 focus-visible:bg-muted/40 focus-visible:outline focus-visible:outline-1 focus-visible:outline-blue-400')}
       style={style}
     >
       <span className={cn('text-[11px] shrink-0 w-4 text-center leading-4', iconColor)}>
@@ -51,6 +65,6 @@ export default function TimelineEvent({ event, onSelectItem, style }) {
       <span className="text-[10px] text-muted-foreground/50 tabular-nums shrink-0 leading-4">
         {relativeTime(event.timestamp)}
       </span>
-    </div>
+    </Tag>
   );
 }

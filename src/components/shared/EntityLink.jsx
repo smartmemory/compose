@@ -2,10 +2,12 @@
  * EntityLink — COMP-COCKPIT-8 shared inline link for cross-view entity jumps.
  *
  * Props:
- *   kind      {string}  one of 'item' | 'feature' | 'gate' | 'view'
+ *   kind      {string}  one of 'item' | 'feature' | 'gate' | 'view', or (COMP-UI-LINKS-2) 'unit' (Cadence room), 'session'
+ *                       (Fleet room, by session name), 'file' (a repo doc path, opened in the wiki)
  *   id        {string}  entity id passed to the navigation callback
  *   label     {node}    visible text (defaults to id)
  *   className {string}  extra classes merged onto the element
+ *   title     {string}  tooltip; when the link degrades to text it carries the reason (`noTarget` or a generic one)
  *
  * Navigation callbacks come from NavigationContext (provided by App.jsx).
  * When no provider is mounted, the callback for `kind` is missing, or the
@@ -18,15 +20,40 @@
 import React from 'react';
 import { cn } from '@/lib/utils.js';
 import { useNavigation } from '@/lib/navigation.jsx';
+import { entityParts } from '@/lib/entityParts.js';
 
 const KIND_TO_CALLBACK = {
   item: 'openItem',
   feature: 'openFeature',
   gate: 'openGate',
   view: 'openView',
+  unit: 'openRoom',
+  step: 'openRoom',
+  session: 'openRoom',
+  file: 'openFile',
 };
 
-export default function EntityLink({ kind, id, label, className }) {
+// The call each kind makes. Room kinds file a focus (roomFocus.js) the target room applies when it opens.
+const CALL = {
+  unit: (h, id) => h('cadence', { kind: 'unit', id }),
+  // a Stratum step: id is `<run id>#<step id>` (a flow's run id is its flow id)
+  step: (h, id) => h('stratum', { kind: 'step', runId: id.slice(0, id.indexOf('#')), stepId: id.slice(id.indexOf('#') + 1) }),
+  session: (h, id) => h('fleet', { kind: 'session', name: id }),
+};
+
+/** Whether `nav` can open `kind`/`id` right now: the callback exists and the provider does not call the target stale. */
+export function canOpenEntity(nav, kind, id) {
+  const cb = nav?.[KIND_TO_CALLBACK[kind]];
+  if (typeof cb !== 'function' || !id) return false;
+  return typeof nav.canNavigate === 'function' ? nav.canNavigate(kind, id) : true;
+}
+
+/** Opens `kind`/`id` through `nav` (the same call EntityLink makes). Best-effort: a throwing callback is swallowed. */
+export function openEntity(nav, kind, id) {
+  try { (CALL[kind] ?? ((h, i) => h(i)))(nav[KIND_TO_CALLBACK[kind]], id); } catch { /* a vanished target must not crash the view */ }
+}
+
+export default function EntityLink({ kind, id, label, className, title }) {
   const nav = useNavigation();
   const text = label ?? id;
   const handler = nav?.[KIND_TO_CALLBACK[kind]];
@@ -34,9 +61,13 @@ export default function EntityLink({ kind, id, label, className }) {
     ? nav.canNavigate(kind, id)
     : true; // providers without canNavigate keep the old optimistic behavior
 
-  if (typeof handler !== 'function' || !resolvable) {
+  if (typeof handler !== 'function' || !resolvable || !id) {
     return (
-      <span className={cn('text-[11px] font-mono text-muted-foreground', className)}>
+      <span
+        className={cn('text-[11px] font-mono text-muted-foreground', className)}
+        title={title ?? (typeof handler !== 'function' ? 'No link here: this view has no place to open it' : `No ${kind} named ${id} to open`)}
+        data-no-target=""
+      >
         {text}
       </span>
     );
@@ -48,14 +79,33 @@ export default function EntityLink({ kind, id, label, className }) {
       onClick={(e) => {
         e.stopPropagation();
         try {
-          handler(id);
+          (CALL[kind] ?? ((h, i) => h(i)))(handler, id);
         } catch {
           // Navigation is best-effort — a vanished target must not crash the view.
         }
       }}
-      className={cn('text-[11px] font-mono text-blue-400 hover:underline cursor-pointer', className)}
+      title={title}
+      className={cn('text-[11px] font-mono text-blue-400 hover:underline focus-visible:underline focus-visible:outline focus-visible:outline-1 focus-visible:outline-blue-400 cursor-pointer text-left', className)}
     >
       {text}
     </button>
+  );
+}
+
+/**
+ * COMP-UI-LINKS-2: free text with its feature codes and repo paths as EntityLinks. A token the navigation context cannot resolve
+ * (no provider, unknown feature code, no file handler) stays plain text, unstyled: prose never grows dead links.
+ */
+export function LinkedText({ text, className }) {
+  const nav = useNavigation();
+  const parts = entityParts(text);
+  if (!nav || parts.length === 0) return <>{text}</>;
+  const ok = (kind, value) => canOpenEntity(nav, kind, value);
+  return (
+    <>
+      {parts.map((p, i) => (p.kind !== 'text' && ok(p.kind, p.value)
+        ? <EntityLink key={i} kind={p.kind} id={p.value} className={cn('text-[inherit]', className)} />
+        : <React.Fragment key={i}>{p.value}</React.Fragment>))}
+    </>
   );
 }

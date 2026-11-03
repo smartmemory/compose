@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { TOOL_CATEGORY_COLORS } from '../vision/constants.js';
 import StepOutcome from './StepOutcome.jsx';
+import EntityLink from '../shared/EntityLink.jsx';
 import ToolResultBlock from './ToolResultBlock.jsx';
 import { formatCost as sharedFormatCost } from '../../lib/format-cost.js';
 
@@ -239,7 +240,7 @@ export default function MessageCard({ msg }) {
     return (
       <div className="text-[10px] uppercase tracking-wider py-1"
         style={{ color: 'hsl(var(--accent))', opacity: 0.8 }}>
-        {label} -- {msg.featureCode}
+        {label} -- {msg.featureCode && <EntityLink kind="feature" id={msg.featureCode} className="text-[inherit]" />}
       </div>
     );
   }
@@ -289,7 +290,7 @@ export default function MessageCard({ msg }) {
     return (
       <div className="text-[10px] uppercase tracking-wider py-1"
         style={{ color }}>
-        build {msg.status} -- {msg.featureCode}
+        build {msg.status} -- {msg.featureCode && <EntityLink kind="feature" id={msg.featureCode} className="text-[inherit]" />}
       </div>
     );
   }
