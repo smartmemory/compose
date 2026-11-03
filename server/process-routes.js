@@ -159,7 +159,11 @@ export async function readStamps({ queuesDir, extra }, note = () => {}) {
  * warning, nothing logged. A skipped line is counted in `warnings`, the same field the stamps lanes use.
  */
 export async function readKpiHistory(file) {
-  const text = await readIfExists(file);
+  let text;
+  try { text = await readIfExists(file); } catch (e) {
+    // The fs message carries the absolute path; the response and the log line get the code and the source name only.
+    throw new Error(`history: could not read the KPI history file (${e?.code ?? 'unknown error'})`);
+  }
   if (text === null) return { lanes: {}, warnings: [] };
   const { lanes, skipped } = parseKpiHistory(text);
   return { lanes, warnings: skipped ? [`${skipped} history lines skipped (not JSON, or no date or lane)`] : [] };

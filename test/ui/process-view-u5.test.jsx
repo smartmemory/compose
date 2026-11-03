@@ -128,6 +128,19 @@ const ROWS = [
       expect(q('delta-hub-standard').style.color).toBe('hsl(var(--success))');
     },
   },
+  ...[
+    ['an error from the history source', { value: null, error: 'history: could not read the KPI history file (EACCES)', ts: 1, stale: false }, 'trend history unavailable: history: could not read the KPI history file (EACCES)'],
+    ['a stale history source', { value: { lanes: {}, warnings: [] }, error: null, ts: 1, stale: true }, 'trend history: cached copy'],
+    ['skipped history lines', { value: { lanes: {}, warnings: ['2 history lines skipped (not JSON, or no date or lane)'] }, error: null, ts: 1, stale: false }, 'trend history: 2 history lines skipped (not JSON, or no date or lane)'],
+    ['a missing history file (the first-day state)', { value: { lanes: {}, warnings: [] }, error: null, ts: 1, stale: false }, null],
+  ].map(([what, history, note]) => ({
+    name: `history note: ${what} ${note ? 'shows the note by the trends' : 'stays quiet'}`,
+    env: () => { const env = envelope(); env.sources.history = history; return env; },
+    check() {
+      if (note) expect(t('process-history-note')).toBe(note);
+      else expect(q('process-history-note')).toBeNull();
+    },
+  })),
 ];
 
 describe('ProcessView U5: flow DAG, tile trends, tile percents', () => {

@@ -7,7 +7,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { attachProcessRoutes, resolveProcessSources } from '../server/process-routes.js';
@@ -166,6 +166,14 @@ const ROWS = [
     const { history } = (await get()).sources;
     assert.deepEqual(history.value.lanes.hub.map((p) => p.waiting_share), [17]);
     assert.deepEqual(history.value.warnings, ['2 history lines skipped (not JSON, or no date or lane)']);
+  }],
+  ['history: a read failure other than a missing file names the code and the source, never the absolute path (response and log)', { mutate: (root) => mkdirSync(join(root, 'kpi-history.jsonl')) }, async ({ get, warns, root }) => {
+    const { history } = (await get()).sources;
+    assert.equal(history.value, null);
+    assert.match(history.error, /^history: could not read the KPI history file \(EISDIR\)$/);
+    const logged = warns.filter((w) => w.includes('history'));
+    assert.equal(logged.length, 1);
+    for (const text of [history.error, ...logged]) { assert.ok(!text.includes(homedir())); assert.ok(!text.includes(root)); }
   }],
   ['history: at most the last 30 days per lane', { mutate: (root) => writeFileSync(join(root, 'kpi-history.jsonl'),
     Array.from({ length: 35 }, (_, i) => JSON.stringify({ date: `2026-09-${String(i + 1).padStart(2, '0')}`.replace(/^2026-09-3([1-5])$/, '2026-10-0$1'), lane: 'hub', waiting_share: i })).join('\n')) }, async ({ get }) => {

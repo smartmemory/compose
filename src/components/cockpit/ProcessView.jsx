@@ -79,6 +79,12 @@ export default function ProcessView() {
   const label = page?.value?.label ?? (table?.projects ?? []).find((p) => p.name === selected)?.label ?? selected;
   const tones = Object.fromEntries(PANEL_IDS.map((k) => [k, tileTone(table, k, column)?.tone ?? null]));
   const history = (selected && data?.sources?.history?.value?.lanes?.[selected]) || [];
+  const hist = data?.sources?.history;
+  const historyNotes = [
+    hist?.error ? `trend history unavailable: ${hist.error}` : null,
+    hist?.stale ? 'trend history: cached copy' : null,
+    ...(hist?.value?.warnings ?? []).map((w) => `trend history: ${w}`),
+  ].filter(Boolean);
   const chip = selected ? laneTarget(data?.fleet?.laneIndex, selected) : null;
 
   return (
@@ -102,6 +108,7 @@ export default function ProcessView() {
                 <span className={NOTE}>· pick another lane in the comparison below</span>
               </div>
               {page.failed ? <div className={NOTE} style={bad} data-testid="process-page-failed">build failed {page.failed.time}: {page.failed.reason} (figures are the last good build)</div> : null}
+              {historyNotes.length ? <div className={NOTE} style={warn} data-testid="process-history-note">{historyNotes.join(' · ')}</div> : null}
               <KpiTiles name={selected} summary={page.value} tones={tones} onDetails={openDrawer} history={history} />
               <FlowDag name={selected} label={label} summary={page.value} pace={paceCell(table, column)} />
             </section>

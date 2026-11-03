@@ -72,8 +72,9 @@ export function cellInfo(spec, cell) {
 export function rankTone(dir, key, keys) {
   const vals = keys.filter((v) => v != null && Number.isFinite(v)).sort((a, b) => a - b);
   if (key == null || !vals.length) return null;
-  const pos = vals.indexOf(key) / Math.max(vals.length - 1, 1);
-  const score = dir === 'low' ? 1 - pos : pos;
+  // A tie group shares the rank of its best member, and a lone value (nothing to compare) is the top of its row.
+  const rankOf = (v) => (dir === 'low' ? vals.findIndex((x) => x === v) : vals.length - 1 - vals.findLastIndex((x) => x === v));
+  const score = vals.length === 1 ? 1 : 1 - rankOf(key) / (vals.length - 1);
   return score >= 0.67 ? 'good' : score >= 0.34 ? 'warn' : 'bad';
 }
 
