@@ -25,6 +25,11 @@
  *   spawns `owner_queue.py close <id> --answer <answer>` with argv only. It never opens the queue file. Replies are the
  *   HITL-1 `ProductReply` (`accepted | conflict | rejected`). Residual: a close from another channel can land in the
  *   milliseconds between the fresh read and the close; OPS-NOTIFY-SPOOL-1's refusal closes that later.
+ * COMP-DOGFOOD-OWNER-QUEUE-1: the owner's open questions are ONE list (lib/owner-gates.js `readOwnerGates`, read fresh per
+ *   request). `GET /api/fleet/owner-gates` returns it (contracts/owner-gate.schema.json), and the `queue` panel of
+ *   `GET /api/fleet` is built from it (`panelOf`, sm_status's row shape), so `ownerAsks` counts what MCP `get_pending_gates`
+ *   and the day ribbon count. The queue file resolves from `env` (`resolveOwnerQueueFile`); an env that names none (no HOME)
+ *   keeps sm_status's panel, which reads the same file.
  * When a notify store is wired (server/notify-state-routes.js), every GET /api/fleet body also carries `notify`
  * (Compose's own ack/snooze/dismiss/answered list, read fresh per request) so the cockpit needs no second poll.
  *
@@ -39,10 +44,12 @@ import { basename, join } from 'node:path';
 import { resolveStratumBin } from '../lib/stratum-engine.js';
 import { groupOf, stripTag } from '../lib/owner-queue-class.js';
 import { optionsOf, choiceText } from '../lib/ask-options.js';
+import { panelOf, readOwnerGates, resolveOwnerQueueFile } from '../lib/owner-gates.js';
 import { requireSensitiveOrPaired } from './security.js';
 
 export const FLEET_ROUTE = '/api/fleet';
 export const OWNER_ANSWER_ROUTE = '/api/fleet/owner-answer';
+export const OWNER_GATES_ROUTE = '/api/fleet/owner-gates';
 export const OWNER_QUEUE_TIMEOUT_MS = 15_000;
 
 // Cache windows. sm_status --json refreshes all of its sources in one call (~26 s measured 2026-10-30),
@@ -402,8 +409,12 @@ export function attachFleetRoutes(app, {
   ttlMs = TTL_MS,
   timeoutMs = TIMEOUT_MS,
   notifyStore = null,
+  ownerQueueFile = resolveOwnerQueueFile(env),
 } = {}) {
   const opts = (name) => ({ ttlMs: ttlMs[name], now, warn, info });
+  // An env with no queue path (no HOME: only a hermetic test env) keeps sm_status's own panel, a reader of the same file,
+  // so nothing is lost; /api/fleet/owner-gates then answers unreadable with readOwnerGates' WARNING.
+  const ownerGates = () => readOwnerGates({ file: ownerQueueFile, env, now: now(), warn });
   const caches = {
     stratum: createSourceCache('stratum', () => readStratum(readers, env, timeoutMs.stratum), opts('stratum')),
     sm_status: createSourceCache('sm_status', () => readSmStatus(readers, env, timeoutMs.sm_status), opts('sm_status')),
@@ -416,8 +427,10 @@ export function attachFleetRoutes(app, {
       if (smStatus.value?.jobs) {
         smStatus.value = { ...smStatus.value, jobs: { ...smStatus.value.jobs, value: mergeJobs(smStatus.value.jobs.value, stratum.value) } };
       }
+      // The cached sm_status entry is never mutated: the owner-gates panel goes on a copy, read fresh per request.
+      const sm = ownerQueueFile && smStatus.value ? { ...smStatus, value: { ...smStatus.value, queue: panelOf(ownerGates(), now()) } } : smStatus;
       res.set('cache-control', 'no-store');
-      const body = { generated: new Date(now()).toISOString(), sources: { stratum, sm_status: smStatus, cadence } };
+      const body = { generated: new Date(now()).toISOString(), sources: { stratum, sm_status: sm, cadence } };
       if (notifyStore) {
         try { body.notify = notifyStore.get(); } catch (error) { body.notify = { error: String(error?.message ?? error).slice(0, 200) }; }
       }
@@ -425,6 +438,11 @@ export function attachFleetRoutes(app, {
     } catch (error) {
       res.status(500).json({ error: String(error?.message ?? error) });
     }
+  });
+
+  app.get(OWNER_GATES_ROUTE, (_req, res) => {
+    res.set('cache-control', 'no-store');
+    res.json(ownerGates());
   });
 
   app.post(OWNER_ANSWER_ROUTE, requireSensitiveOrPaired, async (req, res) => {

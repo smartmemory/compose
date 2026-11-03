@@ -21,6 +21,7 @@ import { buildUnitIndex } from '../lib/unit-index.js';
 import { buildRibbon, computeHistory, etaWithPrev, parseGateLog, remainingByLane, safeReason } from '../lib/ribbon-feed.js';
 import { queueDecisions, unitsIn } from '../lib/decisions-ledger.js';
 import { groupOf, stripTag } from '../lib/owner-queue-class.js';
+import { foldQueueRecords, ownerGatesOf } from '../lib/owner-gates.js';
 import { reconcileOwnerSpans } from '../lib/owner-spans.js';
 import { ledgerDecisions, ledgerPath } from './decisions-routes.js';
 import { applyLaunchFeed, blockedUnits, ingestGovernorLog, readLaunchEvents, retryQueue } from '../lib/launch-events.js';
@@ -55,6 +56,9 @@ function instant(value, name) {
 export function ownerWaits({ queue = [], units = [], lanes = [], from, to, now }) {
   const byId = new Map();
   for (const r of queue) if (r && typeof r.id === 'string') byId.set(r.id, { ...(byId.get(r.id) ?? {}), ...r });
+  // COMP-DOGFOOD-OWNER-QUEUE-1: which asks are open comes from the ONE owner-gates list (lib/owner-gates.js), the list
+  // the cockpit's queue panel and MCP get_pending_gates read, so the three counts are equal by construction.
+  const openIds = new Set(ownerGatesOf(foldQueueRecords(queue), now).map((g) => g.qid));
   const laneOfUnit = new Map(units.map((u) => [u.id, u.lane]));
   const has = new Set(lanes);
   const fallback = has.has('ops') ? 'ops' : (lanes[0] ?? null);
@@ -69,7 +73,7 @@ export function ownerWaits({ queue = [], units = [], lanes = [], from, to, now }
       .find((l) => typeof l === 'string' && has.has(l));
     const lane = named ?? fallback;
     const start = r.ts * 1000;
-    if (r.status === 'open') open.push({ id: r.id, by: r.by ?? null, text: String(r.text ?? ''), age: Math.max(0, Math.round((now - start) / 1000)), lane });
+    if (openIds.has(r.id)) open.push({ id: r.id, by: r.by ?? null, text: String(r.text ?? ''), age: Math.max(0, Math.round((now - start) / 1000)), lane });
     const end = r.status === 'open' ? now : (typeof r.closed_ts === 'number' ? r.closed_ts * 1000 : null);
     if (lane === null || end === null || end < from || start > to) continue;
     const title = stripTag(r.text).slice(0, 160);

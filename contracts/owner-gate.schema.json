@@ -1,0 +1,51 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://compose.smartmemory.dev/contracts/owner-gate.schema.json",
+  "title": "owner-gate",
+  "version": "1.0.0",
+  "description": "One open owner question shown as a gate (COMP-DOGFOOD-OWNER-QUEUE-1, row F of COMP-DOGFOOD-1). The owner queue (ops `claude/scripts/owner_queue.py`, `coordination/owner-queue.jsonl`) is the only writer: phone, chat, digest, the cockpit and MCP all answer the same record, first answer wins. Compose never stores an owner gate; it reads the queue and shows every open `asks` or `security` row (lib/owner-queue-class.js `groupOf`) as one of these. The ONE producer is lib/owner-gates.js `readOwnerGates`; its readers are the MCP `get_pending_gates` tool, `GET /api/fleet/owner-gates` (and the `queue` panel of `GET /api/fleet`, which the cockpit's `ownerAsks` reads), the day ribbon's `ownerWaits`, and `node lib/owner-gates-cli.js list`. An owner gate never expires: it is open until the queue closes it. `approve_gate` on an owner gate takes `option` (one of `options[].key`) and closes the row with `owner_queue.py close --channel mcp --if-version <version>`.",
+  "_roadmap": "COMP-DOGFOOD-OWNER-QUEUE-1",
+  "type": "object",
+  "required": ["id", "qid", "kind", "status", "group", "summary", "options", "recommended", "version", "opened_at", "source"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "description": "`owner:` then the queue id. The prefix keeps an owner gate from colliding with a Compose gate id (`<flowId>:<stepId>:<round>`).",
+      "type": "string",
+      "pattern": "^owner:.+$",
+      "maxLength": 210
+    },
+    "qid": { "description": "The owner-queue record id.", "type": "string", "minLength": 1, "maxLength": 200 },
+    "kind": { "description": "Tells an owner gate from a Compose policy gate in one list.", "const": "owner" },
+    "status": { "description": "Only open rows become gates, so always pending.", "const": "pending" },
+    "group": { "description": "`groupOf(text)`: a security row (resolve) or an ask (answer).", "enum": ["asks", "security"] },
+    "summary": { "description": "The question without its leading tag (`stripTag`).", "type": "string" },
+    "text": { "description": "The record's text as written, tag included (the cockpit row keeps it).", "type": "string" },
+    "by": { "description": "The asking session.", "type": ["string", "null"] },
+    "unit": { "description": "The unit the question blocks, when the asker named one.", "type": ["string", "null"] },
+    "severity": { "description": "The asker's severity, when set.", "type": ["string", "null"] },
+    "post_id": { "description": "The notify-service post id, when the record has one.", "type": ["string", "null"] },
+    "options": {
+      "description": "The answer options, plain English (lib/ask-options.js `optionsOf`: the record's `options`, else `(a) ... (b) ...` parsed from the text). Empty for a free-text ask or a security row; such a gate is answered on a channel that takes text (chat, phone, cockpit), never through approve_gate.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["key", "label"],
+        "additionalProperties": false,
+        "properties": {
+          "key": { "description": "What approve_gate `option` names (the record option's `value`).", "type": "string", "minLength": 1 },
+          "label": { "description": "The option in plain English.", "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "recommended": { "description": "The record's `default` (the asker's recommendation), else null.", "type": ["string", "null"] },
+    "version": {
+      "description": "The record's precondition token, as `notify_client.version_of` computes it (`json.dumps(ts)`). approve_gate passes it as `--if-version`, so an answer to a question re-asked since it was read is refused OWNER_GATE_STALE.",
+      "type": "string",
+      "minLength": 1
+    },
+    "opened_at": { "description": "When the question was asked (the record's `ts`).", "type": "string", "format": "date-time" },
+    "age_s": { "description": "Seconds open at read time.", "type": "integer", "minimum": 0 },
+    "source": { "description": "Where the gate lives.", "const": "owner-queue" }
+  }
+}

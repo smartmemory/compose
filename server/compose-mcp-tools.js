@@ -205,6 +205,8 @@ import { resolveWorkspace } from '../lib/resolve-workspace.js';
 import { discoverWorkspaces, deriveId } from '../lib/discover-workspaces.js';
 import { addOrder, supersedeOrder, configureLiveState, buildLiveState, formatLiveStateSection } from '../lib/live-state.js';
 import { resolvePort } from '../lib/resolve-port.js';
+import { resolveGateTimeoutMs } from '../lib/gate-timeout.js';
+import { OWNER_GATE_PREFIX, closeOwnerGate, isComposeGateExpired, readOwnerGates } from '../lib/owner-gates.js';
 
 export function getVisionFile() { return path.join(getDataDir(), 'vision-state.json'); }
 export function getSessionsFile() { return path.join(getDataDir(), 'sessions.json'); }
@@ -960,6 +962,8 @@ export function toolScaffoldFeature({ featureCode, only, mode = 'build', kind })
 
 export async function toolApproveGate(args = {}) {
   const { gateId, outcome, comment } = args;
+  // COMP-DOGFOOD-OWNER-QUEUE-1: an owner gate is answered with one of its options through the owner queue's own writer.
+  if (typeof gateId === 'string' && gateId.startsWith(OWNER_GATE_PREFIX)) return _answerOwnerGate(args);
   // Only an approval claims the gated work is done; `revised` keeps the feature
   // in its phase and `killed` abandons it, so neither needs a receipt.
   if (!EVIDENCE_GATE_OUTCOMES.has(outcome)) return _postGate(gateId, 'resolve', { outcome, comment });
@@ -972,11 +976,56 @@ export async function toolApproveGate(args = {}) {
     () => _postGate(gateId, 'resolve', { outcome, comment }));
 }
 
-export function toolGetPendingGates({ itemId }) {
+/**
+ * approve_gate on `owner:<qid>`: close the queue row (`owner_queue.py close --channel mcp --if-version`, lib/owner-gates.js
+ * closeOwnerGate), then mint the receipt the evidence rule asks for: a `log` receipt on the closed record's line, minted
+ * after the close (the caller holds no receipt for an answer it has not given yet, so `evidence` is not read here). A
+ * receipt that cannot be minted is a WARNING beside a close that stands (`evidence_id: null`, `evidence_warning`).
+ */
+async function _answerOwnerGate(args) {
+  const closed = closeOwnerGate({ gateId: args.gateId, option: args.option, version: args.version });
+  const result = { gateId: closed.gateId, qid: closed.qid, option: closed.option, answer: closed.answer, closed: true };
+  const { evidenceRequired, checkEvidence, recordEvidence } = await import('../lib/evidence.js');
+  let config = null;
+  try { config = loadProjectConfig(); } catch { config = null; }
+  if (!evidenceRequired(config, getTargetRoot())) return result;
+  const subject = { tool: 'approve_gate', gate: closed.gateId, outcome: closed.option };
+  try {
+    if (!closed.line) throw new Error(`the closed record for ${closed.qid} was not found in ${closed.file} after the close`);
+    const at = closed.line.lastIndexOf('"answer": ');
+    const ev = {
+      kind: 'log', path: closed.file, line: closed.line.slice(at >= 0 ? at : 0).slice(0, 2000),
+      at: new Date().toISOString(), by: (process.env.COMPOSE_SESSION_NAME || 'mcp').slice(0, 128),
+    };
+    const accepted = checkEvidence(ev, 'approve_gate', { subject });
+    const record = recordEvidence(accepted.evidence, { checks: accepted.checks, subject });
+    return { ...result, evidence_id: record.id };
+  } catch (err) {
+    console.warn(`[evidence] WARNING: approve_gate closed ${closed.gateId} but its receipt was NOT minted: ${err.message}`);
+    return { ...result, evidence_id: null, evidence_warning: `receipt not minted: ${err.message}` };
+  }
+}
+
+/**
+ * COMP-DOGFOOD-OWNER-QUEUE-1: the Compose policy gates still pending (the HTTP routes' lazy expiry applied, read only here:
+ * the server marks them), plus, unfiltered by item, every open owner question (lib/owner-gates.js, never expires).
+ * `owner_gates` says how the owner list was read: `{count}`, or `{unreadable: true, error}` (unknown, never zero).
+ */
+export function toolGetPendingGates({ itemId } = {}) {
+  const now = Date.now();
+  const timeoutMs = resolveGateTimeoutMs();
   const { gates } = loadVisionState();
-  if (!gates) return { count: 0, gates: [] };
-  const pending = gates.filter(g => g.status === 'pending' && (!itemId || g.itemId === itemId));
-  return { count: pending.length, gates: pending };
+  const pending = (gates || []).filter((g) => g.status === 'pending' && !isComposeGateExpired(g, now, timeoutMs) && (!itemId || g.itemId === itemId));
+  if (itemId) return { count: pending.length, gates: pending };
+  const owner = readOwnerGates({ now });
+  if (owner.unreadable) {
+    return { count: pending.length, gates: pending, owner_gates: { unreadable: true, error: owner.error, file: owner.file } };
+  }
+  return {
+    count: pending.length + owner.count,
+    gates: [...pending, ...owner.gates],
+    owner_gates: { count: owner.count, file: owner.file, ...(owner.warnings ? { warnings: owner.warnings } : {}) },
+  };
 }
 
 // ---------------------------------------------------------------------------

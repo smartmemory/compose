@@ -35,6 +35,7 @@ import { emitStatusSnapshot } from './status-emit.js';
 import { computeStatusSnapshot } from './status-snapshot.js';
 import { emitDriftAxes } from './drift-emit.js';
 import { resolveGateTimeoutMs } from '../lib/gate-timeout.js';
+import { isComposeGateExpired } from '../lib/owner-gates.js';
 import { attachEvidenceRoutes } from './evidence-routes.js';
 
 let _schemaValidator = null;
@@ -1041,7 +1042,18 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
         res.json({ gates: store.getAllGates().filter(g => g.status === 'resolved') });
       } else {
         const itemId = req.query.itemId || undefined;
-        const gates = store.getPendingGates(itemId);
+        // COMP-DOGFOOD-OWNER-QUEUE-1: the same lazy expiry as GET /:id and resolve, so this list, the MCP
+        // get_pending_gates list and a resolve attempt agree on an expired gate (lib/owner-gates.js isComposeGateExpired).
+        const now = Date.now();
+        const gateTimeout = resolveGateTimeoutMs();
+        let expired = 0;
+        const gates = store.getPendingGates(itemId).filter((g) => {
+          if (!isComposeGateExpired(g, now, gateTimeout)) return true;
+          g.status = 'expired';
+          expired += 1;
+          return false;
+        });
+        if (expired) store._save();
         res.json({ gates });
       }
     } catch (err) {
