@@ -1694,9 +1694,9 @@ OWNER DECISION D-0018 (2026-11-02, ops ledger `c798bfe19d52`): Stratum, Cadence 
 - [ ] Each row opens its room (Stratum gate, Compose gate, Cadence unit)
 
 **308 COMP-SUBAPP-CONTEXT-1: acceptance**
-- [ ] `src/components/cockpit/ContextPanel.jsx` (existing) shows, for the selected feature: roadmap item, wiki hub, last Stratum run, Cadence unit
-- [ ] Data comes only from `src/lib/clients/stratum.js`, `cadence.js`, `wiki.js` (existing); no new fetch paths
-- [ ] A source with no data shows an explicit empty state naming the source, never a blank
+- [x] `src/components/cockpit/ContextPanel.jsx` (existing) shows, for the selected feature: roadmap item, wiki hub, last Stratum run, Cadence unit (rendered by `ContextItemDetail`, which mounts inside the panel: `src/components/cockpit/ContextSources.jsx` (new) on the overview tab; mounted data row `test/ui/context-sources.test.jsx:70`, the links `:176`; not yet seen on the live cockpit)
+- [x] Data comes only from `src/lib/clients/stratum.js`, `cadence.js`, `wiki.js` (existing); no new fetch paths (clients injected, a `fetch`/`wsFetch` spy fails the test if called: `test/ui/context-sources.test.jsx:57`; no edit to `src/lib/clients/*.js`)
+- [x] A source with no data shows an explicit empty state naming the source, never a blank (`test/ui/context-sources.test.jsx:91` empty, `:105` failed read is unavailable, `:128` not connected, `:139` all three fail; picking rules `test/context-sources.test.js:1`)
 
 **309 COMP-SUBAPP-STRAT-AUTHOR-1: acceptance**
 - [x] `@smartmemory/stratum-ui/builder` `FlowBuilder` (`stratum/ui/src/builder/FlowBuilder.jsx`, existing) mounted as a "New pipeline" pane in `StratumView.jsx` (compose d63d80a6, pane `src/components/cockpit/StratumBuilderPane.jsx`; post-land review H0 M1 L4, `smart-memory-ops/units/COMP-SUBAPP-STRAT-AUTHOR-1-REVIEW/report.md`)

@@ -1659,6 +1659,8 @@ function AppInner() {
                       onViewInTree={handleViewInTree}
                       focusedFeature={focusedFeature}
                       onFocusFeature={(item) => dispatchFocus({ type: 'focus', item })}
+                      wikiWorkspace={wikiTab.workspace}
+                      availability={{ stratum: stratumAvail, cadence: cadenceAvail, wiki: wikiTab.availability }}
                     />
                   )}
                   {contextSelection?.type === 'step' && (

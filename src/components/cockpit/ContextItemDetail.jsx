@@ -11,6 +11,9 @@
  *   onOpenFile {fn}    called when user clicks a file (lands on Library > Wiki)
  *   focusedFeature {string?} the focused feature code (COMP-AUDIT-17)
  *   onFocusFeature {fn?}     called with the item when Focus is clicked
+ *   wikiWorkspace {string?}  the wiki's served workspace (COMP-SUBAPP-CONTEXT-1; not the Compose workspace)
+ *   availability {{stratum,cadence,wiki}?} each yes|no|unknown; `no` shows "<source> not connected" and skips the read
+ *   sourceClients {{stratum,cadence,wiki}?} injectable data clients (tests)
  */
 import React, { useState, useMemo, useEffect } from 'react';
 import { useVisionStore } from '../vision/useVisionStore.js';
@@ -27,8 +30,9 @@ import RecallTab from './RecallTab.jsx';
 import useRecallEnabled from './useRecallEnabled.js';
 import { DETAIL_TABS } from './contextPanelState.js';
 import { itemFeatureCode } from './focusedFeature.js';
+import ContextSources from './ContextSources.jsx';
 
-export default function ContextItemDetail({ itemId, onSelect, onClose, onOpenFile, onViewInGraph, onViewInTree, focusedFeature, onFocusFeature }) {
+export default function ContextItemDetail({ itemId, onSelect, onClose, onOpenFile, onViewInGraph, onViewInTree, focusedFeature, onFocusFeature, wikiWorkspace, availability, sourceClients }) {
   const {
     items, connections, gates, updateItem, deleteItem,
     createConnection, deleteConnection, resolveGate,
@@ -129,6 +133,7 @@ export default function ContextItemDetail({ itemId, onSelect, onClose, onOpenFil
               onResolveGate={resolveGate}
               onOpenFile={onOpenFile}
             />
+            <ContextSources featureCode={featureCode} item={item} availability={availability} wikiWorkspace={wikiWorkspace} clients={sourceClients} />
             {challengeOpen && (
               <ChallengeModal
                 item={item}
