@@ -132,10 +132,13 @@ export function landedSince(index, sinceMs, feed = null) {
 export function phoneLines(feed, index, now = Date.now()) {
   if (!Array.isArray(feed?.lanes) || feed?.sourceErrors?.stamps) return null;
   const units = Array.isArray(index?.units) ? index.units : [];
+  const ownerKnown = Array.isArray(feed.owner?.open);
   const nowIso = typeof feed.now === 'string' ? feed.now : new Date(now).toISOString(); // the feed's own clock, so a time reads in its offset
   const out = [];
   for (const l of feed.lanes) {
-    const waits = units.filter((u) => u?.lane === l.lane && (u.waiting === 'review' || u.waiting === 'owner'));
+    // OWNER-IDENTITY-1: the index's owner wait IS an open stamp, so on a readable queue (`owner.open` an array) the queue alone
+    // says who waits on the owner at now (laneState already drew it); the index fallback keeps it only when the queue is unknown.
+    const waits = units.filter((u) => u?.lane === l.lane && (u.waiting === 'review' || (u.waiting === 'owner' && !ownerKnown)));
     // S1: the ribbon's own answer for the lane (laneState), so "main" never reads "working" here and "waiting on review" there.
     const st = laneState(l, nowIso, nowIso);
     let title; let state; let tone = null;

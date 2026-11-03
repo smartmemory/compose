@@ -461,6 +461,14 @@ const refOf = (n, asOf) => { const a = toMs(asOf); return Number.isFinite(a) ? M
 
 /** The spans a lane has at `now` (work or wait, never notRecorded), judged at `ref` (refOf). */
 const spansAtNow = (lane, n, ref = n) => (lane?.spans || []).filter((s) => s.kind !== 'notRecorded' && toMs(s.start) <= n && toMs(s.end) >= ref - AT_NOW_SLACK_MS);
+/**
+ * COMP-DAYVIEW-OWNER-IDENTITY-1: the ONE rule for "this owner wait counts at now", for every view. A queue span (`queueId`,
+ * an open ask) counts; a stamp counts only while it is `open: true`, which survives only when the owner queue could not be
+ * read (the route reconciles stamps on a good read, `lib/owner-spans.js`). Any other owner span is history.
+ */
+export const ownerAtNow = (s) => Boolean(s && s.kind === 'wait' && s.cause === 'owner' && (s.queueId || s.open === true));
+const isOwnerSpan = (s) => s?.kind === 'wait' && s.cause === 'owner';
+
 /** A span's real start: `since` (the producer's unclipped start) when the window cut it, else `start`. */
 const realStart = (s) => toMs(s.since ?? s.start);
 
@@ -489,9 +497,10 @@ function lastStampOf(lane, cur, n) {
  */
 export function laneState(lane, now, asOf = null) {
   const n = toMs(now);
-  const at = spansAtNow(lane, n, refOf(n, asOf));
-  const isOwner = (s) => s.kind === 'wait' && s.cause === 'owner';
-  const owner = at.find((s) => isOwner(s) && s.queueId) || at.find(isOwner); // U3-FU: the queue's span names the wait, a stamp is only the fallback
+  // OWNER-IDENTITY-1 (review F1): an owner span that does not count at now leaves the set BEFORE `latest` is chosen, so a
+  // stamp the queue does not back can never answer "waiting on you" through either path.
+  const at = spansAtNow(lane, n, refOf(n, asOf)).filter((s) => !isOwnerSpan(s) || ownerAtNow(s));
+  const owner = at.find((s) => isOwnerSpan(s) && s.queueId) || at.find(isOwnerSpan); // the queue's span names the wait
   const latest = [...at].sort((a, b) => realStart(b) - realStart(a) || toMs(b.end) - toMs(a.end) || (a.kind === 'wait' ? -1 : 1))[0];
   const wait = owner || (latest?.kind === 'wait' ? latest : null);
   const cur = lane?.current || null;
@@ -513,23 +522,25 @@ export function laneState(lane, now, asOf = null) {
 /**
  * C3: the feed with every LIVE owner wait dropped whose ask is no longer open for the headline. `openIds` are the ids
  * `ownerAsks(feed.owner.open, notifyState)` keeps (the WHAT line's own rule); null means "unknown", so nothing is dropped.
- * A past owner wait (it ended before now) is history and always stays. "Live" is judged on the feed's clock (refOf).
+ * A past owner wait (it ended before now) is history and always stays. "Live" is `ownerAtNow` judged on the feed's clock
+ * (refOf); with the ids known, a live owner span no open id backs (an open stamp included) is dropped.
  */
 export function withOwnerOpen(feed, openIds, now) {
   if (!feed || !Array.isArray(feed.lanes) || !Array.isArray(openIds)) return feed;
   const keep = new Set(openIds);
   const ref = refOf(toMs(now), feed.now);
-  const live = (s) => s.kind === 'wait' && s.cause === 'owner' && s.queueId && toMs(s.end) >= ref - AT_NOW_SLACK_MS;
-  return { ...feed, lanes: feed.lanes.map((l) => ({ ...l, spans: (l.spans || []).filter((s) => !live(s) || keep.has(s.queueId)) })) };
+  const live = (s) => ownerAtNow(s) && toMs(s.end) >= ref - AT_NOW_SLACK_MS;
+  return { ...feed, lanes: feed.lanes.map((l) => ({ ...l, spans: (l.spans || []).filter((s) => !live(s) || (s.queueId && keep.has(s.queueId))) })) };
 }
 
 /**
  * The owner waits the ribbon draws at now: one per open ask, `[{lane, queueId}]` (what the test compares to the headline).
- * The queue is the one "at now" source (`lib/owner-spans.js`): a stamp span, even one clipped at the read, is history.
+ * Judged by `ownerAtNow`: on a readable queue only queue spans count (a stamp, even one clipped at the read, is history); on
+ * an unreadable one an open stamp counts too, with `queueId: null`.
  */
 export function ownerWaitsAtNow(lanes, now, asOf = null) {
   const n = toMs(now);
-  return (lanes || []).flatMap((l) => spansAtNow(l, n, refOf(n, asOf)).filter((s) => s.kind === 'wait' && s.cause === 'owner' && s.queueId).map((s) => ({ lane: l.lane, queueId: s.queueId })));
+  return (lanes || []).flatMap((l) => spansAtNow(l, n, refOf(n, asOf)).filter(ownerAtNow).map((s) => ({ lane: l.lane, queueId: s.queueId ?? null })));
 }
 
 /** Plain names for the feed's source-level gaps (C2: they are text under the ribbon, never a box over the lanes). */

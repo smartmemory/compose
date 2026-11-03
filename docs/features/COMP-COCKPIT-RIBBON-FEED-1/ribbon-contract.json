@@ -20,9 +20,10 @@
       "spans": [{
         "kind": "'work' | 'wait' | 'notRecorded'",
         "start": "iso", "end": "iso",
-        "since": "iso | undefined: the span's real start when the window cut `start` (stamp spans carry it from a unit's first stamp; owner-queue spans always); the client reads it for lane state and the last stamp",
+        "since": "iso | undefined: the span's real start when the window cut `start` (stamp spans carry it from a unit's first stamp; an owner stamp span carries its own stamp's start, not the start of the piece left after job time is cut out; owner-queue spans always carry the ask's time); the client reads it for lane state and the last stamp",
         "open": "bool | undefined: a stamp span with no end of its own, extended to now (work and wait stamps). An owner stamp span is `open: false` once it is clipped at the owner-queue read or cut around its queue ask (lib/owner-spans.js)",
         "queueId": "string | undefined: owner-queue id; present only on an owner wait that came from the queue (cause 'owner'), absent on stamp spans",
+        "qid": "string | undefined: owner stamp spans only (cause 'owner', no `queueId`): the id of the owner-queue ask the stamp records (`owner_waits[].qid`), absent when the stamp has none. The route matches the stamp to the queue ask with `queueId === qid` on any lane; only a stamp with no `qid` is matched by unit and a start within 10 min (lib/owner-spans.js). Client rule for 'at now': an owner span counts only with a `queueId` or `open: true` (`ownerAtNow`, ribbonLayout.js)",
         "laneGuess": "bool | undefined: queue owner waits only. true when no lane was named and the ask is shown on the ops row (the tooltip says so)",
         "unit": "string | null", "title": "string | null",
         "job": "'authoring' | 'review' | 'fix_rounds' | 'gate' | null (work only)",

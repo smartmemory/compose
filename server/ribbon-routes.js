@@ -240,8 +240,10 @@ export function attachRibbonRoutes(app, { remote = false, env = process.env, dep
         }
         // U3-DATA: a stamp is matched to its queue ask by identity, the queue draws the time it covers, an open stamp with no
         // ask is clipped at this read (`reconcileOwnerSpans`). The queue was read, so `asOf` is this request's clock.
+        // COMP-DAYVIEW-OWNER-IDENTITY-1: every lane's queue spans are passed, so a stamp finds its ask (`qid`) on any lane.
+        const asks = ow.spans.map(({ span }) => span);
         for (const row of body.lanes) {
-          row.spans = reconcileOwnerSpans(row.spans, { asOf: t0 })
+          row.spans = reconcileOwnerSpans(row.spans, { asOf: t0, asks })
             .sort((x, y) => Date.parse(x.start) - Date.parse(y.start) || Date.parse(x.end) - Date.parse(y.end));
           row.idle = !row.current && row.spans.length === 0 && (row.marks || []).length === 0;
         }

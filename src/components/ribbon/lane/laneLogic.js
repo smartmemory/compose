@@ -5,7 +5,7 @@
  * current, next, eta. Nothing here fetches. Every function returns words or numbers a view can print, never an empty cell.
  */
 import { smPanel } from '../../cockpit/fleetLogic.js';
-import { clock, etaLabel, etaWord, fmtDur, HAS_ZONE, toMs, when } from '../ribbonLayout.js';
+import { clock, etaLabel, etaWord, fmtDur, HAS_ZONE, ownerAtNow, toMs, when } from '../ribbonLayout.js';
 
 const MIN = 60_000;
 
@@ -126,7 +126,7 @@ export function asOfWord(asOf, now) {
 /** EXPECTED LANDING as one line: the estimate with its `as of`, "on answer", or the no-data words. */
 export function expectedLanding(lane, now) {
   const wait = currentWait(lane, now);
-  if (wait?.cause === 'owner') return { text: 'on answer', sub: 'waiting on you' };
+  if (ownerAtNow(wait)) return { text: 'on answer', sub: 'waiting on you' }; // OWNER-IDENTITY-1: the one at-now owner rule
   const eta = lane?.eta;
   if (!eta) return { text: 'no estimate', sub: null };
   if (eta.noData) return { text: 'no estimate (n<10)', sub: eta.raw || null };

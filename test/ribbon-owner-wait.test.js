@@ -24,7 +24,12 @@ describe('laneState', () => {
     ['current unit with no dispatch stamp is working with no age', lane('a', [span('work')], { id: 'U1' }), ['working', undefined, 'working']],
     ['dispatched over 24h ago and nothing waits is stale', lane('a', [span('work')], { id: 'U1', since: iso(30) }), ['stale', undefined, 'stale: working 1d 6h, no stamp in 24h']],
     ['a review wait wins over the current unit', lane('a', [span('work'), span('wait', { cause: 'review' })], { id: 'U1', since: iso(5) }), ['wait', 'review', null]],
-    ['an owner wait wins over a review wait and counts from the ask', lane('a', [span('wait', { cause: 'review' }), span('wait', { cause: 'owner', since: iso(4) })], { id: 'U1', since: iso(30) }), ['wait', 'owner', null]],
+    ['an owner wait wins over a review wait and counts from the ask', lane('a', [span('wait', { cause: 'review' }), span('wait', { cause: 'owner', since: iso(4), queueId: 'Q' })], { id: 'U1', since: iso(30) }), ['wait', 'owner', null]],
+    // OWNER-IDENTITY-1: an owner span counts at now only through ownerAtNow (a queue ask, or a stamp still open on an
+    // unreadable queue). A stamp the queue does not back is history: it neither wins nor is picked as the latest wait.
+    ['an open stamp (queue unreadable) wins over a review wait', lane('a', [span('wait', { cause: 'review' }), span('wait', { cause: 'owner', since: iso(4), open: true })], { id: 'U1', since: iso(30) }), ['wait', 'owner', null]],
+    ['a closed stamp at now does not win: the review wait is the state', lane('a', [span('wait', { cause: 'review', start: iso(3) }), span('wait', { cause: 'owner', open: false })], { id: 'U1', since: iso(30) }), ['wait', 'review', null]],
+    ['a closed stamp that started last is not picked as the latest wait', lane('a', [span('work', { start: iso(3) }), span('wait', { cause: 'owner', start: iso(1), open: false })], { id: 'U1', since: iso(4) }), ['working', undefined, 'working 4h']],
     ['a stale lane with a wait is a wait, not stale', lane('a', [span('wait', { cause: 'gate' })], { id: 'U1', since: iso(48) }), ['wait', 'gate', null]],
     ['a notRecorded span is never a state', lane('a', [span('notRecorded')]), null],
   ];
@@ -44,7 +49,7 @@ describe('laneState', () => {
   it('a review wait counts from the start of its open span (U2 RIBBON-ROWS-1 M1), an owner wait from the ask', () => {
     assert.equal(laneState(lane('a', [span('wait', { cause: 'review' })], { id: 'U1', since: iso(5) }), NOW).since, NOW - 2 * 3_600_000);
     assert.equal(laneState(lane('a', [span('wait', { cause: 'gate', start: iso(7) })], { id: 'U1', since: iso(5) }), NOW).since, NOW - 7 * 3_600_000);
-    assert.equal(laneState(lane('a', [span('wait', { cause: 'owner', start: iso(1) })], { id: 'U1', since: iso(5) }), NOW).since, NOW - 3_600_000);
+    assert.equal(laneState(lane('a', [span('wait', { cause: 'owner', start: iso(1), queueId: 'Q' })], { id: 'U1', since: iso(5) }), NOW).since, NOW - 3_600_000);
   });
 });
 
