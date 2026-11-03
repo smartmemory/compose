@@ -34,9 +34,9 @@ await import('./helpers/compose-data-guard.js');
 // the dev server is holding :4001.  VisionWriter._serverAvailable() → false →
 // falls back to direct file writes into the test's temp dir.  Tests that need a
 // LIVE server (compose-mcp-tools-http.test.js) override COMPOSE_PORT themselves
-// to their own listen(0) ephemeral port, so they are unaffected.  The same dead
-// port (19997) is already used by the COMP-MODEL-AB sandbox harness, making it
-// the de-facto convention for "no compose server here".
+// to their own listen(0) ephemeral port, so they are unaffected.  The port comes
+// from helpers/dead-port.js (runtime-chosen, never a fixed number in the shared test range); a stand-in that
+// copies this preload must copy that helper too (test/git-sandbox-guard.test.js).
 if (!process.env.COMPOSE_PORT) process.env.COMPOSE_PORT = deadPortSync();
 
 // COMP-GUARD-ONE-TAP follow-up (2026-09-06): stratum's guard registry lives in

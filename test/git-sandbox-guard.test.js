@@ -226,7 +226,7 @@ function runGateStandIn(writer, { corruptConfig = false, baseCommit = false, env
   const stand = realpathSync(mkdtempSync(join(tmpdir(), 'compose-guard-gate-')));
   try {
     mkdirSync(join(stand, 'test', 'helpers'), { recursive: true });
-    for (const f of ['suppress-expected-drift.js', 'helpers/git-env-scrub.js', 'helpers/compose-data-guard.js']) copyFileSync(join(ROOT, 'test', f), join(stand, 'test', f));
+    for (const f of ['suppress-expected-drift.js', 'helpers/git-env-scrub.js', 'helpers/compose-data-guard.js', 'helpers/dead-port.js']) copyFileSync(join(ROOT, 'test', f), join(stand, 'test', f));
     // COMP-TEST-STATE-LEAK-1: the stand-in's live cockpit state, which its copy of the preload guards.
     mkdirSync(join(stand, '.compose', 'data'), { recursive: true });
     writeFileSync(join(stand, '.compose', 'data', 'vision-state.json'), '{"items":[]}');

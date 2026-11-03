@@ -5,6 +5,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync
 import { tmpdir, homedir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { connect } from 'node:net';
 import YAML from 'yaml';
 import { PassThrough } from 'node:stream';
 import { runBuild, readBuildAccumulator } from '../../lib/build.js';
@@ -22,7 +23,13 @@ export async function devinBuildFixture({ live = false, roles = {}, authoredAgen
   if (live) assert.equal(process.env.COMPOSE_DEVIN_LIVE, '1');
   process.env.NODE_ENV = 'test';
   assert.equal(process.env.NODE_ENV, 'test');
-  assert.equal(process.env.COMPOSE_PORT, '19997');
+  // The preload pins COMPOSE_PORT to a runtime-chosen refusing port (helpers/dead-port.js), so assert that guarantee, not a number.
+  assert.match(process.env.COMPOSE_PORT ?? '', /^\d+$/);
+  await new Promise((resolve, reject) => {
+    const probe = connect({ host: '127.0.0.1', port: Number(process.env.COMPOSE_PORT) });
+    probe.once('connect', () => { probe.destroy(); reject(new Error(`COMPOSE_PORT ${process.env.COMPOSE_PORT} accepted a connection; it must refuse`)); });
+    probe.once('error', (err) => (err.code === 'ECONNREFUSED' ? resolve() : reject(err)));
+  });
   if (live) assert.equal(process.platform, 'darwin');
   const root = mkdtempSync(join(tmpdir(), 'compose-devin-golden-'));
   const cwd = join(root, 'repo'), stateRoot = join(root, 'state'), home = join(root, 'home');
