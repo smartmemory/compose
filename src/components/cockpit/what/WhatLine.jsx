@@ -96,7 +96,7 @@ function NeedsYou({ n, rows, why, onClick }) {
       type="button"
       data-testid="what-count-you"
       data-known="true"
-      className="max-w-full truncate rounded-full bg-[hsl(var(--needs-you))] px-2.5 py-0.5 font-semibold text-background outline-none hover:brightness-110 focus-visible:ring-2 focus-visible:ring-ring"
+      className="max-w-full truncate rounded-full bg-[hsl(var(--needs-you))] px-2.5 py-0.5 font-semibold text-white outline-none hover:brightness-110 focus-visible:ring-2 focus-visible:ring-ring"
       title={first ? `${n} needs you: ${first}` : `${n} needs you`}
       onClick={onClick}
     >

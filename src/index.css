@@ -85,7 +85,7 @@
     --warning: 38 92% 50%;
     --warning-ink: 38 92% 50%;
     --meter-ok: 215 20% 65%;
-    --needs-you: 0 84.2% 60.2%;    /* #ef4444 red, = dark --destructive; chip text 5.2:1 */
+    --needs-you: 0 72.2% 50.6%;    /* #dc2626 red, the same as light (owner 2026-11-03 21:05: #ef4444 read as salmon on the dark ground); chip text white 4.8:1 */
     --artifact: 282 40% 60%;
     /* Charts */
     --chart-1: 217 91% 60%;
