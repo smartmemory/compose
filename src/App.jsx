@@ -1238,10 +1238,12 @@ function AppInner() {
       case 'view': return true;
       // COMP-UI-LINKS-2: a Cadence unit, a Fleet session and a repo doc path are resolved by the room they open (an unknown
       // one lands on an empty selection, not a crash), so only an empty id is unresolvable.
-      case 'unit': case 'session': case 'file': case 'step': return typeof id === 'string' && id.length > 0;
+      case 'unit': case 'session': case 'step': return typeof id === 'string' && id.length > 0;
+      // a repo doc opens in the Wiki tab: with no Wiki tab (no wiki package built in, or its server off) the path stays text
+      case 'file': return typeof id === 'string' && id.length > 0 && wikiTab.availability !== 'no';
       default: return false;
     }
-  }, [gates, items]);
+  }, [gates, items, wikiTab.availability]);
 
   // (navigateToWiki is declared here, ahead of navigationValue, which hands it to rooms as `openFile`; comment above its old spot)
   const [wikiDoc, setWikiDoc] = useState(null);

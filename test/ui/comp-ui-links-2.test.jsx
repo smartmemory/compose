@@ -226,3 +226,14 @@ describe('Past builds and Sessions: a feature code with no roadmap item', () => 
     expect(screen.getByText('FEAT-GONE').getAttribute('title')).toMatch(/No roadmap item/);
   });
 });
+
+describe('A file link needs a Wiki tab', () => {
+  it('is text with a reason when the cockpit says it cannot open files', () => {
+    const { container } = withNav(<LinkedText text="see docs/a/b.md" />, makeNav({ canNavigate: (k) => k !== 'file' }));
+    expect(container.textContent).toBe('see docs/a/b.md');
+    cleanup();
+    withNav(<EntityLink kind="file" id="docs/a/b.md" />, makeNav({ canNavigate: (k) => k !== 'file' }));
+    expect(screen.queryByRole('button')).toBeNull();
+    expect(screen.getByText('docs/a/b.md').getAttribute('title')).toMatch(/No file named/);
+  });
+});
