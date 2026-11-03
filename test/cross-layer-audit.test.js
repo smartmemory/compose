@@ -1,13 +1,17 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { CrossLayerAudit, loadDebugConfig } from '../lib/cross-layer-audit.js';
 
-const TMP = join(import.meta.dirname, '.tmp-audit-test');
+let TMP;
 
 describe('loadDebugConfig', () => {
-  beforeEach(() => { mkdirSync(join(TMP, '.compose'), { recursive: true }); });
+  beforeEach(() => {
+    TMP = mkdtempSync(join(tmpdir(), 'compose-audit-test-'));
+    mkdirSync(join(TMP, '.compose'), { recursive: true });
+  });
   afterEach(() => { rmSync(TMP, { recursive: true, force: true }); });
 
   it('returns defaults when no compose.json', () => {

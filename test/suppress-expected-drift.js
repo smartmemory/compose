@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { deadPortSync } from './helpers/dead-port.js';
 
 const TEST_COMMIT_SENTINEL = 'compose-test-sentinel@invalid';
 
@@ -36,7 +37,7 @@ await import('./helpers/compose-data-guard.js');
 // to their own listen(0) ephemeral port, so they are unaffected.  The same dead
 // port (19997) is already used by the COMP-MODEL-AB sandbox harness, making it
 // the de-facto convention for "no compose server here".
-if (!process.env.COMPOSE_PORT) process.env.COMPOSE_PORT = '19997';
+if (!process.env.COMPOSE_PORT) process.env.COMPOSE_PORT = deadPortSync();
 
 // COMP-GUARD-ONE-TAP follow-up (2026-09-06): stratum's guard registry lives in
 // ~/.stratum/guards and, until stratum 2d26986+, could not be redirected. Tests

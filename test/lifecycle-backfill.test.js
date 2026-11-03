@@ -27,9 +27,10 @@ import { createRequire } from 'node:module';
 import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { deadPortSync } from './helpers/dead-port.js';
 
 // Never let the gate's default vision projector find a real cockpit on :4001.
-process.env.COMPOSE_PORT = '19994';
+process.env.COMPOSE_PORT = deadPortSync();
 
 import { createTestSigner } from './helpers/sshsig-sign.js';
 

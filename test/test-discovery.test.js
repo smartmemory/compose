@@ -11,6 +11,8 @@ const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
 
 function files(dir) {
   return readdirSync(dir, { withFileTypes: true }).flatMap(entry => {
+    // Dot-folders are never test locations; a stray temp folder (.tmp-*) can vanish mid-walk and throw ENOENT.
+    if (entry.name.startsWith('.')) return [];
     const path = join(dir, entry.name);
     return entry.isDirectory() ? files(path) : /\.test\.(js|jsx)$/.test(entry.name) ? [relative(root, path)] : [];
   });

@@ -1,7 +1,8 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
-import { mkdirSync, rmSync, readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { FixChainDetector, AttemptCounter, TraceValidator, DebugLedger } from '../lib/debug-discipline.js';
 
 describe('FixChainDetector', () => {
@@ -235,9 +236,9 @@ describe('TraceValidator', () => {
 });
 
 describe('DebugLedger', () => {
-  const TMP = join(import.meta.dirname, '.tmp-ledger-test');
+  let TMP;
 
-  beforeEach(() => { mkdirSync(TMP, { recursive: true }); });
+  beforeEach(() => { TMP = mkdtempSync(join(tmpdir(), 'compose-ledger-test-')); });
   afterEach(() => { rmSync(TMP, { recursive: true, force: true }); });
 
   it('creates ledger file on first write', () => {

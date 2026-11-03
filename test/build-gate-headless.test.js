@@ -13,6 +13,7 @@ import { StratumMcpClient } from '../lib/stratum-mcp-client.js';
 import { TS_MCP_BIN } from './helpers/stratum-test-bin.js';
 import { lookupBuildCancel } from '../lib/build-cancel.js';
 import { pointerPath } from '../lib/notify-gate.js';
+import { deadPortSync } from './helpers/dead-port.js';
 
 const SIMPLE_SPEC = `version: 1
 contracts:
@@ -115,7 +116,7 @@ test('A: runBuild tracker requests carry the resolved workspace header', async (
     });
   });
   const previousPort = process.env.COMPOSE_PORT;
-  process.env.COMPOSE_PORT = '19997';
+  process.env.COMPOSE_PORT = deadPortSync();
   t.after(() => {
     if (previousPort === undefined) delete process.env.COMPOSE_PORT;
     else process.env.COMPOSE_PORT = previousPort;
@@ -165,7 +166,7 @@ test('B: a healthy server that does not know the workspace cannot capture its ga
   t.mock.method(console, 'log', (...args) => output.push(args.join(' ')));
   const previousPort = process.env.COMPOSE_PORT;
   const previousStateRoot = process.env.STRATUM_STATE_ROOT;
-  process.env.COMPOSE_PORT = '19997';
+  process.env.COMPOSE_PORT = deadPortSync();
   process.env.STRATUM_STATE_ROOT = stateRoot;
   t.after(() => {
     if (previousPort === undefined) delete process.env.COMPOSE_PORT;
@@ -236,7 +237,7 @@ test('C(ii): a Stratum gate resolved externally during polling is adopted', asyn
   t.after(() => rmSync(stateRoot, { recursive: true, force: true }));
   const previousPort = process.env.COMPOSE_PORT;
   const previousStateRoot = process.env.STRATUM_STATE_ROOT;
-  process.env.COMPOSE_PORT = '19997';
+  process.env.COMPOSE_PORT = deadPortSync();
   process.env.STRATUM_STATE_ROOT = stateRoot;
   t.after(() => {
     if (previousPort === undefined) delete process.env.COMPOSE_PORT;
@@ -322,7 +323,7 @@ const COMPOSE_BIN = join(REPO_ROOT, 'bin', 'compose.js');
 const REAL_NOTIFY_CLIENT = process.env.COMPOSE_TEST_NOTIFY_CLIENT || join(homedir(), '.claude', 'scripts', 'notify_client.py');
 // Registered in ~/.ports as notify-gates (test range); nothing listens on it, so no
 // Compose server can address the workspace from this process or the answer CLI.
-const NO_SERVER_PORT = '19053';
+const NO_SERVER_PORT = deadPortSync();
 const POST_ID_GRAMMAR = /^compose\.gate:[A-Za-z0-9._-]+(:[A-Za-z0-9._-]+)?$/;
 
 const RECORDER = `import json, os, sys

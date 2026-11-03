@@ -11,10 +11,11 @@ import {
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { deadPortSync } from './helpers/dead-port.js';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const CLI = join(REPO_ROOT, 'bin', 'compose.js');
-const TEST_PORT = '19997';
+const TEST_PORT = deadPortSync();
 const ANSI_RE = /\x1b\[[0-9;]*m/g;
 
 function cleanEnv(extra = {}) {

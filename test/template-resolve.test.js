@@ -1,13 +1,16 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { resolveTemplatePath } from '../lib/build.js';
 
-const TMP = join(import.meta.dirname, '.tmp-template-test');
+// Outside the repo: a folder made under test/ is visible to test-discovery's walk of test/.
+let TMP;
 
 describe('resolveTemplatePath', () => {
   beforeEach(() => {
+    TMP = mkdtempSync(join(tmpdir(), 'compose-template-test-'));
     mkdirSync(join(TMP, 'pipelines'), { recursive: true });
   });
 

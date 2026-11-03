@@ -14,13 +14,14 @@ import { catalog, tier, thinking, claudeDefault, codexDefault, unpricedCodex } f
 // (lib/resolve-port.js:12), during the gate, not at module load. All three
 // golden files import this helper, so the guard covers each of them. An
 // explicit COMPOSE_PORT (e.g. a live-server test) is never overridden.
-if (!process.env.COMPOSE_PORT) process.env.COMPOSE_PORT = '19997';
+if (!process.env.COMPOSE_PORT) process.env.COMPOSE_PORT = deadPortSync();
 import assert from 'node:assert/strict';
 import { appendFileSync, readFileSync, writeFileSync, readdirSync } from 'node:fs';
 import { writeFile, readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
+import { deadPortSync } from './dead-port.js';
 import YAML from 'yaml';
 import { runBuild } from '../../lib/build.js';
 import { ConsumerFanoutArtifacts } from '../../lib/consumer-fanout.js';

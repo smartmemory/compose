@@ -19,10 +19,11 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { deadPortSync } from './helpers/dead-port.js';
 
 process.env.NODE_ENV = 'test';
 // Never let a VisionWriter inside the gate find a real cockpit on :4001.
-process.env.COMPOSE_PORT = '19993';
+process.env.COMPOSE_PORT = deadPortSync();
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 const express = (await import('express')).default;

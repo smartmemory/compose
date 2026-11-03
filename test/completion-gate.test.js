@@ -20,9 +20,10 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { deadPortSync } from './helpers/dead-port.js';
 
 // Never let the gate's default vision projector find a real cockpit on :4001.
-process.env.COMPOSE_PORT = '19995';
+process.env.COMPOSE_PORT = deadPortSync();
 
 import {
   completionGate, readIntent, guardEnabled,
