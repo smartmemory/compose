@@ -48,7 +48,7 @@ export const OWNER_QUEUE_TIMEOUT_MS = 15_000;
 // Cache windows. sm_status --json refreshes all of its sources in one call (~26 s measured 2026-10-30),
 // so its window cannot be shorter than one call; 60 s keeps one open cockpit under half a core. Cadence changes once per tick (cadence-shape.md: 60 s).
 export const TTL_MS = { stratum: 10_000, sm_status: 60_000, cadence: 60_000 };
-export const TIMEOUT_MS = { stratum: 30_000, sm_status: 60_000 };
+export const TIMEOUT_MS = { stratum: 30_000, sm_status: 150_000 }; // sm_status measured 37-44 s solo at load ~22 (2026-11-03); 60 s timed out
 const KILL_GRACE_MS = 5_000;
 const MAX_STDOUT = 16 << 20;
 const SHADOW_TAIL_BYTES = 256 << 10;
