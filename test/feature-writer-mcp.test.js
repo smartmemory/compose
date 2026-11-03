@@ -6,7 +6,7 @@
 import { test, describe, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdtempSync, mkdirSync, existsSync, readFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -14,10 +14,20 @@ import { fileURLToPath } from 'node:url';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const MCP_SERVER = join(ROOT, 'server', 'compose-mcp.js');
 
+// COMP-DOGFOOD-EVIDENCE-GATE-1: set_feature_status refuses a call with no receipt
+// (EVIDENCE_REQUIRED). A `log` receipt the server re-checks: a fresh file in the
+// temp workspace holding the claimed line.
+function receipt(cwd) {
+  const p = join(cwd, 'receipt.log');
+  writeFileSync(p, 'tests 1/1 pass\n');
+  return { kind: 'log', path: p, line: 'tests 1/1 pass', at: new Date().toISOString(), by: 'test' };
+}
+
 class McpClient {
   constructor(cwd) {
     this.proc = spawn('node', [MCP_SERVER], {
-      env: { ...process.env, COMPOSE_TARGET: cwd },
+      // COMP-DOGFOOD-EVIDENCE-GATE-1: receipts go to a store inside the temp workspace, never ~/.compose.
+      env: { ...process.env, COMPOSE_TARGET: cwd, COMPOSE_EVIDENCE_STORE: join(cwd, '.evidence.jsonl') },
       stdio: ['pipe', 'pipe', 'pipe'],
     });
     this.buf = '';
@@ -127,7 +137,7 @@ describe('compose-mcp roadmap writers (end-to-end)', () => {
         code: 'MCP-T-2', description: 'd', phase: 'P',
       });
       const result = await client.callTool('set_feature_status', {
-        code: 'MCP-T-2', status: 'IN_PROGRESS', reason: 'starting',
+        code: 'MCP-T-2', status: 'IN_PROGRESS', reason: 'starting', evidence: receipt(cwd),
       });
       const parsed = parseToolText(result);
       assert.equal(parsed.from, 'PLANNED');
@@ -142,7 +152,7 @@ describe('compose-mcp roadmap writers (end-to-end)', () => {
     const client = new McpClient(cwd);
     try {
       await client.callTool('add_roadmap_entry', { code: 'MCP-T-3', description: 'd', phase: 'P' });
-      await client.callTool('set_feature_status', { code: 'MCP-T-3', status: 'IN_PROGRESS' });
+      await client.callTool('set_feature_status', { code: 'MCP-T-3', status: 'IN_PROGRESS', evidence: receipt(cwd) });
       const result = await client.callTool('roadmap_diff', { since: '24h' });
       const parsed = parseToolText(result);
       assert.deepEqual(parsed.added, ['MCP-T-3']);
@@ -157,7 +167,7 @@ describe('compose-mcp roadmap writers (end-to-end)', () => {
     const cwd = freshCwd();
     const client = new McpClient(cwd);
     try {
-      const result = await client.callTool('set_feature_status', { code: 'GHOST-1', status: 'COMPLETE' });
+      const result = await client.callTool('set_feature_status', { code: 'GHOST-1', status: 'COMPLETE', evidence: receipt(cwd) });
       assert.equal(result.isError, true);
       assert.match(result.content[0].text, /not found/);
     } finally {

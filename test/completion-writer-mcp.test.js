@@ -21,7 +21,8 @@ const FULL_SHA_B = 'b'.repeat(40);
 class McpClient {
   constructor(cwd) {
     this.proc = spawn('node', [MCP_SERVER], {
-      env: { ...process.env, COMPOSE_TARGET: cwd },
+      // COMP-DOGFOOD-EVIDENCE-GATE-1: receipts go to a store inside the temp workspace, never ~/.compose.
+      env: { ...process.env, COMPOSE_TARGET: cwd, COMPOSE_EVIDENCE_STORE: join(cwd, '.evidence.jsonl') },
       stdio: ['pipe', 'pipe', 'pipe'],
     });
     this.buf = '';
@@ -70,6 +71,15 @@ class McpClient {
   }
 }
 
+// COMP-DOGFOOD-EVIDENCE-GATE-1: record_completion refuses a call with no receipt
+// (EVIDENCE_REQUIRED). A `log` receipt the server re-checks: a fresh file in the
+// temp workspace holding the claimed line.
+function receipt(cwd) {
+  const p = join(cwd, 'receipt.log');
+  writeFileSync(p, 'tests 1/1 pass\n');
+  return { kind: 'log', path: p, line: 'tests 1/1 pass', at: new Date().toISOString(), by: 'test' };
+}
+
 function freshCwd() {
   const cwd = mkdtempSync(join(tmpdir(), 'mcp-completion-'));
   mkdirSync(join(cwd, 'docs', 'features'), { recursive: true });
@@ -105,6 +115,7 @@ describe('compose-mcp completion writer (end-to-end)', () => {
     const client = new McpClient(cwd);
     try {
       const result = await client.callTool('record_completion', {
+        evidence: receipt(cwd),
         feature_code: 'COMP-1',
         commit_sha: FULL_SHA_A,
         tests_pass: true,
@@ -132,6 +143,7 @@ describe('compose-mcp completion writer (end-to-end)', () => {
     const client = new McpClient(cwd);
     try {
       const args = {
+        evidence: receipt(cwd),
         feature_code: 'COMP-1',
         commit_sha: FULL_SHA_A,
         tests_pass: true,
@@ -153,6 +165,7 @@ describe('compose-mcp completion writer (end-to-end)', () => {
     const client = new McpClient(cwd);
     try {
       const result = await client.callTool('record_completion', {
+        evidence: receipt(cwd),
         feature_code: 'MISSING-1',
         commit_sha: FULL_SHA_A,
         tests_pass: true,
@@ -181,6 +194,7 @@ describe('compose-mcp completion writer (end-to-end)', () => {
     const client = new McpClient(cwd);
     try {
       const result = await client.callTool('record_completion', {
+        evidence: receipt(cwd),
         feature_code: 'COMP-1',
         commit_sha: FULL_SHA_A,
         tests_pass: true,
@@ -214,6 +228,7 @@ describe('compose-mcp completion writer (end-to-end)', () => {
     const client = new McpClient(cwd);
     try {
       const result = await client.callTool('record_completion', {
+        evidence: receipt(cwd),
         feature_code: 'COMP-1',
         commit_sha: FULL_SHA_A,
         tests_pass: true,
@@ -236,6 +251,7 @@ describe('compose-mcp completion writer (end-to-end)', () => {
     try {
       // Write
       await client.callTool('record_completion', {
+        evidence: receipt(cwd),
         feature_code: 'COMP-1',
         commit_sha: FULL_SHA_A,
         tests_pass: true,

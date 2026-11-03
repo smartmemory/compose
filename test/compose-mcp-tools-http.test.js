@@ -8,8 +8,12 @@
  * via toolKillFeature, _postGate via toolApproveGate).
  */
 import { test } from 'node:test';
+
 import assert from 'node:assert/strict';
 import http from 'node:http';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 
 import {
   toolGetCurrentSession,
@@ -19,6 +23,17 @@ import {
   toolApproveGate,
   toolSetWorkspace,
 } from '../server/compose-mcp-tools.js';
+
+// COMP-DOGFOOD-EVIDENCE-GATE-1: an approving approve_gate takes a receipt the
+// server re-checks, stored here (never ~/.compose). The receipt is a fresh log
+// file holding the claimed line.
+const _EV_DIR = mkdtempSync(join(tmpdir(), 'mcp-http-ev-'));
+process.env.COMPOSE_EVIDENCE_STORE = join(_EV_DIR, 'evidence.jsonl');
+function receipt() {
+  const p = join(_EV_DIR, 'receipt.log');
+  writeFileSync(p, 'gate checks 3/3\n');
+  return { kind: 'log', path: p, line: 'gate checks 3/3', at: new Date().toISOString(), by: 'test' };
+}
 
 // Helper: spin up an http server that captures every request and replies 200 JSON.
 function startCaptureServer(reply = { status: 200, body: { ok: true } }) {
@@ -107,7 +122,7 @@ test('T5 _httpRequest: POST callsite (_postGate via toolApproveGate) sends JSON 
   t.after(() => server.close());
   process.env.COMPOSE_PORT = String(port);
 
-  await toolApproveGate({ gateId: 'G-1', outcome: 'approved', comment: 'ok' });
+  await toolApproveGate({ gateId: 'G-1', outcome: 'approved', comment: 'ok', evidence: receipt() });
   assert.equal(captured.length, 1);
   assert.equal(captured[0].method, 'POST');
   assert.equal(captured[0].url, '/api/vision/gates/G-1/resolve');
@@ -150,7 +165,7 @@ test('T5 _httpRequest: header injected when _binding.id is set, on all 4 callsit
 
   await toolGetCurrentSession({ featureCode: 'F-A' });
   await toolKillFeature({ id: 'ITEM-A', reason: 'r' });
-  await toolApproveGate({ gateId: 'G-A', outcome: 'approved' });
+  await toolApproveGate({ gateId: 'G-A', outcome: 'approved', evidence: receipt() });
   await toolBindSession({ featureCode: 'F-B' });
 
   assert.equal(captured.length, 4);

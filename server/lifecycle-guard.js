@@ -215,8 +215,11 @@ export async function projectFeatureStatus({ featureCode, phase, cwd, commitSha 
 // Evidence-bound completion (Slice 3)
 // ---------------------------------------------------------------------------
 
-/** True if `sha` resolves to a real commit object in the repo at `cwd`. */
-function gitCommitExists(sha, cwd) {
+/**
+ * True if `sha` resolves to a real commit object in the repo at `cwd`. Exported for
+ * the `sha` receipt (lib/evidence.js, COMP-DOGFOOD-EVIDENCE-GATE-1): one commit check.
+ */
+export function gitCommitExists(sha, cwd) {
   const r = spawnSync('git', ['rev-parse', '--verify', '--quiet', `${sha}^{commit}`],
     { cwd, encoding: 'utf8' });
   return r.status === 0;

@@ -9,6 +9,19 @@
  * Data only — no I/O, no imports. Each entry declares `effect` and, when
  * mutating, `writes` (canon-registry entry ids). See lib/tool-inventory.js.
  */
+/**
+ * COMP-DOGFOOD-EVIDENCE-GATE-1: the `evidence` argument of the state tools. The
+ * definition is contracts/evidence.schema.json (lib/evidence.js validates
+ * against it); this is only its wire summary, so a client sees the kinds.
+ */
+const EVIDENCE_PROP = {
+  description: 'Receipt for the claim, re-checked by the server (contracts/evidence.schema.json): an object {kind, at (ISO time), by (session), ...kind fields} with kind sha {repo, sha} | process {pid, launched_at, label, exit_file?, log?} (checked at launch + 120 s or later) | file {path, line?} | log {path, line} | screenshot {path, region?} | command {command, output_line, log} | pixel {path, point {x, y}, expected "#rrggbb"}; or an "ev:<id>" from `node lib/evidence-cli.js record`. Refused without one (EVIDENCE_REQUIRED) unless the workspace sets capabilities.evidence false. The accepted id comes back as evidence_id.',
+  anyOf: [
+    { type: 'object', required: ['kind', 'at', 'by'], properties: { kind: { type: 'string', enum: ['sha', 'process', 'file', 'log', 'screenshot', 'command', 'pixel'] } } },
+    { type: 'string', pattern: '^ev:[0-9a-f]{16}$' },
+  ],
+};
+
 export const TOOLS = [
   {
     name: 'get_vision_items',
@@ -156,8 +169,9 @@ export const TOOLS = [
         tests_pass: { type: 'boolean', description: 'Defaults to true when commit_sha is provided.' },
         files_changed: { type: 'array', items: { type: 'string' }, description: 'Repo-relative paths committed in the SHA.' },
         notes: { type: 'string', description: 'One-line note for the completion record.' },
+        evidence: EVIDENCE_PROP,
       },
-      required: ['id'],
+      required: ['id', 'evidence'],
     },
   },
   {
@@ -244,6 +258,7 @@ export const TOOLS = [
         gateId: { type: 'string', description: 'Gate ID' },
         outcome: { type: 'string', enum: ['approved', 'revised', 'killed'], description: 'Resolution outcome' },
         comment: { type: 'string', description: 'Optional human feedback' },
+        evidence: { ...EVIDENCE_PROP, description: 'Required when outcome is approved (an approval claims the gated work is done); not read for revised or killed. ' + EVIDENCE_PROP.description },
       },
       required: ['gateId', 'outcome'],
     },
@@ -298,9 +313,10 @@ export const TOOLS = [
     description: 'Flip a feature status. Updates feature.json and regenerates ROADMAP.md. Enforces a transition policy (use force: true to bypass). Appends an audit event (best-effort).',
     inputSchema: {
       type: 'object',
-      required: ['code', 'status'],
+      required: ['code', 'status', 'evidence'],
       properties: {
         code: { type: 'string' },
+        evidence: EVIDENCE_PROP,
         status: { type: 'string', enum: ['PLANNED', 'IN_PROGRESS', 'PARTIAL', 'COMPLETE', 'BLOCKED', 'KILLED', 'PARKED', 'SUPERSEDED'] },
         reason: { type: 'string', description: 'Free-form reason persisted in the audit event' },
         commit_sha: { type: 'string', description: 'Optional commit binding' },
@@ -620,9 +636,10 @@ export const TOOLS = [
     description: 'Record a completion bound to a commit SHA — THROUGH the completion gate (COMP-COMPLETION-GATE): under capabilities.guard the commit is server-verified and tests attested (no silent default), ONE guarded transition is ledgered, then the gate writes completions[], status COMPLETE, ROADMAP.md, the cockpit item and the audit event. A refusal (bad evidence, KILLED/SUPERSEDED feature, guard refused/unreachable) errors with COMPLETION_REFUSED and writes NOTHING. Projection failures (ROADMAP/vision) return success with partial:true + failures[]. set_status:false records evidence only (no status change, no guard transition). Idempotent on (feature_code, commit_sha).',
     inputSchema: {
       type: 'object',
-      required: ['feature_code', 'commit_sha', 'tests_pass', 'files_changed'],
+      required: ['feature_code', 'commit_sha', 'tests_pass', 'files_changed', 'evidence'],
       properties: {
         feature_code:    { type: 'string' },
+        evidence:        EVIDENCE_PROP,
         commit_sha:      { type: 'string', description: 'Full 40-char hex SHA (Decision 9). Short prefixes are rejected before any guard write. Stored lowercase; commit_sha_short is derived for display only.' },
         tests_pass:      { type: 'boolean' },
         files_changed:   { type: 'array', items: { type: 'string' } },

@@ -35,6 +35,7 @@ import { emitStatusSnapshot } from './status-emit.js';
 import { computeStatusSnapshot } from './status-snapshot.js';
 import { emitDriftAxes } from './drift-emit.js';
 import { resolveGateTimeoutMs } from '../lib/gate-timeout.js';
+import { attachEvidenceRoutes } from './evidence-routes.js';
 
 let _schemaValidator = null;
 function getSchemaValidator() {
@@ -83,6 +84,10 @@ function loadComposeConfig(root) {
  * @param {{ store: object, scheduleBroadcast: function, broadcastMessage: function, projectRoot: string, settingsStore?: object, capabilities?: object }} deps
  */
 export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMessage, projectRoot = getTargetRoot(), settingsStore, capabilities }) {
+  // COMP-DOGFOOD-EVIDENCE-GATE-1: the read side of the receipts behind these
+  // items' states (the cockpit's evidence chip). Read-only.
+  attachEvidenceRoutes(app);
+
   // COMP-MCP-ENFORCE: when enabled, lifecycle transitions are verdict-gated by
   // stratum's STRAT-GUARD (fail-closed). Default OFF — legacy behavior intact.
   const guardEnabled = () => capabilities?.guard === true;

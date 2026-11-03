@@ -9,6 +9,7 @@ import { TYPE_COLORS, STATUS_COLORS, PHASES, PHASE_LABELS, STATUSES, CONFIDENCE_
 import ConnectionGraph from './ConnectionGraph.jsx';
 import ConfidenceBar from './shared/ConfidenceBar.jsx';
 import CompletionBadge from './shared/CompletionBadge.jsx';
+import EvidenceChip from './shared/EvidenceChip.jsx';
 import BranchComparePanel from './BranchComparePanel.jsx';
 import DriftRibbon from './DriftRibbon.jsx';
 import StartBuildPopover from './StartBuildPopover.jsx';
@@ -506,17 +507,21 @@ export default function ItemDetailPanel({ item, items, connections, gates, onUpd
           <div className="flex items-end gap-3 flex-wrap">
             <div>
               <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1" data-testid="status-label">Board status (cockpit only)</p>
-              <select
-                className="text-xs px-2 py-1 rounded-md bg-muted text-foreground border border-border cursor-pointer"
-                value={item.status || 'planned'}
-                onChange={(e) => onUpdate(item.id, { status: e.target.value })}
-                title="Board status: changes the cockpit card only, not feature.json or compose build"
-                aria-label="Board status (cockpit only)"
-              >
-                {STATUSES.map(s => (
-                  <option key={s} value={s}>{s.replace('_', ' ')}</option>
-                ))}
-              </select>
+              <div className="flex items-center gap-1.5">
+                <select
+                  className="text-xs px-2 py-1 rounded-md bg-muted text-foreground border border-border cursor-pointer"
+                  value={item.status || 'planned'}
+                  onChange={(e) => onUpdate(item.id, { status: e.target.value })}
+                  title="Board status: changes the cockpit card only, not feature.json or compose build"
+                  aria-label="Board status (cockpit only)"
+                >
+                  {STATUSES.map(s => (
+                    <option key={s} value={s}>{s.replace('_', ' ')}</option>
+                  ))}
+                </select>
+                {/* COMP-DOGFOOD-EVIDENCE-GATE-1: the receipt behind this state, or "no receipt" */}
+                <EvidenceChip featureCode={item.lifecycle?.featureCode} status={item.status} />
+              </div>
             </div>
 
             <div>

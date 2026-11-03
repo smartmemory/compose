@@ -60,6 +60,55 @@ export async function assertCompletionEvidence(args, capsOverride, cwd = getTarg
   }
 }
 
+// ---------------------------------------------------------------------------
+// COMP-DOGFOOD-EVIDENCE-GATE-1 — no state claim without a receipt the server
+// can check. record_completion, set_feature_status, complete_feature and an
+// approving approve_gate each take `evidence` (contracts/evidence.schema.json,
+// or an `ev:<id>`). lib/evidence.js re-checks it against the machine, the
+// tool's own action runs, and only then is the receipt stored and its id
+// returned as `evidence_id` — a claim the tool refuses leaves no receipt.
+// Independent of capabilities.guard: the flag is capabilities.evidence,
+// default ON; off logs one WARNING per process (lib/evidence.js).
+// ---------------------------------------------------------------------------
+
+/**
+ * @param {string} toolName
+ * @param {object} args the tool args (carries `evidence`)
+ * @param {object} subject what the receipt backs, stored with it (server-filled)
+ * @param {() => Promise<any>} act the tool's own action
+ * @param {object} [o] test seams forwarded to lib/evidence.js (now, ps, store)
+ */
+export async function withEvidence(toolName, args, subject, act, o = {}) {
+  const { evidenceRequired, checkEvidence, recordEvidence } = await import('../lib/evidence.js');
+  let config = null;
+  try { config = loadProjectConfig(); } catch { config = null; }
+  if (!evidenceRequired(o.config ?? config, getTargetRoot())) return act();
+  const accepted = checkEvidence(args?.evidence, toolName, o);
+  const result = await act();
+  let record;
+  try {
+    record = recordEvidence(accepted.evidence, { checks: accepted.checks, subject: { tool: toolName, ...subject }, store: o.store });
+  } catch (err) {
+    console.warn(`[evidence] WARNING: ${toolName} succeeded but its receipt was NOT stored: ${err.message}`);
+    return result && typeof result === 'object' && !Array.isArray(result)
+      ? { ...result, evidence_id: null, evidence_warning: `receipt not stored: ${err.message}` }
+      : result;
+  }
+  return result && typeof result === 'object' && !Array.isArray(result)
+    ? { ...result, evidence_id: record.id }
+    : result;
+}
+
+/** The tool args without `evidence`: the writers below never see the receipt. */
+function _withoutEvidence(args) {
+  if (!args || typeof args !== 'object') return args;
+  const { evidence: _ev, ...rest } = args;
+  return rest;
+}
+
+/** Gate outcomes that claim the gated work is done (and so need a receipt). */
+export const EVIDENCE_GATE_OUTCOMES = new Set(['approved']);
+
 /** Terminal statuses owned by the lifecycle (projected from phase, Slice 2). */
 const LIFECYCLE_OWNED_STATUS = new Set(['COMPLETE', 'KILLED']);
 
@@ -343,7 +392,9 @@ export async function toolSetFeatureStatus(args) {
   assertForceAuthorized(args, 'set_feature_status');
   assertTerminalStatusAuthorized(args, 'set_feature_status');
   const { setFeatureStatus } = await import('../lib/feature-writer.js');
-  return setFeatureStatus(getTargetRoot(), args);
+  const root = getTargetRoot();
+  return withEvidence('set_feature_status', args, { feature: args?.code, claim: args?.status },
+    () => setFeatureStatus(root, _withoutEvidence(args)));
 }
 
 export async function toolRoadmapDiff(args) {
@@ -518,6 +569,12 @@ export async function toolGetJournalEntries(args) {
 // ---------------------------------------------------------------------------
 
 export async function toolRecordCompletion(args) {
+  return withEvidence('record_completion', args,
+    { feature: args?.feature_code, claim: args?.set_status === false ? 'evidence-only' : 'COMPLETE' },
+    () => _recordCompletion(_withoutEvidence(args)));
+}
+
+async function _recordCompletion(args) {
   // COMP-COMPLETION-GATE slice 1: route the deliberate completion path through
   // the gate, which verifies the same evidence AND takes a guarded transition —
   // the step that has never happened for any real feature (design.md §1).
@@ -777,13 +834,23 @@ export async function toolKillFeature({ id, reason }) {
   return _postLifecycle(id, 'kill', { reason });
 }
 
-export async function toolCompleteFeature({ id, commit_sha, tests_pass, files_changed, notes }) {
+export async function toolCompleteFeature(args = {}) {
+  const { id, commit_sha, tests_pass, files_changed, notes } = args;
   const body = {};
   if (commit_sha !== undefined) body.commit_sha = commit_sha;
   if (tests_pass !== undefined) body.tests_pass = tests_pass;
   if (files_changed !== undefined) body.files_changed = files_changed;
   if (notes !== undefined) body.notes = notes;
-  return _postLifecycle(id, 'complete', body);
+  return withEvidence('complete_feature', args, { feature: _featureCodeOf(id), claim: 'COMPLETE' },
+    () => _postLifecycle(id, 'complete', body));
+}
+
+/** The feature code behind a vision item id (falls back to the id itself). */
+function _featureCodeOf(id) {
+  try {
+    const item = loadVisionState().items.find((i) => i.id === id || i.semanticId === id || i.slug === id);
+    return item?.lifecycle?.featureCode || id;
+  } catch { return id; }
 }
 
 export async function toolBackfillCompletion({ id, commit_sha, tests_pass, files_changed, notes, reason, occurrences }) {
@@ -839,8 +906,18 @@ export function toolScaffoldFeature({ featureCode, only, mode = 'build' }) {
 // Gate tools — mutations delegate to Compose REST API
 // ---------------------------------------------------------------------------
 
-export async function toolApproveGate({ gateId, outcome, comment }) {
-  return _postGate(gateId, 'resolve', { outcome, comment });
+export async function toolApproveGate(args = {}) {
+  const { gateId, outcome, comment } = args;
+  // Only an approval claims the gated work is done; `revised` keeps the feature
+  // in its phase and `killed` abandons it, so neither needs a receipt.
+  if (!EVIDENCE_GATE_OUTCOMES.has(outcome)) return _postGate(gateId, 'resolve', { outcome, comment });
+  let feature;
+  try {
+    const gate = (loadVisionState().gates || []).find((g) => g.id === gateId);
+    if (gate?.itemId) feature = _featureCodeOf(gate.itemId);
+  } catch { feature = undefined; }
+  return withEvidence('approve_gate', args, { gate: gateId, outcome, ...(feature ? { feature } : {}) },
+    () => _postGate(gateId, 'resolve', { outcome, comment }));
 }
 
 export function toolGetPendingGates({ itemId }) {
