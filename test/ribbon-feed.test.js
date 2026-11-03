@@ -187,6 +187,9 @@ describe('GET /api/ribbon', () => {
     ['every source down: still 200, the stamps are not recorded, no lanes', `from=${FROM}&to=${TO}`, { loadUnits: async () => { throw new Error('no stamps'); } }, 200, (b) => {
       assert.deepEqual([b.lanes.length, Boolean(b.sourceErrors.stamps), b.notRecorded.some((n) => n.source === 'stamps')], [0, true, true]);
     }],
+    ['the owner queue down: owner.open is null (unknown, never []), the reason only in sourceErrors', `from=${FROM}&to=${TO}`, { loadOwnerQueue: async () => { throw new Error('ENOENT owner-queue.jsonl'); } }, 200, (b) => {
+      assert.deepEqual([b.owner, Boolean(b.sourceErrors.ownerQueue)], [{ open: null }, true]);
+    }],
     ['from after to is 400', `from=${TO}&to=${FROM}`, {}, 400, (b) => assert.match(b.error, /before/)],
     ['from equal to is 400', `from=${FROM}&to=${FROM}`, {}, 400, () => {}],
     ['32 days is 400', 'from=2026-10-01T00:00:00Z&to=2026-11-02T00:00:00Z', {}, 400, (b) => assert.match(b.error, /31 days/)],

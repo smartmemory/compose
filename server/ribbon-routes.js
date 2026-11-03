@@ -226,8 +226,9 @@ export function attachRibbonRoutes(app, { remote = false, env = process.env, dep
         etas, history, sourceErrors, warn,
       });
       // C3: owner waits from the owner queue, on the lane each one belongs to. A queue that could not be read is unknown
-      // (`owner.open: null`, the ribbon then drops nothing), never an empty list.
-      if (oq.error) body.owner = { open: null, error: oq.error };
+      // (`owner.open: null`, the ribbon then drops nothing), never an empty list. The reason stays in `sourceErrors.ownerQueue`
+      // only, so a raw error string is not copied into one more field (u2-folds RIBBON-FEED-1 M5).
+      if (oq.error) body.owner = { open: null };
       else {
         const ow = ownerWaits({ queue: oq.value ?? [], units: unitList, lanes: body.lanes.map((l) => l.lane), from: a.ms, to: b.ms, now: t0 });
         for (const { lane, span } of ow.spans) {
