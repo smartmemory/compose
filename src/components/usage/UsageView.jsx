@@ -8,7 +8,7 @@
  * COMP-COCKPIT-PROCESS-DATA-1: a scope toggle adds "Seats and fleet" (FleetUsage.jsx): the fleet's day and
  * last-hour spend and per-seat quota, the spend this ledger never sees. The default scope is unchanged.
  */
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { BarChart3, ChevronLeft, ChevronRight, Info, RefreshCw, TriangleAlert } from 'lucide-react';
 import { cn } from '@/lib/utils.js';
 import EmptyState from '../vision/shared/EmptyState.jsx';
@@ -73,6 +73,8 @@ function tilesFor(cur, prev) {
   const p = prev?.tiles;
   const cost = costDisplay(t.total_cost.usd, provenanceCounts(t.total_cost.provenance));
   const c = t.cache_hit_rate;
+  const retry = costDisplay(t.retry_cost.usd, provenanceCounts(t.retry_cost.provenance));
+  const wasted = costDisplay(t.wasted_spend.usd, provenanceCounts(t.wasted_spend.provenance));
   return [
     { label: 'Total cost', info: 'Sum of usd over dispatches in range. Provenance per dispatch: reported, estimated, or no record.',
       value: cost.text, marker: cost.unknownProvenance ? <UnknownMarker tip={cost.tip} /> : null,
@@ -89,10 +91,10 @@ function tilesFor(cur, prev) {
       info: `cache_read / (cache_read + input) over ${c.builds_counted} builds; ${c.builds_excluded} builds without cache fields excluded. Build history has no model id, so this is not split by model.`,
       value: formatRate(c.rate), d: p && delta(c.rate, p.cache_hit_rate.rate) },
     { label: 'Retry cost', info: `Sum of usd on dispatches with attempt > 1 (${t.retry_cost.dispatch_count} dispatches).`,
-      value: formatCost(t.retry_cost.usd, { digits: 2 }), d: p && delta(t.retry_cost.usd, p.retry_cost.usd), money: true },
+      value: retry.text, marker: retry.unknownProvenance ? <UnknownMarker tip={retry.tip} /> : null, d: p && delta(t.retry_cost.usd, p.retry_cost.usd), money: true },
     { label: 'Wasted spend',
       info: `Sum of usd on dispatches whose build ended ${t.wasted_spend.statuses.join('/')}. ${t.wasted_spend.unjoined_count} dispatches have no build record yet, ${t.wasted_spend.no_build_count} have no build.`,
-      value: formatCost(t.wasted_spend.usd, { digits: 2 }), d: p && delta(t.wasted_spend.usd, p.wasted_spend.usd), money: true },
+      value: wasted.text, marker: wasted.unknownProvenance ? <UnknownMarker tip={wasted.tip} /> : null, d: p && delta(t.wasted_spend.usd, p.wasted_spend.usd), money: true },
   ];
 }
 
@@ -167,15 +169,19 @@ function ComposeUsage({ client, now, scopeToggle }) {
   const span = resolveRange(range, offset, now ? new Date(now) : new Date());
   const bounded = span.from !== null;
 
+  // One generation counter shared by the effect and Refresh: only the latest request's answer lands.
+  const generation = useRef(0);
   const load = useCallback(() => {
-    let live = true;
+    const mine = ++generation.current;
     setState((s) => ({ ...s, loading: true, error: null }));
     client.getStats({ from: span.from, to: span.to, compare: compare && bounded })
-      .then((data) => { if (live) setState({ loading: false, data, error: null }); })
-      .catch((err) => { if (live) setState({ loading: false, data: null, error: err.message || String(err) }); });
-    return () => { live = false; };
+      .then((data) => { if (mine === generation.current) setState({ loading: false, data, error: null }); })
+      .catch((err) => { if (mine === generation.current) setState({ loading: false, data: null, error: err.message || String(err) }); });
   }, [client, span.from, span.to, compare, bounded]);
-  useEffect(() => load(), [load]);
+  useEffect(() => {
+    load();
+    return () => { generation.current += 1; };
+  }, [load]);
 
   const cur = state.data?.current;
   const prev = state.data?.previous;
@@ -223,9 +229,12 @@ function ComposeUsage({ client, now, scopeToggle }) {
           {cur.incomplete.marked && (
             <div className="flex items-center gap-2 text-[11px] text-[hsl(var(--warning))]" data-testid="usage-incomplete">
               <TriangleAlert className="w-3.5 h-3.5" />
-              Cost incomplete: {plural(cur.incomplete.usd_unknown_count, 'call')} with unknown cost in this range's build records
-              {cur.incomplete.dispatches_missing_usd ? `, ${plural(cur.incomplete.dispatches_missing_usd, 'dispatch', 'dispatches')} without a cost` : ''}.
-            </div>
+              {cur.incomplete.history_unreadable && <>Build history unreadable ({cur.incomplete.history_unreadable}): cache rate, build outcomes and wasted spend are missing. </>}
+              {(cur.incomplete.usd_unknown_count > 0 || cur.incomplete.dispatches_missing_usd > 0) && <>
+                Cost incomplete: {plural(cur.incomplete.usd_unknown_count, 'call')} with unknown cost in this range's build records
+                {cur.incomplete.dispatches_missing_usd ? `, ${plural(cur.incomplete.dispatches_missing_usd, 'dispatch', 'dispatches')} without a cost` : ''}.
+              </>}
+</div>
           )}
           <section className="grid grid-cols-2 md:grid-cols-4 gap-2" aria-label="Usage summary">
             {tilesFor(cur, prev).map((tile) => <Tile key={tile.label} {...tile} />)}

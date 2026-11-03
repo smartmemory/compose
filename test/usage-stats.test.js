@@ -11,8 +11,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import express from 'express';
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync, chmodSync } from 'node:fs';
+import { tmpdir, homedir } from 'node:os';
 import { join } from 'node:path';
 
 import { attachUsageRoutes } from '../server/usage-routes.js';
@@ -258,5 +258,64 @@ test('GET /api/usage/stats row table', async (t) => {
         rmSync(ws, { recursive: true, force: true });
       }
     });
+  }
+});
+
+// COMP-OBS-STATS-1-FU-1 M3/M4: an unreadable source is a visible fault, not zeros and not a path.
+const unreadable = process.getuid?.() === 0 ? { skip: 'root ignores file modes' } : {};
+
+test('unreadable build history marks the stats incomplete with a reason and warns, not zeros', unreadable, async () => {
+  const ws = mkdtempSync(join(tmpdir(), 'usage-stats-'));
+  const warns = [];
+  const realWarn = console.warn;
+  console.warn = (...a) => warns.push(a.join(' '));
+  try {
+    const dataDir = seed(ws, { ledger: [dispatch('2026-10-01T15:00:00.000Z', { build_id: B_FAIL })], history: [build(B_FAIL, 'failed')] });
+    chmodSync(join(dataDir, 'build-history.jsonl'), 0o000);
+    const { status, body } = await get(ws, dataDir, 'from=2026-10-01T04:00:00.000Z&to=2026-10-02T04:00:00.000Z');
+    assert.equal(status, 200);
+    assert.equal(body.current.incomplete.marked, true);
+    assert.match(body.current.incomplete.history_unreadable, /build history unreadable \(EACCES\)/);
+    assert.ok(!body.current.incomplete.history_unreadable.includes(homedir()));
+    assert.ok(warns.some((w) => /build-history.*unreadable \(EACCES\)/.test(w)), warns.join('|'));
+  } finally {
+    console.warn = realWarn;
+    chmodSync(join(ws, '.compose', 'data', 'build-history.jsonl'), 0o600);
+    rmSync(ws, { recursive: true, force: true });
+  }
+});
+
+test('a 500 from the stats route names the fs code and no absolute path', unreadable, async () => {
+  const ws = mkdtempSync(join(tmpdir(), 'usage-stats-'));
+  const realWarn = console.warn;
+  console.warn = () => {};
+  try {
+    const dataDir = seed(ws, { ledger: [dispatch('2026-10-01T15:00:00.000Z')], history: [] });
+    chmodSync(join(dataDir, 'dispatch-ledger.jsonl'), 0o000);
+    const { status, body } = await get(ws, dataDir, 'from=2026-10-01T04:00:00.000Z&to=2026-10-02T04:00:00.000Z');
+    assert.equal(status, 500);
+    assert.equal(body.error, 'EACCES: stats source unreadable');
+    assert.ok(!body.error.includes(homedir()) && !body.error.includes(ws));
+  } finally {
+    console.warn = realWarn;
+    chmodSync(join(ws, '.compose', 'data', 'dispatch-ledger.jsonl'), 0o600);
+    rmSync(ws, { recursive: true, force: true });
+  }
+});
+
+test('retry cost and wasted spend carry their own provenance breakdown', async () => {
+  const ws = mkdtempSync(join(tmpdir(), 'usage-stats-'));
+  try {
+    const dataDir = seed(ws, {
+      ledger: [dispatch('2026-10-01T15:00:00.000Z', { build_id: B_FAIL, attempt: 2, usd_source: 'estimated', usd: 2 })],
+      history: [build(B_FAIL, 'failed')],
+    });
+    const { body } = await get(ws, dataDir, 'from=2026-10-01T04:00:00.000Z&to=2026-10-02T04:00:00.000Z');
+    const t = body.current.tiles;
+    assert.equal(t.retry_cost.provenance.estimated.dispatch_count, 1);
+    assert.equal(t.wasted_spend.provenance.estimated.dispatch_count, 1);
+    assert.equal(t.wasted_spend.provenance.reported.dispatch_count, 0);
+  } finally {
+    rmSync(ws, { recursive: true, force: true });
   }
 });

@@ -82,6 +82,8 @@ const ROWS = [
   ['server readers: credit keeps a null balance, hourly keeps closed buckets only, a bad document throws', () => {
     assert.deepEqual(creditRow({ balance_usd: null, hold: true, reserve_usd: 10, as_of: 'x' }), { balance_usd: null, hold: true, reserve_usd: 10, as_of: 'x' });
     assert.throws(() => creditRow({}), /no status/);
+    // api_credit prints {balance_usd:null, hold:true, error} when its state cannot load: a fault, not "balance not set".
+    assert.throws(() => creditRow({ balance_usd: null, hold: true, reserve_usd: 10, as_of: '2026-11-03T00:00:00Z', error: 'ledger has a torn record, restore required' }), /api_credit reported: ledger has a torn record/);
     assert.deepEqual(hourlyRows({ buckets: [{ start: 'a', usd: 1.5, by_engine: {} }, null, { usd: 3 }] }), [{ start: 'a', usd: 1.5 }]);
     assert.throws(() => hourlyRows({}), /no buckets/);
   }],

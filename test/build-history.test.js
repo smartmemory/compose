@@ -6,7 +6,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, rmSync, readFileSync, writeFileSync, existsSync, chmodSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { appendBuildHistory, readBuildHistory } from '../lib/build-history.js';
@@ -265,6 +265,24 @@ test('persistHealthGateDowngrade guard: legacy state without flowId but differen
     const written = persistHealthGateDowngrade(dir, { score: 1, threshold: 2, flowId: 'flow-mine', featureCode: 'F-OTHER' });
     assert.equal(written.status, 'failed');
   } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('readBuildHistory: an unreadable file warns and throws with the fs code and no path, a missing file stays []', { skip: process.getuid?.() === 0 }, () => {
+  const dir = mkdtempSync(join(tmpdir(), 'bh-unreadable-'));
+  const warns = [];
+  const realWarn = console.warn;
+  console.warn = (...a) => warns.push(a.join(' '));
+  try {
+    appendBuildHistory(dir, { featureCode: 'F', status: 'complete', mode: 'feature' });
+    chmodSync(join(dir, 'build-history.jsonl'), 0o000);
+    assert.throws(() => readBuildHistory(dir), (e) => e.code === 'EACCES' && e.message === 'build history unreadable (EACCES)');
+    assert.equal(warns.length, 1);
+    assert.ok(!warns[0].includes(dir));
+  } finally {
+    console.warn = realWarn;
+    chmodSync(join(dir, 'build-history.jsonl'), 0o600);
     rmSync(dir, { recursive: true, force: true });
   }
 });

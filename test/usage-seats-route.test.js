@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import http from 'node:http';
 import express from 'express';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { tmpdir, homedir } from 'node:os';
 import { join } from 'node:path';
 
 import { attachUsageRoutes } from '../server/usage-routes.js';
@@ -114,7 +114,7 @@ const ROWS = [
     setup: (dir) => script(dir, JSON.stringify(WATCH)),
     check(body) { assert.equal(body.seats.value.generated_at, new Date(1793438788498.388).toISOString()); },
   },
-  { name: 'reader missing: 200 with the error, no rows', setup: (dir) => join(dir, 'nope.py'), error: /^reader missing: / },
+  { name: 'reader missing: 200 with the error, no rows', setup: (dir) => join(dir, 'nope.py'), error: /^reader missing: nope\.py$/ },
   { name: 'reader prints text, not JSON', setup: (dir) => script(dir, 'usage: status [--json]'), error: /printed no JSON document/ },
   { name: 'reader exits non-zero', setup: (dir) => script(dir, '', 3), error: /^exit 3/ },
   { name: 'reader prints JSON with no accounts list', setup: (dir) => script(dir, JSON.stringify({ accounts: 'x' })), error: /printed no accounts list/ },
@@ -147,6 +147,7 @@ for (const row of ROWS) {
       if (row.error) {
         assert.equal(body.seats.value, null);
         assert.match(body.seats.error, row.error);
+        assert.ok(!body.seats.error.includes(homedir()) && !body.seats.error.includes(dir), 'no absolute path in the error');
       } else {
         row.check(body, dir);
       }

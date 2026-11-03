@@ -1,7 +1,7 @@
 /** COMP-OBS-STATS-1: UsageView renders tiles, chart and table from a fake client, and an empty state. */
 import React from 'react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, waitFor, fireEvent, cleanup } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, cleanup, act } from '@testing-library/react';
 import UsageView from '../../src/components/usage/UsageView.jsx';
 import { locateView } from '../../lib/view-keys.js';
 import CostMeter from '../../src/components/cockpit/cost/CostMeter.jsx';
@@ -76,6 +76,52 @@ describe('UsageView', () => {
     expect(screen.queryAllByTestId('usage-tile')).toHaveLength(0);
     expect(screen.queryByTestId('usage-chart')).toBeNull();
     expect(screen.queryByTestId('usage-model-table')).toBeNull();
+  });
+});
+
+describe('UsageView (COMP-OBS-STATS-1-FU-1)', () => {
+  afterEach(cleanup);
+
+  it('an estimated-only ledger shows "est." on total, retry and wasted tiles', async () => {
+    const cur = usage();
+    cur.tiles.total_cost.provenance = prov(0, 2, 0);
+    cur.tiles.retry_cost = { usd: 2, dispatch_count: 1, attempt_unknown_count: 0, provenance: prov(0, 1, 0) };
+    cur.tiles.wasted_spend.usd = 2;
+    cur.tiles.wasted_spend.provenance = prov(0, 1, 0);
+    render(<UsageView client={fakeClient(cur)} now="2026-10-03T12:00:00" initialScope="compose" />);
+    await waitFor(() => screen.getByTestId('usage-model-table'));
+    const tiles = screen.getAllByTestId('usage-tile');
+    const text = (label) => tiles.find((t) => t.textContent.startsWith(label)).textContent;
+    expect(text('Total cost')).toContain('est.');
+    expect(text('Retry cost')).toContain('~$2.00 est.');
+    expect(text('Wasted spend')).toContain('~$2.00 est.');
+  });
+
+  it('unreadable build history is said on the page', async () => {
+    const cur = usage();
+    cur.incomplete = { marked: true, usd_unknown_count: 0, dispatches_missing_usd: 0, history_unreadable: 'build history unreadable (EACCES)' };
+    render(<UsageView client={fakeClient(cur)} now="2026-10-03T12:00:00" initialScope="compose" />);
+    await waitFor(() => screen.getByTestId('usage-incomplete'));
+    expect(screen.getByTestId('usage-incomplete').textContent).toContain('Build history unreadable (build history unreadable (EACCES))');
+    expect(screen.getByTestId('usage-incomplete').textContent).not.toContain('Cost incomplete');
+  });
+
+  it('a late Refresh answer cannot overwrite a newer range', async () => {
+    const pending = [];
+    const client = { getStats: vi.fn(() => new Promise((resolve) => pending.push(resolve))) };
+    const answer = (i, usd) => pending[i]({ v: 1, generated_at: '2026-10-04T12:00:00.000Z', current: usage({ usd }), previous: null });
+    render(<UsageView client={client} now="2026-10-03T12:00:00" initialScope="compose" />);
+    await waitFor(() => expect(pending).toHaveLength(1));
+    await act(async () => answer(0, 1));
+    fireEvent.click(screen.getByLabelText('Refresh'));
+    await waitFor(() => expect(pending).toHaveLength(2));
+    fireEvent.click(screen.getByRole('button', { name: 'Last 7 days' }));
+    await waitFor(() => expect(pending).toHaveLength(3));
+    await act(async () => answer(2, 7));
+    await waitFor(() => expect(screen.getAllByTestId('usage-tile')[0].textContent).toContain('$7.00'));
+    await act(async () => answer(1, 2)); // the old Refresh resolves last
+    expect(screen.getAllByTestId('usage-tile')[0].textContent).toContain('$7.00');
+    expect(screen.getAllByTestId('usage-tile')[0].textContent).not.toContain('$2.00');
   });
 });
 

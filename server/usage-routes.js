@@ -26,7 +26,7 @@
  * 8-17 s). Both are cached and answer 200 with an `error`, like seats. No balance and no hold flag is ever turned into $0.
  */
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { existsSync } from 'node:fs';
 import { collectDispatchMetrics } from '../lib/dispatch-metrics.js';
 import { createSourceCache, runReader } from './fleet-routes.js';
@@ -73,6 +73,8 @@ export function seatRows(doc) {
 /** Pure: api_credit `status --json` -> `{balance_usd, hold, reserve_usd, as_of}`; a null balance stays null. */
 export function creditRow(doc) {
   if (!doc || typeof doc !== 'object' || !('hold' in doc || 'balance_usd' in doc)) throw new Error('api_credit printed no status');
+  // api_credit prints `error` (with balance null, hold true) when its state cannot load: a fault, not an unset balance.
+  if (doc.error != null && doc.error !== '') throw new Error(`api_credit reported: ${String(doc.error).slice(0, 200)}`);
   return { balance_usd: pct(doc.balance_usd), hold: doc.hold === true, reserve_usd: pct(doc.reserve_usd), as_of: typeof doc.as_of === 'string' ? doc.as_of : null };
 }
 
@@ -98,7 +100,7 @@ export function closedHoursWindow(nowMs) {
 }
 
 export async function readCredit({ python = 'python3', script, env = process.env, timeoutMs = SEATS_TIMEOUT_MS, run = runReader } = {}) {
-  if (!existsSync(script)) throw new Error(`reader missing: ${script}`);
+  if (!existsSync(script)) throw new Error(`reader missing: ${basename(script)}`);
   const { stdout } = await run([python, script, 'status', '--json'], { timeoutMs, env });
   let doc;
   try { doc = JSON.parse(stdout); } catch { throw new Error('api_credit printed no JSON document'); }
@@ -106,7 +108,7 @@ export async function readCredit({ python = 'python3', script, env = process.env
 }
 
 export async function readHourly({ python = 'python3', script, env = process.env, timeoutMs = HOURLY_TIMEOUT_MS, run = runReader, now = Date.now } = {}) {
-  if (!existsSync(script)) throw new Error(`reader missing: ${script}`);
+  if (!existsSync(script)) throw new Error(`reader missing: ${basename(script)}`);
   const win = closedHoursWindow(now());
   if (!win) return { buckets: [] };
   const { stdout } = await run([python, script, 'series', '--from', win.from, '--to', win.to, '--bucket', '1h', '--json'], { timeoutMs, env });
@@ -116,7 +118,7 @@ export async function readHourly({ python = 'python3', script, env = process.env
 }
 
 export async function readSeats({ python = 'python3', script, env = process.env, timeoutMs = SEATS_TIMEOUT_MS, run = runReader } = {}) {
-  if (!existsSync(script)) throw new Error(`reader missing: ${script}`);
+  if (!existsSync(script)) throw new Error(`reader missing: ${basename(script)}`);
   const { stdout } = await run([python, script, 'status', '--json'], { timeoutMs, env });
   let doc;
   try { doc = JSON.parse(stdout); } catch { throw new Error('usage_watch printed no JSON document'); }
@@ -219,8 +221,10 @@ export function attachUsageRoutes(app, deps = {}) {
         previous,
       });
     } catch (err) {
-      const status = err instanceof RangeError ? 400 : 500;
-      res.status(status).json({ error: err.message || String(err) });
+      if (err instanceof RangeError) return res.status(400).json({ error: err.message || String(err) });
+      // Stable text: an fs error message carries the absolute path of the ledger.
+      console.warn(`[usage-routes] stats source unreadable: ${err?.code || err?.name || 'error'}`);
+      res.status(500).json({ error: `${err?.code || 'EIO'}: stats source unreadable` });
     }
   });
   return { warm };
