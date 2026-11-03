@@ -62,8 +62,9 @@ export function workingNow(fleet, feed, agent = null, now = Date.now()) {
       if (j?.alive !== true) continue;
       rows.push({ kind: 'job', lane: laneOfSession(j.session), unit: j.id ?? null, title: j.kind ?? null, since: Number.isFinite(j.age) ? now - j.age * 1000 : null });
     }
-  } else if (lanes) {
-    // S2: only a lane whose current unit is live work stands in; a stale or waiting one is not "working".
+  } else if (lanes && !feed?.sourceErrors?.stamps) {
+    // S2: only a lane whose current unit is live work stands in; a stale or waiting one is not "working". U2 NOW M1: with the
+    // stamps unreadable the lanes have no current unit to read, so the answer is unknown, never "nobody is working".
     const at = typeof feed?.now === 'string' ? feed.now : now; // the feed's own clock, as phoneLines reads it
     for (const l of lanes) if (l.current && laneState(l, at)?.kind === 'working') rows.push({ kind: 'lane', lane: l.lane, unit: l.current.id, title: l.current.title ?? null, since: ms(l.current.since) });
   } else return null;
@@ -107,7 +108,10 @@ export function landedSince(index, sinceMs, feed = null) {
     .sort((a, b) => b.at - a.at)
     .map(({ u, at }) => ({ unit: u.id, lane: u.lane ?? null, title: u.title ?? null, landedAt: at, state: ms(u.deployedAt) !== null ? 'deployed' : 'not deployed yet' }));
   let also = null;
-  if (Array.isArray(feed?.lanes)) {
+  // U2 NOW M1: deploys come from the ledger and decisions from the owner queue; with either unreadable the list would be
+  // missing rows it cannot name, so it is unknown (null), never a short list read as complete.
+  const errs = feed?.sourceErrors || {};
+  if (Array.isArray(feed?.lanes) && !errs.ledger && !errs.ownerQueue) {
     also = feed.lanes
       .flatMap((l) => (l.marks || []).map((m) => ({ kind: m.kind, lane: l.lane, unit: m.unit ?? null, title: m.title ?? null, text: m.text ?? null, at: ms(m.at) })))
       .filter((m) => ['deploy', 'deployFail', 'decide'].includes(m.kind) && m.at !== null && m.at > sinceMs)
@@ -118,18 +122,22 @@ export function landedSince(index, sinceMs, feed = null) {
 }
 
 /**
- * The phone's per-lane lines: `{lane, tone, text}` (`tone` is laneState's kind or wait cause, null for an index-only line) for each lane with something current, waiting or next:
- * "<title> · <state> · ETA <when>" (`etaWord` of the lane drawer: a time or "in 9h", never the feed's long `raw` text). `null` when the feed is down. `index` may be null (then no lane reads "waiting").
+ * The phone's per-lane lines: `{lane, tone, state, title, eta, text}` (`tone` is laneState's kind or wait cause, null for an
+ * index-only line) for each lane with something current, waiting or next. `text` is the one-line form
+ * "<title> · <state> · ETA <when>"; U2 M14 draws `state`, `title` and `eta` as a two-line item. `eta` is `etaWord` of the
+ * lane drawer (a time or "in 9h", never the feed's long `raw` text), and null for a lane that is waiting (M3: no ETA on a
+ * wait; an owner wait reads "on answer"). `null` when the feed is down or its stamps are unreadable (U2 NOW M1). `index` may
+ * be null (then no lane reads "waiting").
  */
 export function phoneLines(feed, index, now = Date.now()) {
-  if (!Array.isArray(feed?.lanes)) return null;
+  if (!Array.isArray(feed?.lanes) || feed?.sourceErrors?.stamps) return null;
   const units = Array.isArray(index?.units) ? index.units : [];
   const nowIso = typeof feed.now === 'string' ? feed.now : new Date(now).toISOString(); // the feed's own clock, so a time reads in its offset
   const out = [];
   for (const l of feed.lanes) {
     const waits = units.filter((u) => u?.lane === l.lane && (u.waiting === 'review' || u.waiting === 'owner'));
     // S1: the ribbon's own answer for the lane (laneState), so "main" never reads "working" here and "waiting on review" there.
-    const st = laneState(l, nowIso);
+    const st = laneState(l, nowIso, nowIso);
     let title; let state; let tone = null;
     if (st) {
       const owner = st.kind === 'wait' && st.cause === 'owner';
@@ -144,8 +152,12 @@ export function phoneLines(feed, index, now = Date.now()) {
     else if (l.next?.length) { title = l.next[0].title || l.next[0].id; state = 'next up'; }
     else continue;
     // S2: a stale unit has no live estimate, so it shows none. S1: an owner wait reads "on answer", as the ribbon's ETA does.
-    const eta = tone === 'stale' ? 'none (stale)' : l.eta && tone === 'owner' ? 'on answer' : l.eta?.noData ? 'no data' : l.eta ? etaWord(l.eta.p50, nowIso) : 'unknown';
-    out.push({ lane: l.lane, tone, text: `${clip(String(title))} · ${state} · ETA ${eta}` });
+    // U2 M3: any other wait has no ETA (the unit lands after the wait, and nobody knows when that ends).
+    const waiting = st?.kind === 'wait' || (!st && waits.length > 0);
+    const eta = tone === 'stale' ? 'none (stale)' : l.eta && tone === 'owner' ? 'on answer' : waiting ? null
+      : l.eta?.noData ? 'no data' : l.eta ? etaWord(l.eta.p50, nowIso) : 'unknown';
+    const t = clip(String(title));
+    out.push({ lane: l.lane, tone, state, title: t, eta, text: eta === null ? `${t} · ${state}` : `${t} · ${state} · ETA ${eta}` });
   }
   return out;
 }

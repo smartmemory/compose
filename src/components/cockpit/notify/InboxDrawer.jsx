@@ -136,8 +136,16 @@ export default function InboxDrawer() {
   const [unfolded, setUnfolded] = React.useState({});
   const [expanded, setExpanded] = React.useState({});
 
+  // COMP-DAYVIEW-DESIGN-FIX-1 U2-DATA Q1: an opener may name a row (`detail.focus`, the ribbon's Reverse sends the decision's
+  // queue id); the drawer opens on it, selected, expanded and scrolled into view, instead of at the top of the list.
+  const [focusId, setFocusId] = React.useState(null);
   React.useEffect(() => {
-    const onOpen = (e) => { e.preventDefault(); setOpen(true); };
+    const onOpen = (e) => {
+      e.preventDefault();
+      setOpen(true);
+      const id = e.detail?.focus;
+      if (id != null && id !== '') { setFocusId(String(id)); setExpanded((m) => ({ ...m, [String(id)]: true })); }
+    };
     window.addEventListener('compose:open-inbox', onOpen);
     return () => window.removeEventListener('compose:open-inbox', onOpen);
   }, []);
@@ -183,6 +191,23 @@ export default function InboxDrawer() {
     count: visible.length,
     onExpand: (i) => { const id = visible[i]?.r.id; if (id) setExpanded((m) => ({ ...m, [id]: !m[id] })); },
   });
+  const focusAt = focusId == null ? undefined : [...indexOf].find(([k]) => String(k) === focusId)?.[1];
+  const { setSelected } = keys;
+  React.useEffect(() => {
+    if (!open || focusId == null) return;
+    if (focusAt !== undefined) {
+      setSelected(focusAt);
+      const el = [...(listRef.current?.querySelectorAll('[data-testid="inbox-row"]') || [])].find((n) => n.getAttribute('data-id') === focusId);
+      el?.scrollIntoView?.({ block: 'nearest' });
+      setFocusId(null);
+      return;
+    }
+    // Not on screen yet: open the fold that holds it (a folded group, or the Cleared fold), then this runs again.
+    const g = groups.find((x) => x.rows.some((r) => String(r.id) === focusId));
+    if (g?.folded && !unfolded[g.id]) setUnfolded((m) => ({ ...m, [g.id]: true }));
+    else if (!g && clearedInfo.some((r) => String(r.id) === focusId)) setShowCleared(true);
+    else if (!g && panel?.value != null) setFocusId(null); // the queue no longer holds it: open at the top
+  }, [open, focusId, focusAt, groups, clearedInfo, unfolded, panel?.value, setSelected]);
   if (!open) return null;
 
   const time = asOf(fleet);

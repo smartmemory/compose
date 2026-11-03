@@ -2,7 +2,7 @@
  * markCards.js — the words on the card a Day ribbon mark opens (COMP-COCKPIT-RIBBON-MARKS-1).
  *
  * `cardFor(item, {now, lanes, seats})` is pure: it turns one contract item (a mark, pin, band or ETA) into
- * `{kind, tone, icon, title, name, sub, body, id, list, links}`. Wording is the prototype's (the owner clicked those
+ * `{kind, tone, icon, title, name, sub, body, id, list, links}`, plus `full` (the body uncut, or null when nothing was cut). Wording is the prototype's (the owner clicked those
  * cards before picking it); times read in the ribbon's relative words ("yesterday 20:50") in the offset of `now`.
  * A link is `{label, action}`; `action.type` is `unit`, `reverse`, `initiative` or `card` (a cluster row opening its own card).
  */
@@ -21,6 +21,8 @@ const sentence = (s) => String(s).trim().replace(/[.\s]+$/, '');
 const titleOf = (m) => m.title || (m.text ? clamp(sentence(m.text), NAME_MAX) : '') || m.label || m.unit || '(untitled)';
 /** The decision text for the body: dropped when the name already shows all of it, cut when long. */
 const detailOf = (m) => (m.text && (m.title || sentence(m.text).length > NAME_MAX) ? `${clamp(sentence(m.text), BODY_MAX)}.` : '');
+/** The same text uncut (U2 MARKS M2: a cut body offers "Show all", so a long decision is never lost to the card). */
+const detailFull = (m) => (m.text && (m.title || sentence(m.text).length > NAME_MAX) ? `${sentence(m.text)}.` : '');
 
 /** The lane a mark belongs to: the one whose marks hold the same `at`, `kind` and `unit` (cluster members carry no lane). */
 export function laneOf(item, lanes) {
@@ -39,17 +41,24 @@ function markCard(m, ctx) {
   const sub = `${lane ? `${lane} lane · ` : ''}${when(m.at, ctx.now)}`;
   const base = { kind: m.kind, tone: m.kind === 'deployFail' ? 'bad' : 'plain', icon: GLYPH[m.kind], sub, id: m.unit || null, list: null };
   switch (m.kind) {
-    case 'land':
-      return { ...base, title: 'Landed', name: titleOf(m), body: detailOf(m), links: unitLink(m) };
+    case 'land': {
+      const body = detailOf(m);
+      const full = detailFull(m);
+      return { ...base, title: 'Landed', name: titleOf(m), body, full: full !== body ? full : null, links: unitLink(m) };
+    }
     case 'deploy':
       return { ...base, title: 'Deployed', name: `${what(m)} live${target(m)}`, body: '', links: unitLink(m) };
     case 'deployFail':
       return { ...base, title: 'Deploy failed', name: `${what(m)} did not go live${target(m)}`, body: '', links: unitLink(m) };
     default: {
-      const rv = m.reverse ? clamp(sentence(m.reverse), BODY_MAX) : '';
-      const rev = rv ? `${/^reverse\b/i.test(rv) ? '' : 'Reverse: '}${rv}.` : 'Reverse: not recorded.';
-      const links = [...unitLink(m), ...(m.reverse ? [{ label: 'reverse ▸', action: { type: 'reverse', id: m.unit || null } }] : [])];
-      return { ...base, title: 'Decided for you', name: titleOf(m), body: [detailOf(m), rev].filter(Boolean).join(' '), links };
+      const revText = (rv) => (rv ? `${/^reverse\b/i.test(rv) ? '' : 'Reverse: '}${rv}.` : 'Reverse: not recorded.');
+      const rev = revText(m.reverse ? clamp(sentence(m.reverse), BODY_MAX) : '');
+      // U2-DATA Q1: an owner-queue decision has no unit; Reverse targets its queue id, so the inbox can open that row.
+      const target = m.unit || m.queueId || null;
+      const links = [...unitLink(m), ...(m.reverse ? [{ label: 'reverse ▸', action: { type: 'reverse', id: target } }] : [])];
+      const body = [detailOf(m), rev].filter(Boolean).join(' ');
+      const full = [detailFull(m), revText(m.reverse ? sentence(m.reverse) : '')].filter(Boolean).join(' ');
+      return { ...base, title: 'Decided for you', name: titleOf(m), body, full: full !== body ? full : null, links };
     }
   }
 }

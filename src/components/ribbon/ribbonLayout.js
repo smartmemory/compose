@@ -28,6 +28,20 @@ export const MIN_TICK_PX = 48;
 
 export const toMs = (t) => (typeof t === 'number' ? t : Date.parse(t));
 
+/**
+ * U2 RANGE M1: a pointer's client x as an x in the svg's own units. The svg scales its viewBox `vbW` x `vbH` into the box
+ * `rect` with "xMidYMid meet", so when the box's aspect differs the drawing is letterboxed: scale is the smaller of the two
+ * ratios and the slack is split either side. Reading x as `(clientX - rect.left) * vbW / rect.width` ignores both and puts
+ * a drag hundreds of units off (viewBox 1200x307 in a 1200x153.5 box: client 346 is x 92, not 346).
+ */
+export function clientToSvgX(clientX, rect, vbW, vbH) {
+  const w = rect?.width || vbW;
+  const h = rect?.height || vbH;
+  const k = Math.min(w / vbW, h / vbH) || 1;
+  const pad = (w - vbW * k) / 2;
+  return (clientX - (rect?.left || 0) - pad) / k;
+}
+
 /** x position of time `t` on a track `width` wide, `from` at 0 and `to` at `width`. */
 export function xOf(t, from, to, width) {
   const f = toMs(from);
@@ -210,8 +224,27 @@ export function etaLabel(p50, now) {
   return weekdayOf(w);
 }
 
-const DURATION = /^\d+(\.\d+)?\s*[mhd]$/;
+const DURATION = /^(\d+(?:\.\d+)?)\s*([mhd])$/;
+const UNIT_MS = { m: MIN, h: HOUR, d: DAY };
 export const HAS_ZONE = /(Z|[+-]\d\d:?\d\d)$/;
+
+/** A duration string ("9h", "32h", "40m") in ms, else null. */
+const durationMs = (v) => {
+  const m = DURATION.exec(String(v ?? '').trim());
+  return m ? Number(m[1]) * UNIT_MS[m[2]] : null;
+};
+
+/**
+ * U2 M3: where a p50 sits on the time axis, in ms. An ISO time is itself; a duration from the estimator ("9h") counts from
+ * `now`. Null for anything else (the ribbon then has no point to draw and says so in words).
+ */
+export function etaAt(p50, now) {
+  if (p50 == null || p50 === '') return null;
+  const d = durationMs(p50);
+  if (d != null) return toMs(now) + d;
+  const t = Date.parse(p50);
+  return Number.isFinite(t) ? t : null;
+}
 
 /**
  * One p50/p80 value in words. The contract's examples are ISO times, but the live estimator (`estimate.py`) prints durations
@@ -220,7 +253,9 @@ export const HAS_ZONE = /(Z|[+-]\d\d:?\d\d)$/;
 export function etaWord(v, now) {
   if (v == null || v === '') return 'unknown';
   if (Number.isFinite(Date.parse(v))) return etaLabel(v, now);
-  if (DURATION.test(String(v).trim())) return `in ${String(v).trim()}`;
+  const d = durationMs(v);
+  // U2 M3: "in 200h" reads as days past two days ("in 8d 8h"), the way every other long span on the ribbon reads.
+  if (d != null) return d > 2 * DAY ? `in ${fmtDur(d)}` : `in ${String(v).trim()}`;
   return String(v);
 }
 
@@ -316,15 +351,22 @@ const inWord = (ms) => (ms >= HOUR ? `in ${Math.round((ms / HOUR) * 10) / 10}h` 
 /** The full label of a seat's next reset: "seat2 resets in 1.3h" (a seat reset only). */
 export const nextResetLabel = (pin, now) => `${pin.seat || pin.label} resets ${inWord(toMs(pin.at) - toMs(now))}`;
 
+/** U2 M7: a merged tick names its seats when there are two or fewer ("s1, s2"), else counts them ("4 seats reset"), never "x4". */
+export function mergedLabel(items) {
+  const tags = [...new Set((items || []).map(resetTag))];
+  return tags.length <= 2 ? tags.join(', ') : `${tags.length} seats reset`;
+}
+
 const toneOf = (items, alertSeats) => (items.some((p) => p.atGate) ? 'gate' : items.some((p) => alertSeats.includes(p.seat)) ? 'alert' : 'plain');
 
 /**
  * What the AHEAD row draws. `pins` are the feed's pins; returns `{ticks, off}`.
  * `ticks` (in the window, left to right): `{x, items, count, label, full, tone, tip}` where `x` is the offset on a track
  * `trackPx` wide, `items` the pins it stands for (more than one when ticks merged), `label` the words beside it ("s1",
- * "cx", the next reset's full words, or a count "x3" when merged), `full` true for a seat's next reset, `tone` one of
+ * "cx", the next reset's full words, or "s1, s2" / "4 seats reset" when merged; U2 M7), `full` true for a seat's next reset, `tone` one of
  * `plain` / `gate` (at the quota cap) / `alert` (the seat has an open alert in `alertSeats`), `tip` the hover text (a
- * merged tick lists every reset it holds). `off` are pins past the window's right edge (`[{pin, label}]`).
+ * merged tick lists every reset it holds). `off` are pins past the window's right edge (`[{pin, label}]`). Only resets after
+ * `now` are drawn (U2 M7).
  * A seat's NEXT reset (first one after `now`) gets its full label when it has room before the next tick, else its short tag.
  */
 export function resetTicks(pins, { from, to, now, trackPx, alertSeats = [] }) {
@@ -332,7 +374,8 @@ export function resetTicks(pins, { from, to, now, trackPx, alertSeats = [] }) {
   const e = toMs(to);
   const sorted = [...(pins || [])].sort((a, b) => toMs(a.at) - toMs(b.at));
   const off = sorted.filter((p) => toMs(p.at) > e).map((p) => ({ pin: p, label: p.kind === 'expiry' ? p.label : resetTag(p) }));
-  const inside = sorted.filter((p) => toMs(p.at) >= f && toMs(p.at) <= e);
+  // U2 M7: a reset that already happened is not ahead of anyone; the row draws only what is still to come.
+  const inside = sorted.filter((p) => toMs(p.at) >= f && toMs(p.at) <= e && toMs(p.at) > toMs(now));
   const next = new Set();
   const seen = new Set();
   sorted.forEach((p) => {
@@ -353,7 +396,7 @@ export function resetTicks(pins, { from, to, now, trackPx, alertSeats = [] }) {
     const count = r.items.length;
     let label;
     let full = false;
-    if (count > 1) label = `x${count}`;
+    if (count > 1) label = mergedLabel(r.items);
     else if (p.kind === 'expiry') label = p.label;
     else if (next.has(p) && nextResetLabel(p, now).length * RESET_CHAR_PX <= room) { label = nextResetLabel(p, now); full = true; } else label = resetTag(p);
     const tip = count > 1
@@ -405,26 +448,54 @@ export const alertTip = (a, now) => {
 
 /** A current unit with no newer stamp for this long is drawn stale, gets no ETA and is not counted as working. */
 export const STALE_MS = 24 * HOUR;
-/** A span still counts as "at now" when it ended this recently (the feed's clock and the page's differ by a poll). */
+/** A span still counts as "at now" when it ended this recently before the feed's own clock (a poll's worth of drift). */
 const AT_NOW_SLACK_MS = 120_000;
 
-/** The spans a lane has at `now` (work or wait, never notRecorded). */
-const spansAtNow = (lane, n) => (lane?.spans || []).filter((s) => s.kind !== 'notRecorded' && toMs(s.start) <= n && toMs(s.end) >= n - AT_NOW_SLACK_MS);
+/**
+ * The clock "at now" is judged against: the feed's own `now` when it is older than the page's (U2, RIBBON-ROWS-1 M2). A body
+ * kept after a failed refresh, or served from the route's 120 s cache, has its open spans ending at ITS now; judged against
+ * the page's later clock they would all look finished and a known wait would flip to "working". The page says the body is
+ * old (DayView's refresh note); the state stays the last known one.
+ */
+const refOf = (n, asOf) => { const a = toMs(asOf); return Number.isFinite(a) ? Math.min(n, a) : n; };
+
+/** The spans a lane has at `now` (work or wait, never notRecorded), judged at `ref` (refOf). */
+const spansAtNow = (lane, n, ref = n) => (lane?.spans || []).filter((s) => s.kind !== 'notRecorded' && toMs(s.start) <= n && toMs(s.end) >= ref - AT_NOW_SLACK_MS);
+/** A span's real start: `since` (the producer's unclipped start) when the window cut it, else `start`. */
+const realStart = (s) => toMs(s.since ?? s.start);
+
+/**
+ * The latest stamp the current unit has: the real start of any of its spans, or the end of one that closed (`open: false`).
+ * An open span's end is now by construction (the producer extends an unended stamp), so it is not evidence (F3).
+ */
+function lastStampOf(lane, cur, n) {
+  let last = null;
+  for (const s of lane?.spans || []) {
+    if (s.kind === 'notRecorded' || s.unit !== cur.id) continue;
+    for (const v of [realStart(s), s.open === false ? toMs(s.end) : NaN]) if (Number.isFinite(v) && v <= n && (last === null || v > last)) last = v;
+  }
+  return last;
+}
 
 /**
  * What a lane is doing at `now`, the ONE answer the ribbon's NOW text, the phone's Now list and the legend share, so the
- * views cannot disagree (S1). An owner wait wins over any other span, then any wait, then the current unit's work.
+ * views cannot disagree (S1). An owner wait wins over any other span; otherwise the span that started last is the lane's
+ * current interval (a wait that began after the work ended is a wait, work that resumed after a wait is work).
+ * `asOf` is the feed's own `now` (refOf). A wait's age counts from its own real start, never from the unit's dispatch
+ * (U2, RIBBON-ROWS-1 M1; F2's fold for stamp spans the window clipped).
  * `{kind: 'wait', cause, since, phrase, span}` | `{kind: 'stale' | 'working', since, phrase}` | null (nothing at now).
- * `stale` (S2): the current unit was dispatched more than `STALE_MS` ago and nothing waits, so it reads as old work, not live.
+ * `stale` (S2, F3): the current unit has no stamp within `STALE_MS` of now (dispatch, any span start, any closed end), so
+ * it reads as old work, not live. Dispatch age alone never makes a unit stale.
  */
-export function laneState(lane, now) {
+export function laneState(lane, now, asOf = null) {
   const n = toMs(now);
-  const at = spansAtNow(lane, n);
+  const at = spansAtNow(lane, n, refOf(n, asOf));
   const owner = at.find((s) => s.kind === 'wait' && s.cause === 'owner');
-  const wait = owner || at.find((s) => s.kind === 'wait');
+  const latest = [...at].sort((a, b) => realStart(b) - realStart(a) || toMs(b.end) - toMs(a.end) || (a.kind === 'wait' ? -1 : 1))[0];
+  const wait = owner || (latest?.kind === 'wait' ? latest : null);
   const cur = lane?.current || null;
   if (wait) {
-    const since = toMs(wait.since ?? (cur && !owner ? cur.since : wait.start));
+    const since = realStart(wait);
     const cause = wait.cause || 'unknown';
     return { kind: 'wait', cause, since, phrase: `${causePhrase(cause)} ${fmtDur(n - since)}`, span: wait };
   }
@@ -432,7 +503,8 @@ export function laneState(lane, now) {
   const since = toMs(cur.since);
   if (!Number.isFinite(since)) return { kind: 'working', since: null, phrase: 'working' };
   const age = n - since;
-  return age > STALE_MS
+  const last = Math.max(since, lastStampOf(lane, cur, n) ?? -Infinity);
+  return n - last > STALE_MS
     ? { kind: 'stale', since, phrase: `stale: working ${fmtDur(age)}, no stamp in 24h` }
     : { kind: 'working', since, phrase: `working ${fmtDur(age)}` };
 }
@@ -440,22 +512,49 @@ export function laneState(lane, now) {
 /**
  * C3: the feed with every LIVE owner wait dropped whose ask is no longer open for the headline. `openIds` are the ids
  * `ownerAsks(feed.owner.open, notifyState)` keeps (the WHAT line's own rule); null means "unknown", so nothing is dropped.
- * A past owner wait (it ended before now) is history and always stays.
+ * A past owner wait (it ended before now) is history and always stays. "Live" is judged on the feed's clock (refOf).
  */
 export function withOwnerOpen(feed, openIds, now) {
   if (!feed || !Array.isArray(feed.lanes) || !Array.isArray(openIds)) return feed;
   const keep = new Set(openIds);
-  const n = toMs(now);
-  const live = (s) => s.kind === 'wait' && s.cause === 'owner' && s.queueId && toMs(s.end) >= n - AT_NOW_SLACK_MS;
+  const ref = refOf(toMs(now), feed.now);
+  const live = (s) => s.kind === 'wait' && s.cause === 'owner' && s.queueId && toMs(s.end) >= ref - AT_NOW_SLACK_MS;
   return { ...feed, lanes: feed.lanes.map((l) => ({ ...l, spans: (l.spans || []).filter((s) => !live(s) || keep.has(s.queueId)) })) };
 }
 
 /** The owner waits the ribbon draws at now: one per open ask, `[{lane, queueId}]` (what the test compares to the headline). */
-export function ownerWaitsAtNow(lanes, now) {
+export function ownerWaitsAtNow(lanes, now, asOf = null) {
   const n = toMs(now);
-  return (lanes || []).flatMap((l) => spansAtNow(l, n).filter((s) => s.kind === 'wait' && s.cause === 'owner').map((s) => ({ lane: l.lane, queueId: s.queueId ?? null })));
+  return (lanes || []).flatMap((l) => spansAtNow(l, n, refOf(n, asOf)).filter((s) => s.kind === 'wait' && s.cause === 'owner').map((s) => ({ lane: l.lane, queueId: s.queueId ?? null })));
 }
 
 /** Plain names for the feed's source-level gaps (C2: they are text under the ribbon, never a box over the lanes). */
 const GAP_WORDS = { spend: 'spend history', expiry: 'plan expiry dates', ownerQueue: 'the owner queue', quota: 'seat quota', holds: 'launch holds' };
 export const gapWord = (source) => GAP_WORDS[source] || GAP_WORDS[String(source).split('.')[0]] || source;
+
+/** U2 M4: what each `sourceErrors` key leaves off the page, in words (`server/ribbon-routes.js` names the keys). */
+const SOURCE_WORDS = {
+  stamps: 'What each lane is doing', quota: 'Seat resets and quota waits', ownerQueue: 'Questions waiting on you', holds: 'Launch holds',
+  ledger: 'Landings and deploys', outage: 'Outage notices', seats: 'Seat usage', eta: 'Landing estimates',
+};
+const localClock = (ms) => new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+
+/**
+ * U2 M4: one plain line per missing source, `[{key, text, title}]`. `text` names what is missing and since when
+ * ("Seat resets and quota waits: not read since 14:02, retrying"); the raw reason (a Python error, a path-free message) is
+ * only the `title`, so no stack word or millisecond count is on screen. Keys are deduped on their top-level name
+ * ("quota.seat3" is "quota"). `good` is `{key: epoch ms}` of the last clean read (`useRibbonFeed().sourceGood`); `ref` an ISO
+ * string whose offset the time is read in (the page's now), else the browser's clock.
+ */
+export function sourceErrorLines(sourceErrors, good = {}, ref = null) {
+  const byKey = new Map();
+  for (const [k, v] of Object.entries(sourceErrors || {})) {
+    const key = String(k).split('.')[0];
+    byKey.set(key, [byKey.get(key), String(v ?? '')].filter(Boolean).join('; '));
+  }
+  return [...byKey].map(([key, why]) => {
+    const at = good?.[key];
+    const when2 = Number.isFinite(at) ? `not read since ${typeof ref === 'string' ? clock(at, ref) : localClock(at)}` : 'not read yet';
+    return { key, text: `${SOURCE_WORDS[key] || key}: ${when2}, retrying`, title: why };
+  });
+}

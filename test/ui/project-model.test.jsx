@@ -130,8 +130,12 @@ const ROWS = [
     const onProjectOpen = vi.fn();
     render(<DayRibbon data={data} from={data.from} to={data.to} now="2026-10-31T16:40:00-07:00" onLaneOpen={onLaneOpen}
       laneProjects={laneChips(MODEL)} onProjectOpen={onProjectOpen} />);
-    fireEvent.click(screen.getByTestId('lane-project-main'));
-    expect(onProjectOpen).toHaveBeenCalledWith({ project: 'smartmemory', lane: 'main', label: 'SmartMemory' });
+    // U2 M6: a lane chip that repeats its group's project is dropped; the group header carries it once.
+    expect(screen.queryByTestId('lane-project-main')).toBeNull();
+    const groupChips = [...document.querySelectorAll('[data-testid^="group-project-"]')];
+    expect(groupChips.map((c) => c.textContent)).toEqual(['SmartMemory']);
+    fireEvent.click(groupChips[0]);
+    expect(onProjectOpen).toHaveBeenCalledWith({ project: 'smartmemory', lane: null, label: 'SmartMemory' });
     expect(onLaneOpen).not.toHaveBeenCalled();
     expect(screen.queryByTestId('lane-project-web')).toBeNull();
   }],

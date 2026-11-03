@@ -42,7 +42,7 @@ describe('Day money block as bars (COMP-COCKPIT-MONEY-COMPACT-1)', () => {
       expect([left.getAttribute('data-height'), right.getAttribute('data-height')]).toEqual(['70', '9']);
       expect(screen.getByTestId('cost-meter-5h-seat1').contains(left)).toBe(true);
       expect(screen.getByTestId('cost-meter-fable-seat1').contains(right)).toBe(true);
-      expect([t('cost-meter-5h-seat1'), t('cost-meter-fable-seat1')]).toEqual(['70%27m', '9%6d']);
+      expect([t('cost-meter-5h-seat1'), t('cost-meter-fable-seat1')]).toEqual(['70%↻27m', '9%↻6d']);
       expect(pair.textContent.endsWith('s1')).toBe(true);
       expect(screen.getByTestId('cost-meter').textContent.match(/5h-only/g)).toBeNull();
       expect(pair.getAttribute('title')).toContain('Team seats are 5h-only');
@@ -82,10 +82,21 @@ describe('Day money block as bars (COMP-COCKPIT-MONEY-COMPACT-1)', () => {
       expect(screen.getByTestId('cost-meter-7d-codex').querySelector('[role="progressbar"]').getAttribute('data-state')).toBe('empty');
       expect(screen.getByTestId('cost-meter-codex').getAttribute('title')).toContain('7/13 pts today');
     }],
+    ['U2 M10 + M4: a key says which bar is which; an over pair says why in words; a seat error is plain words, the reason its title', () => {
+      meter();
+      expect(screen.getByTestId('cost-meter-key')).toBeTruthy();
+      expect(screen.getByTestId('cost-meter-seat-seat2-over').textContent).toMatch(/^(over pace|at cap)$/);
+      expect(screen.queryByTestId('cost-meter-seat-seat4-over')).toBeNull();
+      cleanup();
+      meter({ seats: null, seatsError: "Traceback: KeyError 'five_h'" });
+      const err = screen.getByTestId('cost-meter-seats-down');
+      expect(err.textContent).toBe('Seat usage: not read, retrying');
+      expect(err.getAttribute('title')).toBe("Traceback: KeyError 'five_h'");
+    }],
     ['Codex with both readings draws them, and a non-ok state turns the 7d bar amber', () => {
       const codex = { id: 'codex', label: 'Codex prolite', five_h: { used_pct: 40, resets_at: at(120) }, seven_d: { used_pct: 80, resets_at: at(3 * 1440) }, today_pts: 7, codex_daily: { cap_pct: 13, state: 'warn', off: false } };
       meter({ seats: [...SEATS.slice(0, 5), codex] });
-      expect([t('cost-meter-5h-codex'), t('cost-meter-7d-codex')]).toEqual(['40%2.0h', '80%3d']);
+      expect([t('cost-meter-5h-codex'), t('cost-meter-7d-codex')]).toEqual(['40%↻2.0h', '80%↻3d']);
       expect(screen.getByTestId('cost-meter-7d-codex').querySelector('[role="progressbar"]').getAttribute('data-state')).toBe('warn');
       expect(screen.getByTestId('cost-meter-codex').getAttribute('title')).toContain('(warn)');
     }],
@@ -127,7 +138,8 @@ describe('Day money block as bars (COMP-COCKPIT-MONEY-COMPACT-1)', () => {
       for (const b of bands.slice(0, 4)) {
         expect(b.querySelectorAll('[role="progressbar"]').length).toBe(2);
         expect(b.className).toMatch(/\bbg-muted\/40\b/);
-        expect(b.firstElementChild.className).toMatch(/\bgap-0\b/);
+        // F4 (U2): a small in-pair gap so two "100%" labels never touch.
+        expect(b.firstElementChild.className).toMatch(/\bgap-1\b/);
       }
     }],
   ];

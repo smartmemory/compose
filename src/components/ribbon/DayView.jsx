@@ -5,7 +5,9 @@ import { ribbonAlerts } from '../cockpit/notify/notifyState.js';
 import { publishSeats } from '../cockpit/notify/useNotifyState.js';
 import { useCostMeterProps } from '../vision/HomeFleetGlance.jsx';
 import DayRibbon from './DayRibbon.jsx';
-import { alertTip, orphanAlerts, withOwnerOpen } from './ribbonLayout.js';
+import { alertTip, isLive, orphanAlerts, sourceErrorLines, withOwnerOpen } from './ribbonLayout.js';
+import { PRESETS } from './rangeLogic.js';
+import SourceNote from '../cockpit/SourceNote.jsx';
 import { ownerAsks } from '../cockpit/notify/notifyLogic.js';
 import RangeBar from './RangeBar.jsx';
 import { useRibbonWindow } from './useRibbonWindow.js';
@@ -42,11 +44,6 @@ export const RESETS_HIDDEN_KEY = 'compose:ribbonResetsHidden';
 const FLASH_CLEAR_MS = 1700;
 const NO_ALERTS = [];
 
-/** Plain-word names for `sourceErrors` keys (`server/ribbon-routes.js`). */
-const SOURCE_WORDS = {
-  stamps: 'unit stamps', quota: 'seat quota', ownerQueue: 'the owner queue', holds: 'launch holds', ledger: 'the ledger', outage: 'outage notices',
-};
-
 /** Dispatch a cancelable window event; true when a listener took it (called `preventDefault()`). */
 export function dispatchRibbon(type, detail) {
   return !window.dispatchEvent(new CustomEvent(type, { detail, cancelable: true }));
@@ -55,8 +52,17 @@ export function dispatchRibbon(type, detail) {
 const readResetsHidden = () => { try { return localStorage.getItem(RESETS_HIDDEN_KEY) === '1'; } catch { return false; } };
 const readIdleOpen = () => { try { return sessionStorage.getItem(IDLE_OPEN_KEY) === '1'; } catch { return false; } };
 
-export function sourceErrorLines(sourceErrors) {
-  return Object.entries(sourceErrors || {}).map(([k, v]) => `${SOURCE_WORDS[k] || k} is missing (${String(v).slice(0, 120)})`);
+/** U2 M4: the missing-source lines live in ribbonLayout.js now (the phone shows them too); re-exported for old callers. */
+export { sourceErrorLines };
+
+/**
+ * U2 M15: what the ribbon draws while a window loads. The last body any window returned gives the lanes their names, group
+ * and seat; nothing that belongs to a time is kept (no spans, marks, pins or bands), so the old window's bars never sit on
+ * the new window's axis. Before any body has arrived there are no lanes, and the ribbon draws its axis alone.
+ */
+export function skeletonOf(last) {
+  if (!Array.isArray(last?.lanes)) return { lanes: [] };
+  return { lanes: last.lanes.map((l) => ({ lane: l.lane, group: l.group, seat: l.seat, idle: l.idle, spans: [], marks: [] })) };
 }
 
 /** `[{label, pct}]` for DayRibbon's "(seatN has room for them)": five-hour used percent of each active seat. */
@@ -69,6 +75,12 @@ export function seatPcts(rows) {
 export default function DayView({ onOpenFleet, onNavigate, active = true }) {
   const win = useRibbonWindow({ active });
   const feed = useRibbonFeed(win.window);
+  // U2 F1 + NOW M3: the Now lists (phone, drawer) read the window that holds now. When the ribbon shows a past window, a
+  // second read of the day window stands in, so a look back never makes the Now list describe the past.
+  const live = isLive(win.window.from, win.window.to, win.now);
+  const dayWin = useMemo(() => PRESETS.day(win.now), [win.now]);
+  const nowFeed = useRibbonFeed(dayWin, { enabled: !live });
+  const nowSrc = live ? feed : nowFeed;
   // COMP-COCKPIT-PROJECT-MODEL-1: each ops-lane row's project chip; `{}` (no chips) when projects.roots is unset.
   const projectModel = useProjectModel(active);
   const chips = useMemo(() => laneChips(projectModel.model), [projectModel.model]);
@@ -84,11 +96,14 @@ export default function DayView({ onOpenFleet, onNavigate, active = true }) {
   const seats = useMemo(() => seatPcts(meter.seats), [meter.seats]);
   // C3: the ribbon draws an owner wait at now only for an ask the WHAT line still counts: the same `ownerAsks` rule over the
   // feed's open asks, with the same notify state (an ask answered from the cockpit stops counting in both at once).
-  const ribbonData = useMemo(() => {
-    const open = feed.data?.owner?.open;
-    const ids = Array.isArray(open) ? (ownerAsks(open, notify.notify?.state ?? null, Date.now())?.rows ?? []).map((r) => r.id) : null;
-    return withOwnerOpen(feed.data, ids, win.now);
-  }, [feed.data, notify.notify?.state, win.now]);
+  const openIds = (body) => {
+    const open = body?.owner?.open;
+    return Array.isArray(open) ? (ownerAsks(open, notify.notify?.state ?? null, Date.now())?.rows ?? []).map((r) => r.id) : null;
+  };
+  const ribbonData = useMemo(() => withOwnerOpen(feed.data, openIds(feed.data), win.now), [feed.data, notify.notify?.state, win.now]); // eslint-disable-line react-hooks/exhaustive-deps
+  // One filtered Now feed, through the same owner-ask rule as the ribbon, so the phone's Now line, the drawer and the ribbon's
+  // NOW words cannot disagree after an ask is answered from the cockpit (F1).
+  const nowData = useMemo(() => (live ? ribbonData : withOwnerOpen(nowFeed.data, openIds(nowFeed.data), win.now)), [live, ribbonData, nowFeed.data, notify.notify?.state, win.now]); // eslint-disable-line react-hooks/exhaustive-deps
   const openOwner = useCallback(() => {
     if (window.dispatchEvent(new CustomEvent('compose:open-inbox', { cancelable: true }))) onOpenFleet?.(); // same fallback as the WHAT line
   }, [onOpenFleet]);
@@ -140,6 +155,7 @@ export default function DayView({ onOpenFleet, onNavigate, active = true }) {
   seatsRef.current = Array.isArray(meter.seats) ? meter.seats : [];
   const lanesRef = useRef([]);
   lanesRef.current = feed.data?.lanes || [];
+  const phoneRef = useRef(false);
   const flashTimer = useRef(null);
 
   // The tray's "Show <lane> / <seat>": flash the row (opening the idle fold first when that lane is folded away inside it) or
@@ -151,13 +167,18 @@ export default function DayView({ onOpenFleet, onNavigate, active = true }) {
       clearTimeout(flashTimer.current);
       flashTimer.current = setTimeout(() => { setFlashLane(null); setFlashSeat(null); }, FLASH_CLEAR_MS);
     };
+    // U2 (METER M1): take the event only for a target this page draws right now. The phone draws no ribbon and a seat the
+    // meter does not render has no row to flash; taking those would swallow the tray's own fallback for nothing.
     const onFocus = (e) => {
       const { lane, seat } = e.detail || {};
-      if (seat && seatsRef.current.some((s) => s.id === seat)) {
+      if (phoneRef.current) return;
+      const seatShown = seat && seatsRef.current.some((s) => s.id === seat)
+        && [...document.querySelectorAll('[data-testid^="cost-meter-seat-"]')].some((n) => n.getAttribute('data-testid') === `cost-meter-seat-${seat}`);
+      if (seatShown) {
         e.preventDefault();
         setMeterOpen(true);
         flash(setFlashSeat, seat);
-      } else if (lane && lanesRef.current.some((l) => l.lane === lane)) {
+      } else if (lane && lanesRef.current.some((l) => l.lane === lane) && document.querySelector('[data-testid="day-ribbon"]')) {
         e.preventDefault();
         if (lanesRef.current.some((l) => l.lane === lane && l.idle)) setIdle(true);
         flash(setFlashLane, lane);
@@ -175,14 +196,16 @@ export default function DayView({ onOpenFleet, onNavigate, active = true }) {
   const openPin = useCallback((pin, rect) => { dispatchRibbon(EVT.openPin, { pin, rect }); }, []);
   const openBand = useCallback((band) => { dispatchRibbon(EVT.openBand, { band }); }, []);
 
-  const missing = sourceErrorLines(feed.data?.sourceErrors);
+  const missing = sourceErrorLines(feed.data?.sourceErrors, feed.sourceGood, typeof feed.data?.now === 'string' ? feed.data.now : null);
+  const [pickersOpen, setPickersOpen] = useState(false);
+  phoneRef.current = phone;
   const link = 'text-[12px] text-muted-foreground hover:text-foreground hover:underline focus-visible:underline outline-none';
 
-  const drawer = nowKind && <NowDrawer kind={nowKind} onClose={closeNow} fleet={fleet} index={unitIndex} feed={feed.data} feedLoading={feed.loading} agent={agent} lastVisitAt={lastVisitAt} />;
+  const drawer = nowKind && <NowDrawer kind={nowKind} onClose={closeNow} fleet={fleet} index={unitIndex} feed={nowData} feedLoading={nowSrc.loading} agent={agent} lastVisitAt={lastVisitAt} />;
   if (phone) {
     return (
       <div className="h-full min-h-0 overflow-hidden" data-testid="day-view">
-        <DayPhone feed={feed.data} index={unitIndex} meter={meter} lastVisitAt={lastVisitAt} onOpenFleet={onOpenFleet} onNavigate={onNavigate} onCountOpen={setNowKind} />
+        <DayPhone feed={nowData} sourceGood={nowSrc.sourceGood} index={unitIndex} meter={meter} lastVisitAt={lastVisitAt} onOpenFleet={onOpenFleet} onNavigate={onNavigate} onCountOpen={setNowKind} />
         {drawer}
       </div>
     );
@@ -201,22 +224,24 @@ export default function DayView({ onOpenFleet, onNavigate, active = true }) {
         onPreset={win.preset}
         onStep={win.step}
         onNow={win.goNow}
-        resetsHidden={resetsHidden}
-        onResetsToggle={toggleResets}
+        pickersOpen={pickersOpen}
         alertChip={alertChip}
         onAlertChip={openAlertTray}
       />
       <div className="flex-1 min-h-0 flex flex-col gap-1 relative">
-        {feed.loading && (
-          <div className="flex-1 rounded-xl border border-border bg-card animate-pulse" data-testid="day-skeleton" aria-label="Loading the ribbon" />
-        )}
         {feed.error && !feed.data && (
-          <p className="m-0 text-[12px] text-destructive" role="status" data-testid="day-feed-error">The ribbon could not be loaded: {feed.error}</p>
+          <p className="m-0 text-[12px] text-destructive" role="status" data-testid="day-feed-error" title={feed.error}>The ribbon could not be read; retrying every 2 minutes.</p>
         )}
-        {feed.data && (
-          <div className="flex-1 min-h-0">
+        {/* TOP M1: a failed refresh over kept data says so; the ribbon stays, marked old. */}
+        {feed.stale && <SourceNote source="The ribbon" state={feed} />}
+        {(feed.data || feed.loading) && (
+          // M15: while a window loads, the axis and the lane names stay on screen with "updating…", never a blank panel.
+          <div className="flex-1 min-h-0" data-testid={feed.loading ? 'day-skeleton' : undefined} aria-busy={feed.loading || undefined}>
             <DayRibbon
-              data={ribbonData}
+              data={feed.loading ? skeletonOf(feed.last) : ribbonData}
+              updating={feed.loading}
+              onTitleClick={() => setPickersOpen((v) => !v)}
+              onResetsToggle={toggleResets}
               onOwnerOpen={openOwner}
               from={win.window.from}
               to={win.window.to}
@@ -240,7 +265,7 @@ export default function DayView({ onOpenFleet, onNavigate, active = true }) {
         <RibbonLaneLayer data={feed.data} from={win.window.from} to={win.window.to} now={win.now} />
         {missing.length > 0 && (
           <ul className="m-0 pl-4 text-[12px] text-muted-foreground" data-testid="day-source-errors">
-            {missing.map((m) => <li key={m}>Not drawn: {m}</li>)}
+            {missing.map((m) => <li key={m.key} title={m.title}>{m.text}</li>)}
           </ul>
         )}
       </div>

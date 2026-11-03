@@ -18,6 +18,7 @@ import { buildUnitIndex } from '../lib/unit-index.js';
 import { buildRibbon, computeHistory, etaWithPrev, parseGateLog, remainingByLane, safeReason } from '../lib/ribbon-feed.js';
 import { queueDecisions, unitsIn } from '../lib/decisions-ledger.js';
 import { groupOf, stripTag } from '../lib/owner-queue-class.js';
+import { reconcileOwnerSpans } from '../lib/owner-spans.js';
 import { ledgerDecisions, ledgerPath } from './decisions-routes.js';
 
 export const RIBBON_ROUTE = '/api/ribbon';
@@ -236,6 +237,11 @@ export function attachRibbonRoutes(app, { remote = false, env = process.env, dep
           row.spans.push(span);
           row.spans.sort((x, y) => Date.parse(x.start) - Date.parse(y.start) || Date.parse(x.end) - Date.parse(y.end));
           row.idle = false;
+        }
+        // F2 (U2): the queue is the "at now" owner source, so a stamp owner span that is open or repeats a queue ask is dropped.
+        for (const row of body.lanes) {
+          row.spans = reconcileOwnerSpans(row.spans);
+          row.idle = !row.current && row.spans.length === 0 && (row.marks || []).length === 0;
         }
         body.owner = { open: ow.open };
       }

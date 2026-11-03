@@ -13,17 +13,19 @@
     --popover-foreground: 0 0% 3.9%;
     --primary: 0 0% 9%;
     --primary-foreground: 0 0% 98%;
-    --secondary: 0 0% 96.1%;
+    /* COMP-DAYVIEW-DESIGN-FIX-1 U2 M12: light neutrals tinted toward slate (the dark theme's family), muted text at 6:1 on
+       white (was 4.7:1), and the ribbon blue as the light accent and focus ring (was a near-white gray, invisible as a ring). */
+    --secondary: 220 14% 96%;
     --secondary-foreground: 0 0% 9%;
-    --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 45.1%;
-    --accent: 0 0% 96.1%;
-    --accent-foreground: 0 0% 9%;
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 9% 40%;
+    --accent: 217 69% 47%;
+    --accent-foreground: 0 0% 100%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 89.8%;
-    --input: 0 0% 89.8%;
-    --ring: 0 0% 3.9%;
+    --border: 220 13% 90%;
+    --input: 220 13% 90%;
+    --ring: 217 69% 47%;
     --radius: 0.5rem;
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 240 5.3% 26.1%;
@@ -35,6 +37,8 @@
     --sidebar-ring: 217.2 91.2% 59.8%;
     --success: 142 71% 45%;
     --warning: 32 95% 52%;
+    --warning-ink: 28 92% 30%;    /* warning words on white at 4.5:1 or better (U2 M12: the range bar's alert chip) */
+    --meter-ok: 220 9% 46%;       /* a meter bar under its pace: neutral, so only warn and full carry a color (U2 M10) */
     --artifact: 282 40% 60%;
     --needs-you: 317 100% 33%;    /* #a90079: the one loud hue, owner waits only (COMP-DAYVIEW-DESIGN-FIX-1) */
     --chart-1: 12 76% 61%;
@@ -79,6 +83,8 @@
     /* Semantic */
     --success: 142 71% 45%;
     --warning: 38 92% 50%;
+    --warning-ink: 38 92% 50%;
+    --meter-ok: 215 20% 65%;
     --needs-you: 315 100% 71%;    /* #ff6ad9 */
     --artifact: 282 40% 60%;
     /* Charts */
@@ -115,6 +121,25 @@
 
   /* Legacy borders — used by .compose-btn-icon */
   --border-emphasis: rgba(0, 0, 0, 0.15);
+
+  /* Type tokens (COMP-DAYVIEW-DESIGN-FIX-1 U2 M11): three sizes for the Day view. Labels (caps, axis, legend, keys) 11 px,
+     body (lane names and every word about a lane) 13 px, the WHAT line 15 px. */
+  --type-label: 11px;
+  --type-body: 13px;
+  --type-what: 15px;
+
+  /* Day ribbon state colors (U2 M12, moved from DayRibbon so every view reads one palette). `--rb-gate-ink` is the gate
+     gray darkened for WORDS: the fill stays light, text in it reaches 4.5:1 on the card. */
+  --rb-hl: rgba(37, 99, 201, .22);
+  --rb-work: #0a7e3a;
+  --rb-wait: #d6bd95;
+  --rb-gate: #9da2a7;
+  --rb-gate-bg: #8b9095;
+  --rb-gate-ink: #5f6469;
+  --rb-quota: #6f45a0;
+  --rb-quota-bg: #9165bf;
+  --rb-accent: #2563c9;
+  --rb-alert: #c23e36;
 }
 
 /* Dark mode category color overrides */
@@ -124,6 +149,17 @@
   --color-category-fetching: #06b6d4;
   --color-category-delegating: #a855f7;
   --border-emphasis: #475569;
+
+  --rb-hl: rgba(91, 155, 255, .28);
+  --rb-work: #5bbd74;
+  --rb-wait: #664a1f;
+  --rb-gate: #878d93;
+  --rb-gate-bg: #757b81;
+  --rb-gate-ink: #a3a8ad;
+  --rb-quota: #5e3a91;
+  --rb-quota-bg: #714ca6;
+  --rb-accent: #5b9bff;
+  --rb-alert: #ee6a5f;
 }
 
 /* ── Scrollbar ── */

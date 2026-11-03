@@ -12,18 +12,24 @@ const TONE = { bad: 'text-destructive', warn: 'text-foreground', plain: 'text-fo
  */
 export default function MarkPopover({ card, rect, note, onClose, onAction }) {
   const ref = useRef(null);
-  const [pos, setPos] = useState({ left: 0, top: 0 });
+  const [pos, setPos] = useState({ left: 0, top: 0, width: W });
+  const [all, setAll] = useState(false);
+  useEffect(() => { setAll(false); }, [card]);
 
+  // U2 MARKS M3: the card is never wider than the screen less a gutter, never taller than it (it scrolls inside), and is
+  // placed by its CLAMPED height, so a long card on a short screen stays whole on screen instead of running off the bottom.
   useLayoutEffect(() => {
     const el = ref.current;
-    const h = el ? el.offsetHeight : 0;
     const vw = window.innerWidth;
     const vh = window.innerHeight;
-    const left = Math.max(GAP, Math.min((rect?.left ?? 0) + (rect?.width ?? 0) / 2 - W / 2, vw - W - GAP));
+    const width = Math.min(W, Math.max(0, vw - 2 * GAP));
+    const h = Math.min(el ? el.offsetHeight : 0, vh - 2 * GAP);
+    const left = Math.max(GAP, Math.min((rect?.left ?? 0) + (rect?.width ?? 0) / 2 - width / 2, vw - width - GAP));
     const below = (rect?.bottom ?? 0) + GAP;
-    const top = below + h > vh - GAP ? Math.max(GAP, (rect?.top ?? 0) - h - GAP) : below;
-    setPos({ left, top });
-  }, [rect, card]);
+    const above = (rect?.top ?? 0) - h - GAP;
+    const top = below + h <= vh - GAP ? below : above >= GAP ? above : Math.max(GAP, vh - GAP - h);
+    setPos({ left, top, width });
+  }, [rect, card, all]);
 
   useEffect(() => {
     const el = ref.current;
@@ -52,11 +58,15 @@ export default function MarkPopover({ card, rect, note, onClose, onAction }) {
   return (
     <div ref={ref} role="dialog" aria-label={head} tabIndex={-1} data-testid="mark-popover" data-kind={card.kind}
       className="fixed z-50 rounded-lg border border-border bg-card p-3 text-[12px] shadow-lg outline-none"
-      style={{ left: pos.left, top: pos.top, width: W }}>
+      style={{ left: pos.left, top: pos.top, width: pos.width, maxHeight: `calc(100vh - ${2 * GAP}px)`, overflowY: 'auto' }}>
       <div className={`font-bold ${card.tone === 'bad' ? 'text-destructive' : TONE.plain}`} data-testid="mark-popover-title">{head}</div>
       {card.name && <div className="mt-0.5 font-semibold text-foreground" data-testid="mark-popover-name">{card.name}</div>}
       {card.sub && <div className="text-muted-foreground" data-testid="mark-popover-sub">{card.sub}</div>}
-      {card.body && <p className="m-0 mt-2 text-foreground" data-testid="mark-popover-body">{card.body}</p>}
+      {card.body && <p className="m-0 mt-2 text-foreground break-words" data-testid="mark-popover-body">{all && card.full ? card.full : card.body}</p>}
+      {card.full && (
+        <button type="button" className="mt-1 text-muted-foreground hover:text-foreground hover:underline" data-testid="mark-popover-all"
+          aria-expanded={all} onClick={() => setAll((v) => !v)}>{all ? 'Show less' : 'Show all'}</button>
+      )}
       {card.list && (
         <ul className="m-0 mt-2 flex list-none flex-col gap-1 p-0" data-testid="mark-popover-list">
           {card.list.map((it, i) => (

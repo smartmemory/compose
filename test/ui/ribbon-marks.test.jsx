@@ -37,6 +37,17 @@ function Harness({ data = day, from = data.from, to = data.to, onNavigate = () =
   );
 }
 const withBands = () => ({ ...day, bands: BANDS });
+/**
+ * U2 RIBBON-RANGE-1 M3: marks cluster by pixel distance at every window length, so the fixture's land (08:40) and deploy
+ * (08:45), about 2.5 px apart on the 1086 px day track, draw as one cluster. Rows that open each kind's own card move the
+ * deploy two hours later so both ticks draw alone.
+ */
+const spread = () => ({
+  ...day,
+  lanes: day.lanes.map((l) => (l.lane !== 'web' ? l : {
+    ...l, marks: l.marks.map((m) => (m.kind === 'deploy' ? { ...m, at: '2026-10-31T10:45:00-07:00' } : m)),
+  })),
+});
 const title = () => screen.getByTestId('mark-popover-title').textContent;
 const lane = (c, id) => c.querySelector(`[data-testid="lane-${id}"]`);
 
@@ -45,8 +56,8 @@ afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.useRealTimers(); });
 describe('marks open a card (COMP-COCKPIT-RIBBON-MARKS-1)', () => {
   it('one card per kind, opened by its own event (one row table)', () => {
     const rows = [
-      { name: 'land tick', pick: (c) => lane(c, 'web').querySelector('[data-testid="mark-land"]'), want: '✓ Landed', has: 'unit page ▸' },
-      { name: 'deploy tick', pick: (c) => lane(c, 'web').querySelector('[data-testid="mark-deploy"]'), want: '▲ Deployed', has: 'Pricing grid live on smartmemory.ai' },
+      { name: 'land tick', data: spread(), pick: (c) => lane(c, 'web').querySelector('[data-testid="mark-land"]'), want: '✓ Landed', has: 'unit page ▸' },
+      { name: 'deploy tick', data: spread(), pick: (c) => lane(c, 'web').querySelector('[data-testid="mark-deploy"]'), want: '▲ Deployed', has: 'Pricing grid live on smartmemory.ai' },
       { name: 'failed deploy tick, in red', pick: (c) => c.querySelector('[data-testid="mark-deployFail"]'), want: '▲ Deploy failed', red: true },
       { name: 'decided-for-you tick', pick: (c) => lane(c, 'ops').querySelector('[data-testid="mark-decide"]'), want: '⚖︎ Decided for you', has: 'Reverse: Remove the bypass flag.' },
       { name: 'seat reset pin', pick: (c) => c.querySelector('[data-testid="pin-seatReset"]'), want: '↻ seat2 resets 18:10', has: 'It is at 96% now with ops work queued.' },
@@ -63,6 +74,17 @@ describe('marks open a card (COMP-COCKPIT-RIBBON-MARKS-1)', () => {
       if (r.has) expect(screen.getByTestId('mark-popover').textContent, r.name).toContain(r.has);
       if (r.red) expect(screen.getByTestId('mark-popover-title').className, r.name).toContain('text-destructive');
     }
+  });
+
+  it('U2 M3: at day width two marks 5 minutes apart draw as one cluster of 2, not two overprinted ticks', () => {
+    const { container } = render(<Harness />);
+    const web = lane(container, 'web');
+    expect(web.querySelector('[data-testid="mark-land"]')).toBeNull();
+    expect(web.querySelector('[data-testid="mark-deploy"]')).toBeNull();
+    const badges = web.querySelectorAll('[data-testid="mark-cluster"]');
+    expect(badges.length).toBe(1);
+    fireEvent.click(badges[0]);
+    expect(title()).toBe('2 events');
   });
 
   it('a cluster badge at week width lists its items, and a row opens that item\'s own card', () => {
@@ -87,7 +109,7 @@ describe('marks open a card (COMP-COCKPIT-RIBBON-MARKS-1)', () => {
     ];
     for (const c of closers) {
       cleanup();
-      const { container } = render(<Harness />);
+      const { container } = render(<Harness data={spread()} />);
       const mark = lane(container, 'web').querySelector('[data-testid="mark-land"]');
       mark.focus();
       fireEvent.click(mark);

@@ -5,6 +5,11 @@
  * A change of window aborts the request in flight; the last 5 windows are kept in memory (a cached window shows at once);
  * the poll runs every 120 s, and only while the window contains now and the document is visible. A window with
  * `from >= to` never reaches the feed.
+ *
+ * COMP-DAYVIEW-DESIGN-FIX-1 U2: the hook returns the cockpit's one source shape (`lib/sourceState.js`: `fetchedAt`,
+ * `errorSince`, `stale` beside `data` and `error`), so a failed refresh over kept data reads "unreadable since HH:MM" (TOP M1).
+ * `last` is the newest body from ANY window, for the loading skeleton's lane names (M15). `sourceGood` is, per
+ * `sourceErrors` key, the last time a body read that source cleanly (M4: "not read since HH:MM"), or null when never.
  */
 import { useEffect, useRef, useState } from 'react';
 import { wsFetch } from '../../lib/wsFetch.js';
@@ -19,7 +24,10 @@ const hidden = () => typeof document !== 'undefined' && document.visibilityState
 export function useRibbonFeed(win, { enabled = true } = {}) {
   const cache = useRef(new Map());
   const key = usable(win) ? keyOf(win) : null;
-  const [snap, setSnap] = useState({ key: null, data: null, error: null });
+  const [snap, setSnap] = useState({ key: null, data: null, error: null, fetchedAt: null, errorSince: null });
+  const [last, setLast] = useState(null);
+  const good = useRef({});
+  const [sourceGood, setSourceGood] = useState({});
 
   useEffect(() => {
     if (!enabled || !key) return undefined;
@@ -42,15 +50,25 @@ export function useRibbonFeed(win, { enabled = true } = {}) {
         const data = await res.json();
         if (dead || ac.signal.aborted) return;
         remember(data);
-        setSnap({ key, data, error: null });
+        const at = Date.now();
+        const errs = data?.sourceErrors || {};
+        const known = ['stamps', 'quota', 'ownerQueue', 'holds', 'ledger', 'outage', 'seats', 'eta', ...Object.keys(errs)];
+        known.forEach((k) => { if (!errs[k]) good.current[k] = at; });
+        setSourceGood({ ...good.current });
+        setLast(data);
+        setSnap({ key, data, error: null, fetchedAt: at, errorSince: null });
       } catch (e) {
         if (dead || ac.signal.aborted) return;
-        setSnap((s) => ({ key, data: s.key === key ? s.data : null, error: String(e?.message ?? e) }));
+        const at = Date.now();
+        setSnap((s) => {
+          const same = s.key === key;
+          return { key, data: same ? s.data : null, error: String(e?.message ?? e), fetchedAt: same ? s.fetchedAt : null, errorSince: same && s.error && s.errorSince ? s.errorSince : at };
+        });
       }
     };
 
-    if (cache.current.has(key)) setSnap({ key, data: cache.current.get(key), error: null });
-    else setSnap({ key, data: null, error: null });
+    if (cache.current.has(key)) setSnap({ key, data: cache.current.get(key), error: null, fetchedAt: null, errorSince: null });
+    else setSnap({ key, data: null, error: null, fetchedAt: null, errorSince: null });
     const cachedPast = cache.current.has(key) && !(Date.parse(from) <= Date.now() && Date.now() <= Date.parse(to));
     if (!cachedPast) load();
 
@@ -65,5 +83,14 @@ export function useRibbonFeed(win, { enabled = true } = {}) {
   const mine = snap.key === key;
   const data = mine ? snap.data : null;
   const error = mine ? snap.error : null;
-  return { data, error, loading: enabled && !!key && !data && !error };
+  return {
+    data,
+    error,
+    loading: enabled && !!key && !data && !error,
+    stale: !!(error && data),
+    fetchedAt: mine ? snap.fetchedAt : null,
+    errorSince: mine ? snap.errorSince : null,
+    last,
+    sourceGood,
+  };
 }

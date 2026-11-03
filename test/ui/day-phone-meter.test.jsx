@@ -10,7 +10,7 @@ import { render, screen, fireEvent, cleanup, act } from '@testing-library/react'
 
 vi.mock('../../src/lib/wsFetch.js', async (orig) => ({ ...(await orig()), wsFetch: vi.fn() }));
 import { wsFetch } from '../../src/lib/wsFetch.js';
-import DayView from '../../src/components/ribbon/DayView.jsx';
+import DayView, { EVT } from '../../src/components/ribbon/DayView.jsx';
 import { resetFleetPoller } from '../../src/lib/fleetPoller.js';
 
 const FIXTURE = JSON.parse(readFileSync(resolve(process.cwd(), 'test/fixtures/ribbon/day.json'), 'utf8'));
@@ -59,6 +59,29 @@ describe('phone Day meter cards (COMP-COCKPIT-PHONE-1)', () => {
       await act(async () => { fireEvent.keyDown(window, { key: 'Escape' }); });
       expect(screen.queryByTestId('meter-popover')).toBeNull();
       expect(document.activeElement).toBe(row);
+    }],
+    ['U2 PHONE-1 M1: an outside tap that closes the card gives focus back to the row it came from', async () => {
+      render(<DayView onNavigate={() => {}} />);
+      const row = await screen.findByTestId('cost-meter-seat-seat2');
+      row.focus();
+      await press(row);
+      await screen.findByTestId('meter-popover');
+      // A browser moves focus to the body after a press on nothing focusable; jsdom does not, so the test does it.
+      await act(async () => { fireEvent.pointerDown(document.body); document.activeElement?.blur(); await new Promise((r) => setTimeout(r, 5)); });
+      expect(screen.queryByTestId('meter-popover')).toBeNull();
+      expect(document.activeElement).toBe(row);
+    }],
+    ['U2 METER M1: a jump the page cannot draw is not taken (the phone has no ribbon; a seat the meter does not show has no row)', async () => {
+      render(<DayView onNavigate={() => {}} />);
+      await screen.findByTestId('cost-meter-seat-seat2');
+      const send = (detail) => { const e = new CustomEvent(EVT.focus, { detail, cancelable: true }); act(() => { window.dispatchEvent(e); }); return e.defaultPrevented; };
+      expect([send({ lane: 'main' }), send({ seat: 'seat2' })]).toEqual([false, false]);
+      cleanup();
+      setWidth(1440);
+      render(<DayView onNavigate={() => {}} />);
+      await screen.findByTestId('day-ribbon');
+      await screen.findByTestId('cost-meter-seat-seat2');
+      expect([send({ seat: 'seat9' }), send({ lane: 'no-such-lane' }), send({ seat: 'seat2' })]).toEqual([false, false, true]);
     }],
     ['the money tap opens the money card', async () => {
       render(<DayView onNavigate={() => {}} />);

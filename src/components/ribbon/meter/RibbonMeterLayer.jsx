@@ -21,7 +21,12 @@ export default function RibbonMeterLayer({ meter, flashSeat = null, onNavigate, 
     setOpen(null);
     const el = trigger.current;
     trigger.current = null;
-    if (why !== 'nav' && el && el.isConnected && typeof el.focus === 'function') el.focus();
+    const back = () => { if (el && el.isConnected && typeof el.focus === 'function') el.focus(); };
+    if (why === 'outside') {
+      // U2 (PHONE-1 M1): the press that closed the card is still landing; give focus back only if it left focus on nothing,
+      // as RibbonMarksLayer does, so a tap on another control keeps its own focus.
+      setTimeout(() => { if (!document.activeElement || document.activeElement === document.body) back(); }, 0);
+    } else if (why !== 'nav') back();
   }, []);
 
   // A flashed seat may sit below the meter box's fold: bring its row into view.

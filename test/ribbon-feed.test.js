@@ -11,6 +11,8 @@ import { join } from 'node:path';
 import { attachRibbonRoutes } from '../server/ribbon-routes.js';
 import { buildRibbon, computeHistory, etaWithPrev, holdBands, parseGateLog } from '../lib/ribbon-feed.js';
 import { buildDecisions, parseLedger, queueDecisions } from '../lib/decisions-ledger.js';
+import { ownerWaitsAtNow } from '../src/components/ribbon/ribbonLayout.js';
+import { ownerAsks } from '../src/components/cockpit/notify/notifyLogic.js';
 
 const D = (s) => Date.parse(`2026-10-31T${s}:00Z`);
 const T = (s) => `2026-10-31T${s}:00.000Z`; // the feed prints toISOString()
@@ -252,6 +254,22 @@ describe('GET /api/ribbon', () => {
       assert.equal(res.status, 200);
       assert.equal(hits.units, 1, 'the source cache was warm');
     } finally { server.close(); }
+  });
+  it('U2 F2: one ask with a stamp and a queue row draws once at now, an answered ask with only an open stamp draws nothing, and the drawn count is the headline count', async () => {
+    const r = await get(`from=${FROM}&to=${TO}`, {
+      loadUnits: async () => ({ units: [
+        unit('U8', 'forge', { ready_at: T('07:50'), dispatched_at: T('08:00'), author_done_at: T('08:50'), owner_waits: [{ start: T('09:00'), end: null }] }),
+        unit('U9', 'web', { ready_at: T('05:50'), dispatched_at: T('06:00'), author_done_at: T('06:50'), owner_waits: [{ start: T('07:00'), end: null }] }),
+      ], coverage: {}, asOf: new Date(NOW).toISOString() }),
+      loadOwnerQueue: async () => [{ id: 'A', status: 'open', by: 'forge-main', ts: D('09:00') / 1000, text: 'ASK: ship it?', unit: 'U8' }],
+    });
+    assert.equal(r.status, 200);
+    const owners = (name) => r.body.lanes.find((l) => l.lane === name).spans.filter((s) => s.kind === 'wait' && s.cause === 'owner');
+    assert.deepEqual(owners('forge').map((s) => s.queueId ?? null), ['A'], 'one ask, one span: the queue\'s');
+    assert.deepEqual(owners('web'), [], 'the answered ask leaves no open stamp span');
+    const drawn = ownerWaitsAtNow(r.body.lanes, NOW, r.body.now);
+    assert.deepEqual(drawn.map((d) => d.queueId), ownerAsks(r.body.owner.open, null, NOW).rows.map((q) => q.id));
+    assert.equal(drawn.length, 1);
   });
   it('remote mode mounts nothing', () => assert.equal(attachRibbonRoutes(express(), { remote: true }), false));
 });

@@ -23,7 +23,7 @@ describe('laneState', () => {
     ['current unit dispatched 3h ago is working with its age', lane('a', [span('work')], { id: 'U1', since: iso(3) }), ['working', undefined, 'working 3h']],
     ['current unit with no dispatch stamp is working with no age', lane('a', [span('work')], { id: 'U1' }), ['working', undefined, 'working']],
     ['dispatched over 24h ago and nothing waits is stale', lane('a', [span('work')], { id: 'U1', since: iso(30) }), ['stale', undefined, 'stale: working 1d 6h, no stamp in 24h']],
-    ['a review wait wins over the current unit and keeps its dispatch age', lane('a', [span('work'), span('wait', { cause: 'review' })], { id: 'U1', since: iso(5) }), ['wait', 'review', null]],
+    ['a review wait wins over the current unit', lane('a', [span('work'), span('wait', { cause: 'review' })], { id: 'U1', since: iso(5) }), ['wait', 'review', null]],
     ['an owner wait wins over a review wait and counts from the ask', lane('a', [span('wait', { cause: 'review' }), span('wait', { cause: 'owner', since: iso(4) })], { id: 'U1', since: iso(30) }), ['wait', 'owner', null]],
     ['a stale lane with a wait is a wait, not stale', lane('a', [span('wait', { cause: 'gate' })], { id: 'U1', since: iso(48) }), ['wait', 'gate', null]],
     ['a notRecorded span is never a state', lane('a', [span('notRecorded')]), null],
@@ -41,8 +41,9 @@ describe('laneState', () => {
     assert.equal(laneState(lane('a', [], { id: 'U1', since: new Date(NOW - STALE_MS).toISOString() }), NOW).kind, 'working');
     assert.equal(laneState(lane('a', [], { id: 'U1', since: new Date(NOW - STALE_MS - 60_000).toISOString() }), NOW).kind, 'stale');
   });
-  it('a review wait counts from the dispatch, an owner wait from the ask', () => {
-    assert.equal(laneState(lane('a', [span('wait', { cause: 'review' })], { id: 'U1', since: iso(5) }), NOW).since, NOW - 5 * 3_600_000);
+  it('a review wait counts from the start of its open span (U2 RIBBON-ROWS-1 M1), an owner wait from the ask', () => {
+    assert.equal(laneState(lane('a', [span('wait', { cause: 'review' })], { id: 'U1', since: iso(5) }), NOW).since, NOW - 2 * 3_600_000);
+    assert.equal(laneState(lane('a', [span('wait', { cause: 'gate', start: iso(7) })], { id: 'U1', since: iso(5) }), NOW).since, NOW - 7 * 3_600_000);
     assert.equal(laneState(lane('a', [span('wait', { cause: 'owner', start: iso(1) })], { id: 'U1', since: iso(5) }), NOW).since, NOW - 3_600_000);
   });
 });

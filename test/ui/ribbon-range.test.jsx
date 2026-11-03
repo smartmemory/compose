@@ -29,21 +29,32 @@ const w = (from, to) => ({ from, to });
 function Harness({ active = true, clock = () => NOW }) {
   const r = useRibbonWindow({ active, clock });
   const feed = useRibbonFeed(r.window);
+  // U2 M1: the pickers sit behind the ribbon title, as in DayView.
+  const [pickersOpen, setPickersOpen] = React.useState(false);
   return (
     <div>
       <RangeBar window={r.window} following={r.following} clampedBecause={r.clampedBecause} onRange={r.setRange}
-        onPreset={r.preset} onStep={r.step} onNow={r.goNow} />
+        onPreset={r.preset} onStep={r.step} onNow={r.goNow} pickersOpen={pickersOpen} />
       {feed.loading
         ? <div data-testid="skeleton" />
-        : <DayRibbon data={feed.data || { lanes: [] }} from={r.window.from} to={r.window.to} now={r.now} onAxisSelect={r.zoom} />}
+        : <DayRibbon data={feed.data || { lanes: [] }} from={r.window.from} to={r.window.to} now={r.now} onAxisSelect={r.zoom} onTitleClick={() => setPickersOpen((v) => !v)} />}
     </div>
   );
 }
 
 const q = (root, id) => root.querySelector(`[data-testid="${id}"]`);
-const setPicker = (root, id, value) => { const el = q(root, id); fireEvent.change(el, { target: { value } }); fireEvent.blur(el); };
-/** The svg reports a 1200 x 300 box at the origin, so clientX is the svg x (track runs 92 to 1188). */
-const withBox = () => vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, width: 1200, height: 300, right: 1200, bottom: 300, x: 0, y: 0 });
+/** A picker input, opening the pickers from the ribbon title first when they are closed (U2 M1). */
+const picker = (root, id) => { if (!q(root, id)) fireEvent.click(q(root, 'ribbon-title-button')); return q(root, id); };
+/** U2: Live is a toggle that says whether the window follows now; it is never disabled. */
+const live = (root) => q(root, 'range-now').getAttribute('aria-pressed');
+const setPicker = (root, id, value) => { const el = picker(root, id); fireEvent.change(el, { target: { value } }); fireEvent.blur(el); };
+/** The svg reports a 1200 x 300 box at the origin, so clientX is the svg x (track runs X0 = 100 to 1186, 1086 px). */
+const withBox = () => {
+  // U2 RANGE M1: the pointer maps through the svg's viewBox with meet scaling, so the box takes the viewBox's own height.
+  const vb = document.querySelector('[data-testid="ribbon-svg"]')?.getAttribute('viewBox')?.split(/\s+/).map(Number) || [0, 0, 1200, 300];
+  const [width, height] = [vb[2], vb[3]];
+  return vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, width, height, right: width, bottom: height, x: 0, y: 0 });
+};
 const drag = (root, fromX, toX) => {
   fireEvent.pointerDown(q(root, 'axis-drag'), { clientX: fromX, pointerId: 1 });
   fireEvent.pointerMove(window, { clientX: toX, pointerId: 1 });
@@ -58,7 +69,7 @@ const ROWS = [
       expect(asked()).toEqual([urlFor(DAY)]);
       expect(window.location.hash).toBe('');
       expect(q(root, 'ribbon-title').textContent).toBe('Lanes · yesterday 18:00 to tomorrow 06:00');
-      expect(q(root, 'range-now').disabled).toBe(true);
+      expect(live(root)).toBe('true');
       expect(q(root, 'range-preset-day').getAttribute('aria-pressed')).toBe('true');
       expect(q(root, 'now-line')).toBeTruthy();
     },
@@ -78,7 +89,7 @@ const ROWS = [
       await waitFor(() => expect(q(root, 'day-ribbon')).toBeTruthy());
       expect(asked()).toEqual([urlFor(w('2026-10-20T00:00:00-07:00', '2026-10-21T00:00:00-07:00'))]);
       expect(q(root, 'now-line')).toBeNull();
-      expect(q(root, 'range-now').disabled).toBe(false);
+      expect(live(root)).toBe('false');
       expect(q(root, 'ribbon-title').textContent).toBe('Lanes · Tue 20 Oct 00:00 to Wed 21 Oct 00:00');
     },
   },
@@ -91,7 +102,7 @@ const ROWS = [
       await waitFor(() => expect(asked()).toContain(urlFor(six)));
       expect(window.location.hash).toBe(formatHash(six));
       expect(q(root, 'range-preset-6h').getAttribute('aria-pressed')).toBe('true');
-      expect(q(root, 'range-now').disabled).toBe(false);
+      expect(live(root)).toBe('false');
     },
   },
   {
@@ -122,7 +133,7 @@ const ROWS = [
     run: async ({ root }) => {
       await waitFor(() => expect(q(root, 'day-ribbon')).toBeTruthy());
       const n = asked().length;
-      fireEvent.change(q(root, 'range-start'), { target: { value: '2026-10-30T12:00' } });
+      fireEvent.change(picker(root, 'range-start'), { target: { value: '2026-10-30T12:00' } });
       expect(asked().length).toBe(n);
       expect(window.location.hash).toBe('');
       fireEvent.blur(q(root, 'range-start'));
@@ -155,14 +166,14 @@ const ROWS = [
     },
   },
   {
-    name: 'Now: back to the live default, hash cleared, button disabled again',
+    name: 'Now: back to the live default, hash cleared, Live pressed again',
     setup: () => { window.history.replaceState(null, '', `/${formatHash(w('2026-10-20T00:00:00-07:00', '2026-10-21T00:00:00-07:00'))}`); },
     run: async ({ root }) => {
       await waitFor(() => expect(q(root, 'day-ribbon')).toBeTruthy());
       fireEvent.click(q(root, 'range-now'));
       await waitFor(() => expect(asked()).toContain(urlFor(DAY)));
       expect(window.location.hash).toBe('');
-      expect(q(root, 'range-now').disabled).toBe(true);
+      expect(live(root)).toBe('true');
       await waitFor(() => expect(q(root, 'now-line')).toBeTruthy());
     },
   },
@@ -183,7 +194,7 @@ const ROWS = [
     run: async ({ root }) => {
       await waitFor(() => expect(q(root, 'day-ribbon')).toBeTruthy());
       const box = withBox();
-      const release = drag(root, 92, 92 + 1096 / 4);
+      const release = drag(root, 100, 100 + 1086 / 4);
       expect(q(root, 'axis-selection')).toBeTruthy();
       expect(window.location.hash).toBe('');
       release();
@@ -200,7 +211,7 @@ const ROWS = [
       await waitFor(() => expect(q(root, 'day-ribbon')).toBeTruthy());
       const box = withBox();
       const n = asked().length;
-      const release = drag(root, 92, 400);
+      const release = drag(root, 100, 400);
       fireEvent.keyDown(window, { key: 'Escape' });
       expect(q(root, 'axis-selection')).toBeNull();
       release();
@@ -250,7 +261,7 @@ const ROWS = [
       window.history.replaceState(null, '', `/${formatHash(want)}`);
       act(() => { window.dispatchEvent(new HashChangeEvent('hashchange')); });
       await waitFor(() => expect(asked()).toContain(urlFor(want)));
-      expect(q(root, 'range-now').disabled).toBe(false);
+      expect(live(root)).toBe('false');
     },
   },
   {
@@ -262,7 +273,7 @@ const ROWS = [
       await waitFor(() => expect(asked()).toContain(urlFor(w('2026-10-18T06:00:00-07:00', '2026-10-19T18:00:00-07:00'))));
       const n = asked().length;
       fireEvent.click(q(root, 'range-forward'));
-      await waitFor(() => expect(q(root, 'range-start').value).toBe('2026-10-19T18:00'));
+      await waitFor(() => expect(picker(root, 'range-start').value).toBe('2026-10-19T18:00'));
       expect(q(root, 'day-ribbon')).toBeTruthy();
       expect(asked().length).toBe(n);
     },
@@ -279,7 +290,7 @@ const ROWS = [
       }
       const n = asked().length;
       for (let i = 0; i < 5; i += 1) fireEvent.click(q(root, 'range-forward'));
-      await waitFor(() => expect(q(root, 'range-start').value).toBe('2026-10-19T18:00'));
+      await waitFor(() => expect(picker(root, 'range-start').value).toBe('2026-10-19T18:00'));
       expect(asked().length).toBe(n + 1);
     },
   },

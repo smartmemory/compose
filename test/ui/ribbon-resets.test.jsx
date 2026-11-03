@@ -32,10 +32,10 @@ afterEach(() => { cleanup(); localStorage.clear(); vi.restoreAllMocks(); vi.useR
 
 const ROWS = [
   {
-    name: 'labels: a tick is just s1..s4 or cx, the fixture day reads s2, s1 and one merged x2',
+    name: 'labels: a tick is just s1..s4 or cx, the fixture day reads s2, s1 and one merged "s3, s4" (U2 M7: names, never "x2")',
     run: () => {
       const root = draw(day.pins);
-      expect(ticks(root).map(word)).toEqual(['s2', 's1', 'x2']);
+      expect(ticks(root).map(word)).toEqual(['s2', 's1', 's3, s4']);
       expect(['seat2', 'seat1', 'seat3', 'seat4', 'codex', 'other'].map((s) => resetTag({ seat: s }))).toEqual(['s2', 's1', 's3', 's4', 'cx', 'other']);
       // one line: every tick sits on the same baseline
       expect(new Set(root.querySelectorAll('[data-testid^="pin-"] text')).size).toBeGreaterThan(0);
@@ -58,13 +58,14 @@ const ROWS = [
       const root = draw([pin('seat1', '22:40'), pin('seat3', '22:50'), pin('seat4', '23:05')]);
       const g = ticks(root);
       expect(g).toHaveLength(1);
-      expect(word(g[0])).toBe('x3');
+      expect(word(g[0])).toBe('3 seats reset'); // U2 M7: over two seats, counted in words
       expect(g[0].getAttribute('data-count')).toBe('3');
       expect(g[0].getAttribute('data-tip')).toBe('3 resets 22:40\nseat1 5h limit resets 22:40\nseat3 5h limit resets 22:50\nseat4 5h limit resets 23:05');
       // a click on it opens the list as a cluster of resets
       const onPinOpen = vi.fn();
       cleanup();
       const again = draw([pin('seat1', '22:40'), pin('seat3', '22:50')], { onPinOpen });
+      expect(word(ticks(again)[0])).toBe('s1, s3');
       fireEvent.click(ticks(again)[0]);
       expect(onPinOpen.mock.calls[0][0]).toMatchObject({ kind: 'cluster', count: 2 });
       expect(onPinOpen.mock.calls[0][0].items.map((p) => p.seat)).toEqual(['seat1', 'seat3']);
@@ -115,10 +116,11 @@ const ROWS = [
   {
     name: 'next-resets line: always visible under the row, one entry per seat in time order, alert seat toned, hidden with none',
     run: () => {
-      // the live-like case: seats within minutes of each other, so every tick merges and no tick carries full words
+      // the live-like case: seats within minutes of each other, so every tick merges and no tick carries full words. U2 M7:
+      // seat1's 16:00 reset is before now (16:40), so it is not ahead and draws no tick.
       const live = [pin('seat3', '17:15'), pin('seat2', '17:10'), pin('seat4', '17:20'), pin('seat2', '22:10'), pin('seat1', '16:00')];
       const root = draw(live, { alerts: [{ seat: 'seat3', since: NOW, title: 'x' }] });
-      expect(ticks(root).map(word)).toEqual(['s1', 'x3', 's2']);
+      expect(ticks(root).map(word)).toEqual(['3 seats reset', 's2']);
       const line = root.querySelector('[data-testid="next-resets"]');
       expect([...line.querySelectorAll('.nr')].map((n) => n.textContent)).toEqual(['s2 30m', 's3 35m', 's4 40m']);
       expect(line.querySelector('[data-seat="seat3"]').className).toContain('nr-alert');
@@ -139,25 +141,27 @@ const ROWS = [
       await screen.findByTestId('day-ribbon');
       expect(screen.queryAllByTestId('pin-seatReset').length).toBeGreaterThan(0);
       const heightOn = svgHeight(first.container);
-      const btn = screen.getByTestId('range-resets-toggle');
-      expect(btn.getAttribute('aria-pressed')).toBe('true');
-      fireEvent.click(btn);
+      // U2 M8: the switch is a checkbox beside NEXT RESETS, in the ribbon, not a range-bar button.
+      const toggle = () => within(screen.getByTestId('ribbon-resets-toggle')).getByRole('checkbox');
+      expect(toggle().checked).toBe(true);
+      fireEvent.click(toggle());
       expect(localStorage.getItem(RESETS_HIDDEN_KEY)).toBe('1');
       expect(screen.queryAllByTestId('pin-seatReset')).toHaveLength(0);
       expect(screen.queryAllByTestId('pin-expiry')).toHaveLength(0);
       expect(svgHeight(first.container)).toBeLessThan(heightOn);
-      expect(screen.getByTestId('range-resets-toggle').getAttribute('aria-pressed')).toBe('false');
+      expect(toggle().checked).toBe(false);
+      expect(within(screen.getByTestId('range-bar')).queryByTestId('range-resets-toggle')).toBeNull();
       first.unmount();
       render(<DayView onNavigate={() => {}} />);
       await screen.findByTestId('day-ribbon');
       expect(screen.queryAllByTestId('pin-seatReset')).toHaveLength(0);
-      fireEvent.click(screen.getByTestId('range-resets-toggle'));
+      fireEvent.click(toggle());
       expect(localStorage.getItem(RESETS_HIDDEN_KEY)).toBe('0');
       expect(screen.queryAllByTestId('pin-seatReset').length).toBeGreaterThan(0);
       vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('denied'); });
-      fireEvent.click(screen.getByTestId('range-resets-toggle'));
+      fireEvent.click(toggle());
       expect(screen.queryAllByTestId('pin-seatReset')).toHaveLength(0);
-      expect(within(screen.getByTestId('range-bar')).getByTestId('range-resets-toggle')).toBeTruthy();
+      expect(within(screen.getByTestId('day-ribbon')).getByTestId('ribbon-resets-toggle')).toBeTruthy();
     },
   },
 ];

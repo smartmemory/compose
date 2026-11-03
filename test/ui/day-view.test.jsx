@@ -84,7 +84,9 @@ describe('Day front page (COMP-COCKPIT-RIBBON-TOP-1)', () => {
     window.history.pushState({}, '', `/${PAST}`);
     render(<DayView onNavigate={() => {}} />);
     await screen.findByTestId('day-ribbon');
-    expect(screen.getByTestId('range-now').disabled).toBe(false);
+    // U2: Live is a toggle (aria-pressed), never disabled; the pickers open from the ribbon title.
+    expect(screen.getByTestId('range-now').getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(screen.getByTestId('ribbon-title-button'));
     expect(screen.getByTestId('range-start').value).toBe('2026-10-20T00:00');
     expect(wsFetch.mock.calls.map((c) => c[0]).some((u) => u.includes(encodeURIComponent('2026-10-20T00:00+08:00')))).toBe(true);
   }, 30000);
@@ -151,8 +153,11 @@ describe('Day front page (COMP-COCKPIT-RIBBON-TOP-1)', () => {
     stubFetch({ ...FIXTURE, sourceErrors: { ownerQueue: 'wiki stopped', ledger: 'no file' } });
     render(<DayView onNavigate={() => {}} />);
     const list = await screen.findByTestId('day-source-errors');
-    expect(list.textContent).toContain('the owner queue is missing');
-    expect(list.textContent).toContain('the ledger is missing');
+    // U2 M4: plain words on screen, the raw reason only in the title.
+    expect(list.textContent).toContain('Questions waiting on you: not read yet, retrying');
+    expect(list.textContent).toContain('Landings and deploys: not read yet, retrying');
+    expect(list.textContent).not.toContain('wiki stopped');
+    expect(list.querySelectorAll('[title="wiki stopped"]').length).toBe(1);
     expect(screen.getByTestId('day-ribbon')).toBeTruthy();
   }, 30000);
 
@@ -189,8 +194,10 @@ describe('Day front page (COMP-COCKPIT-RIBBON-TOP-1)', () => {
 
   it('pure helpers: source words and the seat percents the idle fold reads (one row table)', () => {
     const rows = [
-      { name: 'known key', got: sourceErrorLines({ stamps: 'x' }), want: ['unit stamps is missing (x)'] },
-      { name: 'unknown key keeps its name', got: sourceErrorLines({ weird: 'y' }), want: ['weird is missing (y)'] },
+      { name: 'known key', got: sourceErrorLines({ stamps: 'x' }), want: [{ key: 'stamps', text: 'What each lane is doing: not read yet, retrying', title: 'x' }] },
+      { name: 'unknown key keeps its name', got: sourceErrorLines({ weird: 'y' }), want: [{ key: 'weird', text: 'weird: not read yet, retrying', title: 'y' }] },
+      { name: 'one line per top-level source, reasons joined', got: sourceErrorLines({ 'quota.seat3': 'a', 'quota.seat4': 'b' }), want: [{ key: 'quota', text: 'Seat resets and quota waits: not read yet, retrying', title: 'a; b' }] },
+      { name: 'a last clean read is named in the ref offset', got: sourceErrorLines({ seats: 'z' }, { seats: Date.parse('2026-11-03T06:02:00Z') }, '2026-11-03T16:00:00+08:00'), want: [{ key: 'seats', text: 'Seat usage: not read since 14:02, retrying', title: 'z' }] },
       { name: 'none', got: sourceErrorLines(undefined), want: [] },
       { name: 'seats: retired and the codex row are left out, a missing reading is null', got: seatPcts([
         { label: 'seat1', five_h: { used_pct: 40 } }, { label: 'seat2', retired: true, five_h: { used_pct: 10 } },

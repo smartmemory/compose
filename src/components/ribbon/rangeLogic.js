@@ -17,10 +17,12 @@ export const MAX_WINDOW_MS = 31 * DAY;
 export const MIN_WINDOW_MS = HOUR;
 /** A drag on the axis shorter than this is a click, not a zoom. */
 export const MIN_DRAG_MS = 15 * MIN;
-/** Marks closer than this (in track px) merge into one count badge. */
-export const CLUSTER_PX = 16;
-/** The drawing clusters only windows wider than the day default (36 h): at day width ROWS's marks are drawn singly. */
-export const CLUSTER_ABOVE_MS = 36 * HOUR;
+/**
+ * Marks closer than this (in track px) merge into one count badge: a mark glyph is about 12 px wide at the ribbon's true
+ * size, so two closer than that overprint. U2 M5: the rule is pixels at every window width (the old "only above 36 h" rule
+ * stacked glyph runs on the Day window).
+ */
+export const CLUSTER_PX = 12;
 
 const pad = (n, w = 2) => String(n).padStart(w, '0');
 
@@ -169,9 +171,18 @@ export const isRibbonHash = (hash) => typeof hash === 'string' && hash.startsWit
 /** `datetime-local` value ("2026-10-31T18:00") for an ISO string: its own wall clock, no zone shift. */
 export const toLocalInput = (iso) => (typeof iso === 'string' ? iso.slice(0, 16) : '');
 
-/** ISO string for a `datetime-local` value, read in the zone of `like` (an ISO string with an offset). */
+/**
+ * ISO string for a `datetime-local` value, read in the zone of `like` (an ISO string with an offset). When `like` is in the
+ * browser's own zone (U2-DATA Q2), the value is read on the browser's local clock and carries the offset in force at ITS
+ * instant, the presets' rule: a picked time across a clock change keeps its wall hour instead of shifting by the change.
+ */
 export function fromLocalInput(value, like) {
-  if (!/^\d{4}-\d\d-\d\dT\d\d:\d\d$/.test(value || '')) return null;
+  const m = /^(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d)$/.exec(value || '');
+  if (!m) return null;
+  if (inBrowserZone(like)) {
+    const ms = new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]).getTime();
+    return Number.isFinite(ms) ? isoAt(ms, browserOff(ms)) : null;
+  }
   const off = zoneOf(like);
   const wallMs = Date.parse(`${value}:00Z`);
   return Number.isFinite(wallMs) ? isoAt(wallMs - off, off) : null;
@@ -179,7 +190,7 @@ export function fromLocalInput(value, like) {
 
 /**
  * One lane's marks, merged where they sit closer than `CLUSTER_PX` on a track `widthPx` wide. A run of marks within
- * 16 px of the run's first mark becomes `{kind: 'cluster', at, count, items}` (at = the members' mean time); a mark
+ * `CLUSTER_PX` of the run's first mark becomes `{kind: 'cluster', at, count, items}` (at = the members' mean time); a mark
  * alone passes through unchanged. A cluster already in the list counts as its own `count`. Marks outside the window
  * pass through untouched (the drawing filters them).
  */

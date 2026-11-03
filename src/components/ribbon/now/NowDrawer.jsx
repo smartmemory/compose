@@ -107,6 +107,7 @@ function Landed({ data, now, sinceMs, loading }) {
   );
 }
 
+/** `feed` is DayView's Now feed (`nowData`), the same one the ribbon's NOW words and the phone list read (U2 F1). */
 export default function NowDrawer({ kind, onClose, fleet, index, feed, feedLoading = false, agent, lastVisitAt = null, now = Date.now() }) {
   const closeRef = useRef(null);
   useEffect(() => {
@@ -131,7 +132,10 @@ export default function NowDrawer({ kind, onClose, fleet, index, feed, feedLoadi
     line = 'Agents running a unit right now';
     body = <Working rows={working} now={now} loading={feedLoading} />;
   } else if (kind === 'waiting') {
-    title = waiting === null ? 'Waiting' : `${(waiting.review?.length ?? 0) + (waiting.you?.length ?? 0)} waiting`;
+    // U2 (COUNT-ONE M2): with the owner queue unreadable the total is unknown, so the title never sums it as zero.
+    title = waiting === null ? 'Waiting'
+      : waiting.you === null ? `${waiting.review?.length ?? 0} waiting on review, owner questions unknown`
+        : `${(waiting.review?.length ?? 0) + waiting.you.length} waiting`;
     line = waiting === null ? 'Units waiting on a review or on you' : `review ${waiting.review?.length ?? '?'}, you ${waiting.you?.length ?? '?'}`;
     body = <Waiting lists={waiting} now={now} />;
   } else {
