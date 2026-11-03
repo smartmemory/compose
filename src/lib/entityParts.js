@@ -10,47 +10,83 @@ const FEATURE = String.raw`\b[A-Z][A-Z0-9]*(?:-[A-Z0-9]+){1,}\b`;
 const PATH = String.raw`(?<![\w/.:-])(?:[\w.-]+/)+[\w.-]+\.md\b(?:#L?\d+)?`;
 const TOKEN = new RegExp(`(${PATH})|(${FEATURE})`, 'g');
 
+/**
+ * A repo-relative document path the wiki may be asked for: no `..` segment, not absolute, no `~`, no backslash, no `%` escape,
+ * no URL scheme. The wiki refuses these too; refusing here keeps them text instead of a dead (or probing) link.
+ */
+export function isSafeRepoPath(p) {
+  if (typeof p !== 'string') return false;
+  const path = p.replace(/#.*$/, '');
+  if (!path || /^[/~\\]/.test(path) || /^[A-Za-z][A-Za-z0-9+.-]*:/.test(path) || /[\\%]/.test(path)) return false;
+  return !path.split('/').some((seg) => seg === '..' || seg === '');
+}
+
 /** @returns {Array<{kind: 'text'|'file'|'feature', value: string}>} the parts, in order; their values join back to `text` */
 export function entityParts(text) {
   if (typeof text !== 'string' || !text) return [];
   const parts = [];
+  const pushText = (value) => {
+    if (!value) return;
+    const prev = parts[parts.length - 1];
+    if (prev?.kind === 'text') prev.value += value; else parts.push({ kind: 'text', value });
+  };
   let last = 0;
   for (const m of text.matchAll(TOKEN)) {
-    if (m.index > last) parts.push({ kind: 'text', value: text.slice(last, m.index) });
-    parts.push({ kind: m[1] ? 'file' : 'feature', value: m[0] });
+    pushText(text.slice(last, m.index));
+    if (m[1] && !isSafeRepoPath(m[0])) pushText(m[0]);
+    else parts.push({ kind: m[1] ? 'file' : 'feature', value: m[0] });
     last = m.index + m[0].length;
   }
-  if (last < text.length) parts.push({ kind: 'text', value: text.slice(last) });
+  pushText(text.slice(last));
   return parts;
 }
 
-const PROTECTED = /(```[\s\S]*?```|`[^`\n]*`|\[[^\]\n]*\]\([^)\n]*\)|<[^>\n]+>|https?:\/\/\S+)/g;
 export const ENTITY_HREF = '#entity:';
+/** The kinds an `#entity:<kind>:<id>` href may name (the keys EntityLink knows how to open). */
+export const ENTITY_KINDS = ['item', 'feature', 'gate', 'view', 'unit', 'step', 'session', 'file'];
 
-// A whole inline-code span that is exactly one entity (`docs/a.md`, `COMP-X-1`) links, code styling kept: journals put most paths there.
-function linkCodeSpan(seg, ok) {
-  const inner = /^`([^`\n]+)`$/.exec(seg)?.[1];
-  const parts = inner ? entityParts(inner) : [];
-  return parts.length === 1 && parts[0].kind !== 'text' && ok(parts[0].kind, parts[0].value)
-    ? `[${seg}](${ENTITY_HREF}${parts[0].kind}:${parts[0].value})` : seg;
-}
-
-/**
- * Markdown with each resolvable entity token turned into a `[token](#entity:<kind>:<token>)` link. Code fences, inline code that holds more than one token,
- * existing links, HTML and URLs are left alone. `ok(kind, value)` says whether a token has a target; one that does not stays text.
- */
-export function linkEntitiesInMarkdown(md, ok) {
-  if (typeof md !== 'string' || !md) return md ?? '';
-  return md.split(PROTECTED).map((seg, i) => (i % 2 === 1 ? linkCodeSpan(seg, ok) : entityParts(seg)
-    .map((p) => (p.kind !== 'text' && ok(p.kind, p.value) ? `[${p.value}](${ENTITY_HREF}${p.kind}:${p.value})` : p.value)).join(''))).join('');
-}
-
-/** The `{kind, id}` an entity href names, or null for any other href. */
+/** The `{kind, id}` an entity href names, or null for any other href or an unknown kind. */
 export function parseEntityHref(href) {
   if (typeof href !== 'string' || !href.startsWith(ENTITY_HREF)) return null;
   const rest = href.slice(ENTITY_HREF.length);
   const at = rest.indexOf(':');
-  return at > 0 ? { kind: rest.slice(0, at), id: rest.slice(at + 1) } : null;
+  const kind = at > 0 ? rest.slice(0, at) : '';
+  return ENTITY_KINDS.includes(kind) ? { kind, id: rest.slice(at + 1) } : null;
+}
+
+// Markdown nodes whose text is not prose to linkify: links (inline, reference), their definitions, code, raw html.
+const SKIP = new Set(['link', 'linkReference', 'definition', 'code', 'inlineCode', 'html', 'image', 'imageReference']);
+
+/**
+ * remark plugin (COMP-UI-LINKS-2-FU-1): turns each resolvable entity token in the parsed tree's text nodes into a `link` node
+ * to `#entity:<kind>:<token>`. It works on the parser's own tree, so reference links, link definitions, any-length code
+ * spans, tilde fences and autolinks are never touched. An inline-code span that is exactly one entity (single backticks only)
+ * links with its code styling kept: journals put most paths there. `ok(kind, value)` says whether a token has a target.
+ */
+export function remarkLinkEntities(ok) {
+  const link = (kind, value, child) => ({ type: 'link', url: `${ENTITY_HREF}${kind}:${value}`, children: [child] });
+  const walk = (node, source) => {
+    if (!Array.isArray(node.children) || SKIP.has(node.type)) return;
+    node.children = node.children.flatMap((child) => {
+      if (child.type === 'text') {
+        const parts = entityParts(child.value);
+        if (!parts.some((p) => p.kind !== 'text' && ok(p.kind, p.value))) return [child];
+        return parts.map((p) => (p.kind !== 'text' && ok(p.kind, p.value)
+          ? link(p.kind, p.value, { type: 'text', value: p.value })
+          : { type: 'text', value: p.value }));
+      }
+      if (child.type === 'inlineCode') {
+        const start = child.position?.start?.offset;
+        const single = typeof start === 'number' && source.charAt(start) === '`' && source.charAt(start + 1) !== '`';
+        const parts = single ? entityParts(child.value) : [];
+        return parts.length === 1 && parts[0].kind !== 'text' && ok(parts[0].kind, parts[0].value)
+          ? [link(parts[0].kind, parts[0].value, child)] : [child];
+      }
+      walk(child, source);
+      return [child];
+    });
+  };
+  return () => (tree, file) => walk(tree, String(file?.value ?? ''));
 }
 
 /** True for a path the wiki can open as a document (markdown, optionally with a `#L<n>` anchor). */

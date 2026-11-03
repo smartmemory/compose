@@ -15,6 +15,8 @@ import { cn } from '@/lib/utils.js';
  * Props:
  *   content    — markdown string
  *   className? — override the default prose wrapper classes
+ *   remarkPlugins? — extra remark plugins, run after GFM (COMP-UI-LINKS-2-FU-1: entity linking on the parsed tree)
+ *   components?    — extra element renderers, merged over the built-in `code` one
  */
 
 // Initialize mermaid once with dark theme (module-level, idempotent).
@@ -82,10 +84,10 @@ const DEFAULT_PROSE = `prose prose-sm prose-invert max-w-none
   prose-th:text-foreground prose-td:text-muted-foreground
   prose-hr:border-border`;
 
-export default function MarkdownViewer({ content, className }) {
+export default function MarkdownViewer({ content, className, remarkPlugins = [], components }) {
   return (
     <article className={cn(DEFAULT_PROSE, className)}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ code: MarkdownCode }}>
+      <ReactMarkdown remarkPlugins={[remarkGfm, ...remarkPlugins]} components={{ code: MarkdownCode, ...components }}>
         {content || ''}
       </ReactMarkdown>
     </article>

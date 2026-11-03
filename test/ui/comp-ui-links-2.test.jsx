@@ -17,8 +17,10 @@ import ContextSessionsTable from '../../src/components/vision/ContextSessionsTab
 import ContextErrorLog from '../../src/components/vision/ContextErrorLog.jsx';
 import LinkedMarkdown from '../../src/components/vision/shared/LinkedMarkdown.jsx';
 import MessageCard from '../../src/components/agent/MessageCard.jsx';
+import IdeaboxView from '../../src/components/vision/IdeaboxView.jsx';
+import { useIdeaboxStore } from '../../src/components/vision/useIdeaboxStore.js';
 import { promotedFeature } from '../../src/components/vision/IdeaboxView.jsx';
-import { entityParts, linkEntitiesInMarkdown, parseEntityHref } from '../../src/lib/entityParts.js';
+import { entityParts, parseEntityHref } from '../../src/lib/entityParts.js';
 import { entityLinkParts, linkParts } from '../../src/components/cockpit/notify/inboxLogic.js';
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
@@ -210,8 +212,8 @@ describe('Inbox entity parts', () => {
   it('the tokenizer round-trips and the markdown href round-trips', () => {
     const text = 'a COMP-A-1, b/c.md#L3 z';
     expect(entityParts(text).map((p) => p.value).join('')).toBe(text);
-    const md = linkEntitiesInMarkdown(text, () => true);
-    expect(md).toContain('(#entity:feature:COMP-A-1)');
+    const { container } = withNav(<LinkedMarkdown content={text} />, makeNav());
+    expect(container.querySelector('a').getAttribute('href')).toBe('#entity:feature:COMP-A-1');
     expect(parseEntityHref('#entity:file:b/c.md#L3')).toEqual({ kind: 'file', id: 'b/c.md#L3' });
     expect(parseEntityHref('https://x')).toBeNull();
   });
@@ -234,7 +236,7 @@ describe('A file link needs a Wiki tab', () => {
     cleanup();
     withNav(<EntityLink kind="file" id="docs/a/b.md" />, makeNav({ canNavigate: (k) => k !== 'file' }));
     expect(screen.queryByRole('button')).toBeNull();
-    expect(screen.getByText('docs/a/b.md').getAttribute('title')).toMatch(/No file named/);
+    expect(screen.getByText('docs/a/b.md').getAttribute('title')).toMatch(/Wiki tab is not available/);
   });
 });
 
@@ -246,5 +248,109 @@ describe('A source path is not a wiki document', () => {
     fireEvent.click(screen.getByText('bad'));
     expect(screen.queryByRole('button', { name: 'src/a.js' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Open in Sessions' })).toBeTruthy();
+  });
+});
+
+// ── COMP-UI-LINKS-2-FU-1: a link whose target cannot open is text with a reason, in every path that makes links ──
+
+describe('FU-1 M1: a room that is unavailable makes its links text', () => {
+  const roomsOff = (nav) => makeNav({ canNavigate: (kind) => !['unit', 'step'].includes(kind), ...nav });
+  it.each([
+    ['unit', 'U-1', /Cadence room is not available/],
+    ['step', 'run-1#build', /Stratum room is not available/],
+  ])('a %s link is text with the reason, and nothing is called', (kind, id, reason) => {
+    const nav = roomsOff();
+    withNav(<EntityLink kind={kind} id={id} />, nav);
+    expect(screen.queryByRole('button')).toBeNull();
+    expect(screen.getByText(id).getAttribute('title')).toMatch(reason);
+    fireEvent.click(screen.getByText(id));
+    expect(nav.openRoom).not.toHaveBeenCalled();
+  });
+  it('a session link is unaffected: the Fleet room is not package-gated', () => {
+    const nav = roomsOff();
+    withNav(<EntityLink kind="session" id="lane-a" />, nav);
+    fireEvent.click(screen.getByRole('button'));
+    expect(nav.openRoom).toHaveBeenCalledWith('fleet', { kind: 'session', name: 'lane-a' });
+  });
+});
+
+describe('FU-1 M3: file tokens and authored hrefs', () => {
+  it.each(['../x.md', 'a/../../x.md', '/etc/x.md', '~/x.md', '~/a/x.md', 'https://h.test/a/x.md', 'file:///a/x.md'])(
+    '%s stays text in the tokenizer and in LinkedText', (path) => {
+      expect(entityParts(`see ${path} now`).every((p) => p.kind === 'text')).toBe(true);
+      const nav = makeNav();
+      const { container } = withNav(<LinkedText text={`see ${path} now`} />, nav);
+      expect(container.querySelector('button, a')).toBeNull();
+      expect(container.textContent).toBe(`see ${path} now`);
+    });
+  it('a safe path still links', () => {
+    expect(entityParts('see docs/a/x.md').map((p) => p.kind)).toEqual(['text', 'file']);
+  });
+  it('an authored #entity:file href with a traversal path is text and a click never opens it', () => {
+    const nav = makeNav();
+    const { container } = withNav(<LinkedMarkdown content={'[outside](#entity:file:../../x.md) and [ok](#entity:file:docs/a/x.md)'} />, nav);
+    expect(screen.getByText('outside').closest('a')).toBeNull();
+    expect(screen.getByText('outside').getAttribute('title')).toMatch(/not a repo document path/);
+    fireEvent.click(screen.getByText('outside'));
+    expect(nav.openFile).not.toHaveBeenCalled();
+    expect(container.querySelectorAll('a')).toHaveLength(1);
+    fireEvent.click(screen.getByRole('link', { name: 'ok' }));
+    expect(nav.openFile).toHaveBeenCalledWith('docs/a/x.md');
+  });
+  it('an authored entity href the provider refuses is text; one for an unknown kind is text', () => {
+    const nav = makeNav({ canNavigate: () => false });
+    withNav(<LinkedMarkdown content={'[g](#entity:feature:COMP-A-1) [z](#entity:bogus:1)'} />, nav);
+    expect(screen.queryByRole('link')).toBeNull();
+    fireEvent.click(screen.getByText('g'));
+    fireEvent.click(screen.getByText('z'));
+    expect(nav.openFeature).not.toHaveBeenCalled();
+    expect(nav.openItem).not.toHaveBeenCalled();
+  });
+  it('parseEntityHref accepts only the known kinds', () => {
+    expect(parseEntityHref('#entity:bogus:1')).toBeNull();
+    expect(parseEntityHref('#entity:unit:U-1')).toEqual({ kind: 'unit', id: 'U-1' });
+  });
+});
+
+describe('FU-1 M2: the linkifier follows the markdown parser', () => {
+  it('a reference link keeps its https href, a definition is untouched', () => {
+    const { container } = withNav(<LinkedMarkdown content={'See [COMP-MODEL-AB][ref] and [COMP-MODEL-AB][] and [COMP-MODEL-AB].\n\n[ref]: https://example.test/a\n[COMP-MODEL-AB]: https://example.test/b'} />, makeNav());
+    const hrefs = [...container.querySelectorAll('a')].map((a) => a.getAttribute('href'));
+    expect(hrefs).toEqual(['https://example.test/a', 'https://example.test/b', 'https://example.test/b']);
+    expect(container.textContent).not.toContain('#entity');
+  });
+  it('double-backtick and tilde code are untouched', () => {
+    const { container } = withNav(<LinkedMarkdown content={'a ``COMP-MODEL-AB`` b ``COMP-X-1 docs/a/b.md``\n\n~~~\nCOMP-MODEL-AB docs/a/b.md\n~~~\n'} />, makeNav());
+    expect(container.querySelectorAll('a')).toHaveLength(0);
+    expect(container.textContent).toContain('COMP-MODEL-AB docs/a/b.md');
+    expect(container.textContent).not.toContain('](');
+    expect(container.querySelectorAll('code')).toHaveLength(3);
+  });
+  it('prose tokens still link and an autolinked URL is left alone', () => {
+    const nav = makeNav();
+    const { container } = withNav(<LinkedMarkdown content={'COMP-A-1 at https://x.test/COMP-B-2/y.md'} />, nav);
+    expect([...container.querySelectorAll('a')].map((a) => a.getAttribute('href'))).toEqual(['#entity:feature:COMP-A-1', 'https://x.test/COMP-B-2/y.md']);
+  });
+});
+
+describe('FU-1 warnings: Ideas chips and a timeline event that names an item', () => {
+  it('an Ideas tag chip and a cluster chip filter the list', async () => {
+    const idea = { id: 'IDEA-1', num: 1, title: 'Fix login', description: '', priority: 'P0', status: 'NEW', tags: ['auth'], cluster: 'Onboarding' };
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ ideas: [idea], killed: [], clusters: [] }) })));
+    useIdeaboxStore.setState({ ideas: [idea], killed: [], selectedIdeaId: null, filters: { tag: '', status: '', priority: '', search: '' } });
+    render(<IdeaboxView />);
+    fireEvent.click(await screen.findByTestId('idea-tag'));
+    expect(useIdeaboxStore.getState().filters.tag).toBe('auth');
+    useIdeaboxStore.setState({ filters: { tag: '', status: '', priority: '', search: '' }, selectedIdeaId: 'IDEA-1' });
+    fireEvent.click(await screen.findByTestId('idea-cluster'));
+    expect(useIdeaboxStore.getState().filters.search).toBe('Onboarding');
+  });
+  it('a timeline event with meta.itemId opens that item', () => {
+    const onSelectItem = vi.fn();
+    const nav = makeNav();
+    withNav(<TimelineEvent onSelectItem={onSelectItem} event={{ category: 'build', title: 'Built', meta: { itemId: 'item-9' }, timestamp: null }} />, nav);
+    fireEvent.click(screen.getByTestId('timeline-event'));
+    expect(onSelectItem).toHaveBeenCalledWith('item-9');
+    expect(nav.openGate).not.toHaveBeenCalled();
   });
 });

@@ -1236,14 +1236,18 @@ function AppInner() {
       case 'feature': return items.some(i =>
         i.featureCode === id || i.feature_code === id || i.lifecycle?.featureCode === id);
       case 'view': return true;
-      // COMP-UI-LINKS-2: a Cadence unit, a Fleet session and a repo doc path are resolved by the room they open (an unknown
-      // one lands on an empty selection, not a crash), so only an empty id is unresolvable.
-      case 'unit': case 'session': case 'step': return typeof id === 'string' && id.length > 0;
+      // COMP-UI-LINKS-2: a Cadence unit, a Stratum step and a Fleet session are resolved by the room they open (an unknown
+      // one lands on an empty selection, not a crash), so an empty id is unresolvable. COMP-UI-LINKS-2-FU-1: a room whose
+      // package is unavailable (`no`) would send the click to Day, so its links are text. The Fleet room (the Sessions tab) is
+      // not package-gated (PACKAGE_GATED_VIEWS: ops, stratum, cadence, wiki), so a session link needs no availability check.
+      case 'unit': return typeof id === 'string' && id.length > 0 && cadenceAvail !== 'no';
+      case 'step': return typeof id === 'string' && id.length > 0 && stratumAvail !== 'no';
+      case 'session': return typeof id === 'string' && id.length > 0;
       // a repo doc opens in the Wiki tab: with no Wiki tab (no wiki package built in, or its server off) the path stays text
       case 'file': return typeof id === 'string' && id.length > 0 && wikiTab.availability !== 'no';
       default: return false;
     }
-  }, [gates, items, wikiTab.availability]);
+  }, [gates, items, wikiTab.availability, cadenceAvail, stratumAvail]);
 
   // (navigateToWiki is declared here, ahead of navigationValue, which hands it to rooms as `openFile`; comment above its old spot)
   const [wikiDoc, setWikiDoc] = useState(null);

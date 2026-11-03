@@ -20,7 +20,7 @@
 import React from 'react';
 import { cn } from '@/lib/utils.js';
 import { useNavigation } from '@/lib/navigation.jsx';
-import { entityParts } from '@/lib/entityParts.js';
+import { entityParts, isSafeRepoPath } from '@/lib/entityParts.js';
 
 const KIND_TO_CALLBACK = {
   item: 'openItem',
@@ -41,11 +41,22 @@ const CALL = {
   session: (h, id) => h('fleet', { kind: 'session', name: id }),
 };
 
-/** Whether `nav` can open `kind`/`id` right now: the callback exists and the provider does not call the target stale. */
+/** Whether `nav` can open `kind`/`id` right now: the callback exists, the id is well formed, and the provider does not call the target stale or its room unavailable. The one question every link path asks. */
 export function canOpenEntity(nav, kind, id) {
   const cb = nav?.[KIND_TO_CALLBACK[kind]];
   if (typeof cb !== 'function' || !id) return false;
+  if (kind === 'file' && !isSafeRepoPath(id)) return false;
   return typeof nav.canNavigate === 'function' ? nav.canNavigate(kind, id) : true;
+}
+
+/** Why a link that cannot open is text: shown as its tooltip. */
+export function noTargetReason(nav, kind, id) {
+  if (typeof nav?.[KIND_TO_CALLBACK[kind]] !== 'function') return 'No link here: this view has no place to open it';
+  if (kind === 'file' && !isSafeRepoPath(id)) return `${id} is not a repo document path, so it cannot be opened`;
+  if (kind === 'unit') return `The Cadence room is not available here, so unit ${id} cannot be opened`;
+  if (kind === 'step') return `The Stratum room is not available here, so step ${id} cannot be opened`;
+  if (kind === 'file') return `The Wiki tab is not available here, so ${id} cannot be opened`;
+  return `No ${kind} named ${id} to open`;
 }
 
 /** Opens `kind`/`id` through `nav` (the same call EntityLink makes). Best-effort: a throwing callback is swallowed. */
@@ -57,15 +68,12 @@ export default function EntityLink({ kind, id, label, className, title }) {
   const nav = useNavigation();
   const text = label ?? id;
   const handler = nav?.[KIND_TO_CALLBACK[kind]];
-  const resolvable = typeof nav?.canNavigate === 'function'
-    ? nav.canNavigate(kind, id)
-    : true; // providers without canNavigate keep the old optimistic behavior
 
-  if (typeof handler !== 'function' || !resolvable || !id) {
+  if (!canOpenEntity(nav, kind, id)) { // providers without canNavigate keep the old optimistic behavior
     return (
       <span
         className={cn('text-[11px] font-mono text-muted-foreground', className)}
-        title={title ?? (typeof handler !== 'function' ? 'No link here: this view has no place to open it' : `No ${kind} named ${id} to open`)}
+        title={title ?? noTargetReason(nav, kind, id)}
         data-no-target=""
       >
         {text}
