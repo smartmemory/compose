@@ -1,0 +1,15 @@
+{
+  "title": "evidence-words",
+  "version": "1.0.0",
+  "description": "Which receipt kinds (contracts/evidence.schema.json) can back which state word. The ONE table every resolver reads: compose lib/evidence.js (`kindBacks`, `checkCite`, used by withEvidence for the four state tools) and the ops claim_check.py (ledger, bus, the sm-ops H5 mirror), which loads this file by path (COMPOSE_CONTRACTS_DIR). A word with no row takes any kind. `kinds` [\"*\"] = any kind. `max_age_s`: the cited receipt's server `checked_at` is at most this old. `recheck`: the receipt is re-verified against the machine when cited (process: the pid is alive and its command contains the label).",
+  "_source": "COMP-DOGFOOD-EVIDENCE-GATE-1 fix r1, review-postland.md F1 (a receipt was not bound to the claim it backs: a log receipt backed RUNNING, a file receipt backed LANDED)",
+  "words": {
+    "RUNNING": { "kinds": ["process"], "recheck": true, "max_age_s": 900, "why": "a running job is a live fact: only a pid that is alive now, running the labelled command, checked within 15 min" },
+    "LANDED": { "kinds": ["sha"], "why": "a landed change is a commit on the repo's default branch" },
+    "DEPLOYED": { "kinds": ["sha"], "why": "what is deployed is a commit" },
+    "COMPLETE": { "kinds": ["sha", "command"], "why": "a completed feature is a commit or a command's output (its tests)" },
+    "READY": { "kinds": ["*"] },
+    "CLEAN": { "kinds": ["*"] },
+    "DONE": { "kinds": ["*"] }
+  }
+}

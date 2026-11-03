@@ -101,7 +101,8 @@ describe('contract', () => {
       const t = TOOLS.find((d) => d.name === name);
       assert.match(t.inputSchema.properties.evidence.description, /contracts\/evidence\.schema\.json/, name);
     }
-    for (const name of ['record_completion', 'set_feature_status', 'complete_feature']) {
+    // set_feature_status left: its receipt depends on the status (fix r1, QUESTION 1 (a)); test/evidence-binding.test.js pins it
+    for (const name of ['record_completion', 'complete_feature']) {
       assert.ok(TOOLS.find((d) => d.name === name).inputSchema.required.includes('evidence'), name);
     }
   });
@@ -129,7 +130,7 @@ describe('process receipt (the exit-77 incident)', () => {
     assert.equal(probe.alive, true);
     assert.ok(Number.isFinite(probe.startedAt), 'ps lstart parsed');
     const r = ev.verifyEvidence({
-      kind: 'process', pid: child.pid, launched_at: new Date(probe.startedAt).toISOString(), label: 'sleeper', at: AT(), by: BY,
+      kind: 'process', pid: child.pid, launched_at: new Date(probe.startedAt).toISOString(), label: 'sleep', at: AT(), by: BY,
     }, { now: probe.startedAt + 121_000 });
     assert.equal(r.ok, true, r.reasons.join('; '));
     assert.match(r.checks[0], /alive at launch \+ 121 s/);
@@ -210,7 +211,7 @@ describe('file, log and command receipts', () => {
 
 describe('the four state tools refuse a claim without a receipt', () => {
   const cases = [
-    ['set_feature_status', () => tools.toolSetFeatureStatus({ code: 'EVG-1', status: 'IN_PROGRESS' })],
+    ['set_feature_status (COMPLETE)', () => tools.toolSetFeatureStatus({ code: 'EVG-1', status: 'COMPLETE' })],
     ['record_completion', () => tools.toolRecordCompletion({ feature_code: 'EVG-1', commit_sha: 'a'.repeat(40), tests_pass: true, files_changed: [] })],
     ['complete_feature', () => tools.toolCompleteFeature({ id: 'EVG-1', commit_sha: 'a'.repeat(40), tests_pass: true })],
     ['approve_gate (approved)', () => tools.toolApproveGate({ gateId: 'g-1', outcome: 'approved' })],
@@ -222,9 +223,9 @@ describe('the four state tools refuse a claim without a receipt', () => {
   }
 
   test('a schema-invalid receipt → EVIDENCE_INVALID; an unknown ev:<id> → EVIDENCE_UNKNOWN_REF', async () => {
-    await assert.rejects(() => tools.toolSetFeatureStatus({ code: 'EVG-1', status: 'IN_PROGRESS', evidence: { kind: 'sha' } }),
+    await assert.rejects(() => tools.toolSetFeatureStatus({ code: 'EVG-1', status: 'COMPLETE', evidence: { kind: 'sha' } }),
       (e) => e.code === 'EVIDENCE_INVALID');
-    await assert.rejects(() => tools.toolSetFeatureStatus({ code: 'EVG-1', status: 'IN_PROGRESS', evidence: 'ev:ffffffffffffffff' }),
+    await assert.rejects(() => tools.toolSetFeatureStatus({ code: 'EVG-1', status: 'COMPLETE', evidence: 'ev:ffffffffffffffff' }),
       (e) => e.code === 'EVIDENCE_UNKNOWN_REF');
   });
 
@@ -239,7 +240,7 @@ describe('the four state tools refuse a claim without a receipt', () => {
 });
 
 describe('withEvidence stores the receipt only after the tool succeeded', () => {
-  test('success → stored with the server-filled subject and returned as evidence_id; citing the id works', async () => {
+  test('success → stored with the server-filled subject and returned as evidence_id; citing the id keeps the id', async () => {
     const { cwd, sha } = makeRepo();
     const res = await tools.withEvidence('set_feature_status', { evidence: { kind: 'sha', repo: cwd, sha, at: AT(), by: BY } },
       { feature: 'EVG-2', claim: 'IN_PROGRESS' }, async () => ({ ok: true }));
@@ -249,7 +250,7 @@ describe('withEvidence stores the receipt only after the tool succeeded', () => 
     assert.equal(rec.evidence.sha, sha);
     const again = await tools.withEvidence('set_feature_status', { evidence: res.evidence_id }, { feature: 'EVG-2', claim: 'PARKED' },
       async () => ({ ok: true }));
-    assert.deepEqual(ev.readEvidence(again.evidence_id).checks, [`cites ${res.evidence_id}`]);
+    assert.equal(again.evidence_id, res.evidence_id, 'a cite keeps the id (fix r1, F1 (b)): it never mints a second record');
   });
 
   test('the tool throws → nothing stored', async () => {
@@ -307,7 +308,7 @@ describe('the CLI and the read route', () => {
       routes[p](req, res);
     });
     const list = await call('/api/evidence', { query: { feature: 'EVG-2' } });
-    assert.ok(list.body.records.length >= 2);
+    assert.ok(list.body.records.length >= 1);
     assert.equal(list.body.records[0].kind, 'sha');
     const one = await call('/api/evidence/:id', { params: { id: list.body.records[0].id } });
     assert.equal(one.body.id, list.body.records[0].id);

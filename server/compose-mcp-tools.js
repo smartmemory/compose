@@ -69,6 +69,10 @@ export async function assertCompletionEvidence(args, capsOverride, cwd = getTarg
 // or an `ev:<id>`). lib/evidence.js re-checks it against the machine, the
 // tool's own action runs, and only then is the receipt stored and its id
 // returned as `evidence_id` — a claim the tool refuses leaves no receipt.
+// The receipt's kind must back the claim (contracts/evidence-words.json:
+// COMPLETE takes sha or command). An `ev:<id>` keeps its id: the cite must
+// name the record's own subject, is logged to the cite side log, and mints
+// nothing (fix r1 of the post-land review, F1).
 // Independent of capabilities.guard: the flag is capabilities.evidence,
 // default ON; off logs one WARNING per process (lib/evidence.js).
 // ---------------------------------------------------------------------------
@@ -81,15 +85,28 @@ export async function assertCompletionEvidence(args, capsOverride, cwd = getTarg
  * @param {object} [o] test seams forwarded to lib/evidence.js (now, ps, store)
  */
 export async function withEvidence(toolName, args, subject, act, o = {}) {
-  const { evidenceRequired, checkEvidence, recordEvidence } = await import('../lib/evidence.js');
+  const { evidenceRequired, checkEvidence, recordEvidence, recordCite } = await import('../lib/evidence.js');
   let config = null;
   try { config = loadProjectConfig(); } catch { config = null; }
   if (!evidenceRequired(o.config ?? config, getTargetRoot())) return act();
-  const accepted = checkEvidence(args?.evidence, toolName, o);
+  const full = { tool: toolName, ...subject };
+  const accepted = checkEvidence(args?.evidence, toolName, { ...o, claim: subject?.claim, subject: full });
   const result = await act();
+  const withId = (id, extra = {}) => (result && typeof result === 'object' && !Array.isArray(result)
+    ? { ...result, evidence_id: id, ...extra }
+    : result);
+  if (accepted.cites) {
+    try {
+      recordCite(accepted.cites, { tool: toolName, subject: full, store: o.store });
+    } catch (err) {
+      console.warn(`[evidence] WARNING: ${toolName} cited ${accepted.cites} but the cite was NOT logged: ${err.message}`);
+      return withId(accepted.cites, { evidence_warning: `cite not logged: ${err.message}` });
+    }
+    return withId(accepted.cites);
+  }
   let record;
   try {
-    record = recordEvidence(accepted.evidence, { checks: accepted.checks, subject: { tool: toolName, ...subject }, store: o.store });
+    record = recordEvidence(accepted.evidence, { checks: accepted.checks, subject: full, store: o.store });
   } catch (err) {
     console.warn(`[evidence] WARNING: ${toolName} succeeded but its receipt was NOT stored: ${err.message}`);
     return result && typeof result === 'object' && !Array.isArray(result)
@@ -404,6 +421,11 @@ export async function toolSetFeatureStatus(args) {
   assertTerminalStatusAuthorized(args, 'set_feature_status');
   const { setFeatureStatus } = await import('../lib/feature-writer.js');
   const root = getTargetRoot();
+  // QUESTION 1 (a) of the post-land review: only a status that claims work done
+  // (a row in contracts/evidence-words.json: COMPLETE) needs a receipt. PLANNED,
+  // IN_PROGRESS, BLOCKED, PARKED, ... are free; their `evidence` is not read.
+  const { claimRule } = await import('../lib/evidence.js');
+  if (!claimRule(args?.status)) return setFeatureStatus(root, _withoutEvidence(args));
   return withEvidence('set_feature_status', args, { feature: args?.code, claim: args?.status },
     () => setFeatureStatus(root, _withoutEvidence(args)));
 }

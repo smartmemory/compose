@@ -46,7 +46,9 @@ describe('record_evidence tool', () => {
     assert.equal(rec.id, out.evidence_id);
     assert.deepEqual(rec.subject, SUBJECT);
     assert.equal(rec.evidence.kind, 'command');
-    assert.equal(ev.checkEvidence(out.evidence_id, 'record_completion').cites, out.evidence_id);
+    // fix r1 (F1 (b)): a cite names the record's own subject; with none it is refused
+    assert.equal(ev.checkEvidence(out.evidence_id, 'record_completion', { claim: 'COMPLETE', subject: { feature: SUBJECT.unit } }).cites, out.evidence_id);
+    assert.throws(() => ev.checkEvidence(out.evidence_id, 'record_completion'), (e) => e.code === 'EVIDENCE_SUBJECT_MISMATCH');
   });
 
   test('a sha receipt for a sha that does not exist is refused and the store is unchanged', async () => {

@@ -393,7 +393,7 @@ export const TOOLS = [
     description: 'Flip a feature status. Updates feature.json and regenerates ROADMAP.md. Enforces a transition policy (use force: true to bypass). Appends an audit event (best-effort).',
     inputSchema: {
       type: 'object',
-      required: ['code', 'status', 'evidence'],
+      required: ['code', 'status'],
       properties: {
         code: { type: 'string' },
         evidence: EVIDENCE_PROP,

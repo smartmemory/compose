@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://compose.smartmemory.dev/contracts/evidence.schema.json",
   "title": "evidence",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "One receipt for one state claim (COMP-DOGFOOD-EVIDENCE-GATE-1, row A of COMP-DOGFOOD-1). The caller says what it saw; the Compose server re-checks it against the machine (git, ps, the file, the screenshot) and never trusts it. An accepted receipt is stored and returned as an `ev:<id>` (`#/definitions/evidenceRef`), which a later claim may cite in place of the object (the ops ledger, the message bus and the four state tools all take the ref; lib/evidence-cli.js mints one outside MCP). The validator is lib/evidence.js `validateEvidence`; the re-checks are lib/evidence.js `verifyEvidence`; the store is lib/evidence.js `evidenceStorePath` (one JSON line per accepted receipt, `#/definitions/record`).",
   "_source": "smart-memory-ops units/COMP-DOGFOOD-1/plan-dag.md row A (OWNER GO, shape (a): Compose is the system of record)",
   "_roadmap": "COMP-DOGFOOD-EVIDENCE-GATE-1",
@@ -12,7 +12,7 @@
   ],
   "definitions": {
     "evidenceRef": {
-      "description": "The id the server returns for an accepted receipt. `ev:` then 16 lower-case hex characters. Citing it re-uses the stored, already re-checked receipt; an id the store does not hold is refused (EVIDENCE_UNKNOWN_REF).",
+      "description": "The id the server returns for an accepted receipt. `ev:` then 16 lower-case hex characters. Citing it re-uses the stored, already re-checked receipt under the SAME id: its kind must back the claim (contracts/evidence-words.json, EVIDENCE_WRONG_KIND), its subject must match (EVIDENCE_SUBJECT_MISMATCH), a RUNNING cite is re-verified and must be checked within 15 min (EVIDENCE_STALE). An id the store does not hold as a valid record is refused (EVIDENCE_UNKNOWN_REF).",
       "type": "string",
       "pattern": "^ev:[0-9a-f]{16}$"
     },
@@ -52,7 +52,7 @@
       "maxLength": 2000
     },
     "sha": {
-      "description": "A commit exists. Re-check: `git rev-parse --verify --quiet <sha>^{commit}` in `repo` (server/lifecycle-guard.js gitCommitExists).",
+      "description": "A commit is on the repo's default branch. Re-check: `git rev-parse --verify --quiet <sha>^{commit}` in `repo` (server/lifecycle-guard.js gitCommitExists), then `git merge-base --is-ancestor <sha> <branch>` for the default branch (origin/HEAD, else main, else master; local or origin/).",
       "type": "object",
       "required": ["kind", "repo", "sha", "at", "by"],
       "additionalProperties": false,
@@ -65,7 +65,7 @@
       }
     },
     "process": {
-      "description": "A launched job is still running. Re-check: refused as too early before `launched_at` + 120 s; then the pid must be alive (`ps -p`), and when `exit_file` or `log` is named, an exit code there (77 is the seat-ceiling gate) or a gate line in the log fails the claim with that line quoted.",
+      "description": "A launched job is still running. Re-check: refused as too early before `launched_at` + 120 s; then the pid must be alive (`ps -p`), its command (`ps -o command=`) must contain `label`, and when `exit_file` or `log` is named, an exit code there (77 is the seat-ceiling gate) or a gate line in the log fails the claim with that line quoted.",
       "type": "object",
       "required": ["kind", "pid", "launched_at", "label", "at", "by"],
       "additionalProperties": false,
@@ -81,7 +81,7 @@
       }
     },
     "file": {
-      "description": "A file was written. Re-check: it exists, its mtime is no older than `at` minus the server's skew, and `line` (when given) is in it.",
+      "description": "A file was written. Re-check: `at` is at most 15 min before the server's check and not in the future, the file exists, its mtime is no older than `at` minus the server's skew, and `line` (when given) is in it.",
       "type": "object",
       "required": ["kind", "path", "at", "by"],
       "additionalProperties": false,
@@ -167,20 +167,21 @@
       }
     },
     "subject": {
-      "description": "What the receipt was accepted for, filled in by the server, never by the caller: the tool and the claim it backed (feature code and the claimed state, or gate id and outcome). Absent for a receipt recorded on its own (lib/evidence-cli.js `record`).",
+      "description": "What the receipt was accepted for. The four state tools fill it (the tool and the claim it backed: feature code and the claimed state, or gate id and outcome); record_evidence and `evidence-cli.js record --subject` take it from the caller (`unit` or `feature`, and `claim`). Absent for a receipt recorded with no subject. A cite through a state tool must name the same feature (or unit, or gate) as the record's subject (EVIDENCE_SUBJECT_MISMATCH); a record with no subject is cited only by its own `by` session (COMPOSE_SESSION_NAME).",
       "type": "object",
       "additionalProperties": false,
-      "required": ["tool"],
+      "minProperties": 1,
       "properties": {
         "tool": { "type": "string" },
+        "unit": { "description": "An ops unit code (record_evidence); compared with a cite's feature code like `feature`.", "type": "string" },
         "feature": { "type": "string" },
-        "claim": { "description": "The state the receipt backs: a feature status (`IN_PROGRESS`, `COMPLETE`) or `evidence-only` for a record_completion with set_status false.", "type": "string" },
+        "claim": { "description": "The state the receipt backs: a feature status (`COMPLETE`), a state word (`RUNNING`, `LANDED`), or `evidence-only` for a record_completion with set_status false.", "type": "string" },
         "gate": { "type": "string" },
         "outcome": { "type": "string" }
       }
     },
     "record": {
-      "description": "One line of the evidence store: an accepted receipt, its id, when the server checked it, and what each check found.",
+      "description": "One line of the evidence store: an accepted receipt, its id, when the server checked it, and what each check found. Every reader (lib/evidence.js readEvidence, claim_check.py) validates a line against this definition; a line that fails is unknown. A cite of an existing id never adds a line here: it appends `{cites, at, tool, subject, by}` to the side log beside the store (`evidence-cites.jsonl`, lib/evidence.js citesPath), and the id stays the same.",
       "type": "object",
       "required": ["id", "evidence", "checked_at", "checks"],
       "additionalProperties": false,
