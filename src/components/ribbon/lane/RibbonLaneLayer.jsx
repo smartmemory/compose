@@ -1,12 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useFleet } from '../../../lib/fleetPoller.js';
-import { smPanel } from '../../cockpit/fleetLogic.js';
+import { useNavigation } from '../../../lib/navigation.jsx';
 import LaneDrawer from './LaneDrawer.jsx';
 import LanePage from './LanePage.jsx';
-import { sessionsForLane } from './laneLogic.js';
+import { sessionsSource } from './laneLogic.js';
 
 const OPEN_LANE = 'compose:ribbon-open-lane'; // same string as DayView's EVT.openLane (not imported: DayView mounts this file)
-const NO_SESSIONS = [];
+const NO_SESSIONS = { status: 'ok', sessions: [], reason: null };
 
 /**
  * RibbonLaneLayer — listens for `compose:ribbon-open-lane`, takes it (`preventDefault()`) and holds `{lane, mode}`. It reads
@@ -18,6 +18,8 @@ export default function RibbonLaneLayer({ data, from, to, now }) {
   const dataRef = useRef(data);
   dataRef.current = data;
   const fleet = useFleet();
+  const navigation = useNavigation();
+  const openFleet = navigation?.openRoom ? () => navigation.openRoom('fleet') : undefined; // the host's Fleet pane, where the Cadence cards live
   const lane = open && (data?.lanes || []).find((l) => l.lane === open.lane);
 
   const returnTo = useRef(null);
@@ -51,10 +53,10 @@ export default function RibbonLaneLayer({ data, from, to, now }) {
   }, [open, close]);
 
   if (!open || !lane) return null;
-  const sessions = open.mode === 'drawer' ? sessionsForLane(smPanel(fleet.data, 'sessions')?.value, lane.lane) : NO_SESSIONS;
+  const sessions = open.mode === 'drawer' ? sessionsSource(fleet, lane.lane) : NO_SESSIONS;
   const live = data?.live !== false;
   const at = data?.now || now;
   return open.mode === 'page'
-    ? <LanePage lane={lane} from={from} to={to} now={at} onBack={close} />
+    ? <LanePage lane={lane} from={from} to={to} now={at} onBack={close} onOpenFleet={openFleet} />
     : <LaneDrawer lane={lane} live={live} now={at} sessions={sessions} onClose={close} onOpenPage={() => setOpen({ lane: open.lane, mode: 'page' })} />;
 }

@@ -4,6 +4,7 @@
  * Input is ONE lane object from the ribbon feed for the current window (`ribbon-contract.json` `lanes[]`): spans, marks,
  * current, next, eta. Nothing here fetches. Every function returns words or numbers a view can print, never an empty cell.
  */
+import { smPanel } from '../../cockpit/fleetLogic.js';
 import { clock, etaLabel, etaWord, fmtDur, HAS_ZONE, toMs, when } from '../ribbonLayout.js';
 
 const MIN = 60_000;
@@ -181,6 +182,19 @@ export function sessionsForLane(sessions, laneName) {
   if (!laneName || !Array.isArray(sessions)) return [];
   const bases = [laneName, ...(LANE_SESSION_ALIASES[laneName] || [])];
   return sessions.filter((s) => s && typeof s.name === 'string' && bases.some((b) => s.name === `${b}-main` || s.name.startsWith(`${b}-`)));
+}
+
+/**
+ * Where the drawer's sessions come from, with the source's own state kept (a failed or still-loading read is never an empty
+ * list). `fleet` is `useFleet()`'s `{data, error, loading}`. Returns `{status: 'loading'|'unavailable'|'ok', sessions, reason}`.
+ */
+export function sessionsSource(fleet, laneName) {
+  const sm = fleet?.data?.sources?.sm_status;
+  const panel = smPanel(fleet?.data, 'sessions');
+  if (panel && Array.isArray(panel.value)) return { status: 'ok', sessions: sessionsForLane(panel.value, laneName), reason: null };
+  if (!fleet?.data && fleet?.loading) return { status: 'loading', sessions: [], reason: null };
+  const reason = panel ? panel.error : (sm?.error ?? fleet?.error ?? (fleet?.data ? 'sm_status reader is down' : 'no fleet data'));
+  return { status: 'unavailable', sessions: [], reason: String(reason ?? 'no sessions source') };
 }
 
 export { clock, etaWord };

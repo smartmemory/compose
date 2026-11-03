@@ -14,7 +14,7 @@ function Section({ id, title, children }) {
  * TIME LOST, WHO AND WHERE, then the link to the lane page. All wording comes from laneLogic.js; this file only lays it out.
  * Esc is handled by the layer, so it works the same on the page.
  */
-export default function LaneDrawer({ lane, live, now, sessions = [], onClose, onOpenPage }) {
+export default function LaneDrawer({ lane, live, now, sessions = { status: 'ok', sessions: [] }, onClose, onOpenPage }) {
   const closeRef = useRef(null);
   useEffect(() => { closeRef.current?.focus(); }, []);
   const landing = expectedLanding(lane, now);
@@ -51,8 +51,10 @@ export default function LaneDrawer({ lane, live, now, sessions = [], onClose, on
           </Section>
           <Section id="who" title="WHO AND WHERE">
             <p className={P}>{lane.seat ? `seat ${lane.seat.replace(/^seat/i, '')}` : 'no seat recorded'}</p>
-            {sessions.length === 0 && <p className="m-0 text-[12px] text-muted-foreground">no session found for this lane</p>}
-            {sessions.map((s) => <p key={s.name} className={P}>{s.name} <span className="text-muted-foreground text-[12px]">· {s.busy ? 'busy' : 'idle'}</span></p>)}
+            {sessions.status === 'loading' && <p className="m-0 text-[12px] text-muted-foreground" data-testid="drawer-sessions-loading">reading…</p>}
+            {sessions.status === 'unavailable' && <p className="m-0 text-[12px] text-muted-foreground" data-testid="drawer-sessions-unavailable">sessions unavailable: {sessions.reason}</p>}
+            {sessions.status === 'ok' && sessions.sessions.length === 0 && <p className="m-0 text-[12px] text-muted-foreground">no session found for this lane</p>}
+            {sessions.sessions.map((s) => <p key={s.name} className={P}>{s.name} <span className="text-muted-foreground text-[12px]">· {s.busy ? 'busy' : 'idle'}</span></p>)}
           </Section>
         </div>
         <footer className="px-4 py-3 border-t border-border">

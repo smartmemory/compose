@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
-import { ChainGraph } from '@cadence/ui';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ChainGraph, DataClientProvider, NavProvider } from '@cadence/ui';
 import '@cadence/ui/styles.css';
 import useCadenceUiAvailable from '../../cockpit/useCadenceUiAvailable.js';
 import { createCadenceDataClient } from '../../../lib/clients/cadence.js';
+import { useNavigation } from '../../../lib/navigation.jsx';
 import { tipText, toMs, windowTitle } from '../ribbonLayout.js';
 import { SEGMENT_WORD, chainForLane, unitSegments } from './laneLogic.js';
 
@@ -51,17 +52,21 @@ function UnitRow({ row, lane, from, to, now }) {
   );
 }
 
-function ChainBlock({ lane }) {
+function ChainBlock({ lane, client, onOpenFleet }) {
   const available = useCadenceUiAvailable();
+  const navigation = useNavigation();
+  const dataClient = useMemo(() => client ?? createCadenceDataClient(), [client]);
+  // ChainGraph reads the belt through the provider (to link a step to its unit); a link opens the unit in the host's Cadence room.
+  const nav = useMemo(() => ({ open: navigation?.openRoom ? (target) => navigation.openRoom('cadence', target) : undefined }), [navigation]);
   const [state, setState] = useState({ chains: null, error: null });
   useEffect(() => {
     if (!available) return undefined;
     let live = true;
-    createCadenceDataClient().getChains()
+    dataClient.getChains()
       .then((r) => { if (live) setState({ chains: r?.chains || [], error: null }); })
       .catch((e) => { if (live) setState({ chains: null, error: String(e?.message ?? e) }); });
     return () => { live = false; };
-  }, [available]);
+  }, [available, dataClient]);
   let body;
   if (!available) body = <p className="m-0 text-[13px] text-muted-foreground" data-testid="lane-chain-unavailable">Cadence not available</p>;
   else if (state.error) body = <p className="m-0 text-[13px] text-muted-foreground" data-testid="lane-chain-error">Chains could not be read: {state.error}</p>;
@@ -69,8 +74,10 @@ function ChainBlock({ lane }) {
   else {
     const chain = chainForLane(lane, state.chains);
     body = chain
-      ? <div className={`cb-root${document.documentElement.classList.contains('dark') ? ' dark' : ''}`} data-testid="lane-chain-graph"><p className="m-0 mb-1 text-[12px] text-muted-foreground">{chain.title || chain.unit}</p><ChainGraph chain={chain} /></div>
-      : <p className="m-0 text-[13px] text-muted-foreground" data-testid="lane-chain-none">Chains: not linked to lanes yet. See Fleet › Cadence.</p>;
+      ? <div className={`cb-root${document.documentElement.classList.contains('dark') ? ' dark' : ''}`} data-testid="lane-chain-graph"><p className="m-0 mb-1 text-[12px] text-muted-foreground">{chain.title || chain.unit}</p><DataClientProvider client={dataClient}><NavProvider nav={nav}><ChainGraph chain={chain} /></NavProvider></DataClientProvider></div>
+      : <p className="m-0 text-[13px] text-muted-foreground" data-testid="lane-chain-none">Chains: not linked to lanes yet. {onOpenFleet
+        ? <button type="button" data-testid="lane-chain-open-fleet" onClick={onOpenFleet} className="underline hover:text-foreground focus-visible:outline focus-visible:outline-1">See Fleet › Cadence</button>
+        : 'See Fleet › Cadence.'}</p>;
   }
   return <section className="py-3" data-testid="lane-chain"><h3 className={H}>CHAIN AT THE FRONTIER</h3>{body}</section>;
 }
@@ -80,7 +87,7 @@ function ChainBlock({ lane }) {
  * as the title, one row per unit (author → review → fix → gate, then the land and deploy marks) over the window, the chain at
  * the frontier, and the landed vs live strip. Esc and the breadcrumb are handled by the layer / `onBack`.
  */
-export default function LanePage({ lane, from, to, now, onBack }) {
+export default function LanePage({ lane, from, to, now, onBack, onOpenFleet, client }) {
   const rows = unitSegments(lane);
   const landed = rows.filter((r) => r.landedAt || r.deployedAt);
   useEffect(() => { document.querySelector('[data-testid="lane-page-back"]')?.focus(); }, []);
@@ -98,7 +105,7 @@ export default function LanePage({ lane, from, to, now, onBack }) {
         {rows.length === 0 && <p className="m-0 text-[13px] text-muted-foreground" data-testid="lane-units-empty">nothing ran in this window</p>}
         {rows.map((r, i) => <UnitRow key={`${r.unit}${i}`} row={r} lane={lane} from={from} to={to} now={now} />)}
       </section>
-      <ChainBlock lane={lane} />
+      <ChainBlock lane={lane} client={client} onOpenFleet={onOpenFleet} />
       <section className="py-2 border-t border-border" data-testid="lane-live">
         <h3 className={H}>LANDED VS LIVE</h3>
         {landed.length === 0 && <p className="m-0 text-[13px] text-muted-foreground">nothing landed in this window</p>}

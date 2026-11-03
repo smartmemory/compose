@@ -12,6 +12,17 @@ import { render, screen, fireEvent, cleanup, act, waitFor } from '@testing-libra
 vi.mock('../../src/lib/wsFetch.js', async (orig) => ({ ...(await orig()), wsFetch: vi.fn() }));
 import { wsFetch } from '../../src/lib/wsFetch.js';
 import DayView from '../../src/components/ribbon/DayView.jsx';
+import LanePage from '../../src/components/ribbon/lane/LanePage.jsx';
+import LaneDrawer from '../../src/components/ribbon/lane/LaneDrawer.jsx';
+import { sessionsSource } from '../../src/components/ribbon/lane/laneLogic.js';
+import { NavigationContext } from '../../src/lib/navigation.jsx';
+
+// Cadence availability is the one thing faked: the real `@cadence/ui` (ChainGraph, providers) renders in the FU-1 rows.
+const cadence = vi.hoisted(() => ({ up: false }));
+vi.mock('../../src/components/cockpit/useCadenceUiAvailable.js', () => ({
+  default: () => cadence.up,
+  useCadenceUiAvailability: () => (cadence.up ? 'yes' : 'no'),
+}));
 
 const FIXTURE = JSON.parse(readFileSync(resolve(process.cwd(), 'test/fixtures/ribbon/day.json'), 'utf8'));
 const ok = (body) => ({ ok: true, status: 200, json: async () => body, text: async () => '' });
@@ -28,6 +39,7 @@ describe('lane drawer and lane page (COMP-COCKPIT-RIBBON-LANE-1)', () => {
   beforeEach(() => {
     localStorage.clear(); sessionStorage.clear(); window.history.pushState({}, '', '/');
     wsFetch.mockReset();
+    cadence.up = false;
     vi.spyOn(console, 'warn').mockImplementation(() => {});
   });
   afterEach(() => { cleanup(); vi.restoreAllMocks(); window.history.pushState({}, '', '/'); });
@@ -74,4 +86,44 @@ describe('lane drawer and lane page (COMP-COCKPIT-RIBBON-LANE-1)', () => {
     ];
     for (const r of rows) expect(r.got, r.name).toEqual(r.want);
   }, 30000);
+
+  describe('FU-1: chain graph provider, sessions source state, Fleet link', () => {
+    const lane = FIXTURE.lanes.find((l) => l.lane === '2.0');
+    const WIN = { from: FIXTURE.window?.from ?? '2026-11-01T00:00:00-07:00', to: FIXTURE.window?.to ?? '2026-11-02T00:00:00-07:00', now: FIXTURE.now };
+    const chainFor = (names) => ({ id: 'units/X/wave-plan.md', unit: 'X', title: 'X plan', problems: [], updatedAt: '2026-11-03T00:00:00Z',
+      steps: names.map((n, i) => ({ name: n, dependsOn: i ? [names[i - 1]] : [], state: i ? 'READY' : 'DONE', stateKind: i ? 'ready' : 'done', artifact: null, repo: null, level: i })) });
+
+    it('H1: the real ChainGraph renders through LanePage with the injected client, and its belt read goes to that client', async () => {
+      cadence.up = true;
+      const client = {
+        getChains: vi.fn(async () => ({ chains: [chainFor([lane.current.id, 'AFTER-IT'])] })),
+        getBelt: vi.fn(async () => ({ units: [{ id: lane.current.id, lane: lane.lane }] })),
+      };
+      render(<LanePage lane={lane} {...WIN} onBack={() => {}} client={client} />);
+      const graph = await screen.findByTestId('lane-chain-graph');
+      expect([!!graph.querySelector('.cb-graph'), screen.queryByTestId('lane-chain-error') == null], 'graph drawn, no error').toEqual([true, true]);
+      await waitFor(() => expect(client.getBelt).toHaveBeenCalled());
+    });
+
+    it('M1: a failed or loading sessions source says so, never "no session found"', () => {
+      const text = (sessions) => { cleanup(); render(<LaneDrawer lane={lane} live now={WIN.now} sessions={sessions} onClose={() => {}} onOpenPage={() => {}} />); return screen.getByTestId('drawer-who').textContent; };
+      const failed = sessionsSource({ data: { sources: { sm_status: { value: null, error: 'reader failed' } } }, error: null, loading: false }, '2.0');
+      const loading = sessionsSource({ data: null, error: null, loading: true }, '2.0');
+      const empty = sessionsSource({ data: { sources: { sm_status: { value: { sessions: { value: [], error: null } } } } }, error: null, loading: false }, '2.0');
+      expect([failed.status, loading.status, empty.status]).toEqual(['unavailable', 'loading', 'ok']);
+      expect(text(failed)).toContain('sessions unavailable: reader failed');
+      expect(text(failed)).not.toContain('no session found');
+      expect(text(loading)).toContain('reading…');
+      expect(text(empty)).toContain('no session found for this lane');
+    });
+
+    it('M2: "See Fleet › Cadence" is a control that opens the Fleet pane through the host navigation', async () => {
+      cadence.up = true;
+      const openRoom = vi.fn();
+      const client = { getChains: vi.fn(async () => ({ chains: [] })), getBelt: vi.fn(async () => ({ units: [] })) };
+      render(<NavigationContext.Provider value={{ openRoom }}><LanePage lane={lane} {...WIN} onBack={() => {}} client={client} onOpenFleet={() => openRoom('fleet')} /></NavigationContext.Provider>);
+      fireEvent.click(await screen.findByTestId('lane-chain-open-fleet'));
+      expect(openRoom).toHaveBeenCalledWith('fleet');
+    });
+  });
 });
