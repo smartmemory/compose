@@ -133,7 +133,7 @@ const GRAPH_ASPECT_HINT = 'grouping by feature aspect is not built yet';
  * COMP-SUBAPP-HOST-1: `host` (contracts/subapp-host.schema.json) goes into the provider; its selected feature wins over
  * `featureCode` (the session's, a display fallback) and opens that feature's hub. The chip's × goes back to Search, unscoped.
  */
-export default function WikiView({ featureCode: fallbackCode, host, workspace, frameBase, client, docOpen, availability, urlPane, onPaneChange }) {
+function WikiRoom({ featureCode: fallbackCode, host, workspace, frameBase, client, docOpen, availability, recheckFailed, urlPane, onPaneChange }) {
   const dataClient = useMemo(() => client ?? createWikiDataClient(), [client]);
   const scoped = useHostScope(host, 'wiki');
   const featureCode = scoped.scope ? (scoped.cleared ? '' : scoped.scope.value) : (fallbackCode ?? '');
@@ -255,6 +255,16 @@ export default function WikiView({ featureCode: fallbackCode, host, workspace, f
   // The wiki lists 127.0.0.1 parents only (a `localhost` page is another site: no cookie, no frame).
   const frameable = typeof window === 'undefined' || window.location.hostname === '127.0.0.1';
 
+  // COMP-SUBAPP-HOST-WORKSPACE-1: after a workspace switch the wiki's served workspace is re-read (useWikiTabState). Until it answers
+  // the room says so; if the re-check failed it says the wiki is unavailable, never the previous workspace's notes or an empty hub.
+  if (!workspace && recheckFailed) {
+    return (
+      <div className="wiki-tab h-full flex flex-col min-h-0" data-testid="wiki-view">
+        <p className="px-3 py-2 text-xs text-muted-foreground" data-testid="wiki-unavailable">Wiki unavailable: checking it for this workspace failed.</p>
+      </div>
+    );
+  }
+  const checking = !workspace && availability === 'unknown';
   return (
     <WikiDataProvider client={dataClient} host={scoped.host}>
       <div className="wiki-tab h-full flex flex-col min-h-0" data-testid="wiki-view">
@@ -281,6 +291,9 @@ export default function WikiView({ featureCode: fallbackCode, host, workspace, f
             </>
           )}
         />
+        {checking && (
+          <p className="px-3 py-2 text-xs text-muted-foreground border-b border-border" data-testid="wiki-checking">Checking the wiki for this workspace…</p>
+        )}
         {docWaiting && (
           <p className="px-3 py-2 text-xs text-muted-foreground border-b border-border" data-testid="wiki-doc-unavailable">
             {wikiUnavailableMessage(docWaiting)}
@@ -342,4 +355,11 @@ export default function WikiView({ featureCode: fallbackCode, host, workspace, f
       </div>
     </WikiDataProvider>
   );
+}
+
+// COMP-SUBAPP-HOST-WORKSPACE-1: ONE re-scope mechanism for all three rooms: the whole room is keyed on the host's workspace id, so a
+// switch remounts it (its data provider, client and panes start fresh and the first read goes to the new workspace; nothing of the old
+// one survives in state). No package change. Wiki: the server reads follow the workspace root; the served wiki workspace is re-checked by useWikiTabState.
+export default function WikiView(props) {
+  return <WikiRoom key={props.host?.workspace?.id ?? ''} {...props} />;
 }

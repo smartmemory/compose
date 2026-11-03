@@ -24,7 +24,7 @@ export const DEFAULT_RUNS_FILTER = 'recent';
  * one, else Stratum's Gates pane filtered to the run. A flow name or the drawer's "builder" opens the run's own spec in the builder
  * at that step. The selected step lives here and `onSelectStep` sets it in the same call (RunDetail's stepId contract, review L2).
  */
-export default function StratumView({ client, host }) {
+function StratumRoom({ client, host }) {
   const dataClient = useMemo(() => client ?? createStratumDataClient(), [client]);
   const navigation = useNavigation();
   const scoped = useHostScope(host, 'stratum');
@@ -101,4 +101,11 @@ export default function StratumView({ client, host }) {
       </NavProvider>
     </DataClientProvider>
   );
+}
+
+// COMP-SUBAPP-HOST-WORKSPACE-1: ONE re-scope mechanism for all three rooms: the whole room is keyed on the host's workspace id, so a
+// switch remounts it (its data provider, client and panes start fresh and the first read goes to the new workspace; nothing of the old
+// one survives in state). No package change. Stratum: the run reads are not shown to be workspace-scoped on the server (unverified), so the room re-reads without claiming a filter.
+export default function StratumView(props) {
+  return <StratumRoom key={props.host?.workspace?.id ?? ''} {...props} />;
 }

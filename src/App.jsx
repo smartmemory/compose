@@ -431,7 +431,7 @@ function CockpitView({
       // The selected item's feature wins over the session's (COMPOSE-WIKI-TAB-1).
       const item = selectedItemId ? items.find(i => i.id === selectedItemId) : null;
       const code = item?.featureCode || item?.feature_code || item?.lifecycle?.featureCode || featureCode || '';
-      return <WikiView featureCode={code} host={subappHost} workspace={wikiTab?.workspace} frameBase={wikiTab?.frameBase} docOpen={wikiDoc} availability={wikiTab?.availability} urlPane={wikiPane} onPaneChange={onWikiPaneChange} />;
+      return <WikiView featureCode={code} host={subappHost} workspace={wikiTab?.workspace} frameBase={wikiTab?.frameBase} docOpen={wikiDoc} availability={wikiTab?.availability} recheckFailed={wikiTab?.recheckFailed} urlPane={wikiPane} onPaneChange={onWikiPaneChange} />;
     }
     case 'qa-scope':
       return <QaScopeView featureCode={featureCode} />;
@@ -492,7 +492,11 @@ function AppInner() {
     try { for (const k of LEGACY_NAV_STORAGE_KEYS) localStorage.removeItem(k); } catch { /* ignore */ }
   }, []);
   // ── Workspace context (for refresh after project switch) ────────────────
-  const { refresh: refreshWorkspace } = useWorkspace();
+  const { refresh: refreshWorkspace, workspace: composeWorkspace, error: workspaceError } = useWorkspace();
+  // COMP-SUBAPP-HOST-WORKSPACE-1: a failed workspace fetch leaves the host with no workspace (never an invented id); say so once.
+  useEffect(() => {
+    if (workspaceError) console.warn(`[subapp-host] no workspace in the host (the rooms are not re-scoped on a switch): ${workspaceError.message || workspaceError}`);
+  }, [workspaceError]);
 
   // ── Design store ────────────────────────────────────────────────────────
   const designDecisions = useDesignStore(s => s.decisions);
@@ -702,7 +706,8 @@ function AppInner() {
   const selectedItem = useMemo(() => (selectedItemId ? items.find((i) => i.id === selectedItemId) ?? null : null), [items, selectedItemId]);
   const subappHost = useMemo(() => buildSubappHost({
     selectedItem, focusedFeature, lane: opsLaneOf(projectModel, projectFocus?.lane, projectFocus?.project), authMode: getAuthMode(), attention: attentionSink.publish,
-  }), [selectedItem, focusedFeature, projectFocus?.lane, projectFocus?.project, projectModel]);
+    workspace: { id: composeWorkspace?.id, root: composeWorkspace?.root },
+  }), [selectedItem, focusedFeature, projectFocus?.lane, projectFocus?.project, projectModel, composeWorkspace?.id, composeWorkspace?.root]);
 
   const handleProjectSwitch = useCallback(async (newPath) => {
     try {

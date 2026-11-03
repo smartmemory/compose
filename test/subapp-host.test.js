@@ -26,10 +26,9 @@ describe('subapp-host contract', () => {
     }
   });
 
-  test('refuses a workspace field (306b adds it), a token in auth, a data value as the sink, and an empty feature code', () => {
+  test('refuses a token in auth, a data value as the sink, and an empty feature code', () => {
     const base = buildSubappHost({ selectedItem: item, attention: () => {} });
     const bad = [
-      { ...base, workspace: 'w' },
       { ...base, auth: { ...base.auth, token: 't' } },
       { ...base, attention: 'publish' },
       { ...base, attention: { publish: true } },
@@ -37,6 +36,27 @@ describe('subapp-host contract', () => {
       { selection: {}, auth: base.auth },
     ];
     for (const h of bad) assert.equal(validHost(h), false, JSON.stringify(h));
+  });
+
+  test('a well-formed workspace validates; a malformed one is refused (306b)', () => {
+    const base = buildSubappHost({ selectedItem: item, attention: () => {} });
+    for (const ok of [{ id: 'w' }, { id: 'w', root: '/r/w' }]) assert.equal(validHost({ ...base, workspace: ok }), true, JSON.stringify(ok));
+    for (const bad of ['w', null, {}, { id: '' }, { id: 7 }, { id: 'w', root: '' }, { id: 'w', source: 'boot' }, { id: 'w', extra: 1 }]) {
+      assert.equal(validHost({ ...base, workspace: bad }), false, JSON.stringify(bad));
+    }
+  });
+
+  test('buildSubappHost sets host.workspace only for a workspace with an id, and keeps only id and root', () => {
+    const attention = () => {};
+    const withWs = buildSubappHost({ workspace: { id: 'w', root: '/r', source: 'boot' }, attention });
+    assert.deepEqual(withWs.workspace, { id: 'w', root: '/r' });
+    assert.equal(validHost(withWs), true, JSON.stringify(validHost.errors));
+    // loading (null), failed (null), or a body with no id: no workspace key at all, never an empty object or an invented id
+    for (const workspace of [undefined, null, {}, { id: '' }, { id: undefined, root: '/r' }]) {
+      const h = buildSubappHost({ workspace, attention });
+      assert.equal('workspace' in h, false, JSON.stringify(workspace));
+      assert.equal(validHost(h), true);
+    }
   });
 
   test('the inbox row definition matches what notifyLogic adapters really produce', () => {

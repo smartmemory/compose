@@ -31,13 +31,19 @@ export function selectionOf({ selectedItem, focusedFeature, lane, unit } = {}) {
   return sel;
 }
 
-/** The host object (contract `subapp-host`). `authMode` is wsFetch's `getAuthMode()`; `attention` the sink's `publish`. */
-export function buildSubappHost({ selectedItem, focusedFeature, lane, unit, authMode = 'cockpit', attention }) {
-  return {
+/** The host object (contract `subapp-host`). `authMode` is wsFetch's `getAuthMode()`; `attention` the sink's `publish`; `workspace` the workspace provider's `{id, root}` (COMP-SUBAPP-HOST-WORKSPACE-1). */
+export function buildSubappHost({ selectedItem, focusedFeature, lane, unit, authMode = 'cockpit', attention, workspace }) {
+  const host = {
     selection: selectionOf({ selectedItem, focusedFeature, lane, unit }),
     auth: { mode: authMode === 'mobile-paired' ? 'mobile-paired' : 'cockpit', credentials: 'data-client' },
     attention,
   };
+  // 306b: only a workspace that has an id; never an empty object or an invented id. `source` is not part of the contract.
+  if (typeof workspace?.id === 'string' && workspace.id) {
+    host.workspace = { id: workspace.id };
+    if (typeof workspace.root === 'string' && workspace.root) host.workspace.root = workspace.root;
+  }
+  return host;
 }
 
 /**

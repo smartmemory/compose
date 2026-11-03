@@ -1682,9 +1682,9 @@ OWNER DECISION D-0018 (2026-11-02, ops ledger `c798bfe19d52`): Stratum, Cadence 
 - [x] Done = select a feature in Roadmap, switch to Stratum, only that feature's runs show (golden flow on the live cockpit) (2026-11-02, live cockpit :5195 after restart on compose 3def991b, Playwright system Chrome 1440x900 dark: COMP-TUI-4 selected in Roadmap Tree; Stratum showed 5 of 5 runs, every one COMP-TUI-4's per `GET /api/stratum-ui/runs`; the chip's clear showed all 515; Cadence Board and Wiki hub scoped to it; console errors 0; shots in `smart-memory-ops/units/COMP-SUBAPP-HOST-1/shots/`)
 
 **306b COMP-SUBAPP-HOST-WORKSPACE-1: acceptance**
-- [ ] `contracts/subapp-host.schema.json` (306a) gains the current workspace
-- [ ] `StratumView.jsx`, `CadenceView.jsx`, `WikiView.jsx` (existing) pass the workspace from the Compose workspace provider (COMP-WORKSPACE-HTTP, existing) into the host
-- [ ] Switching workspace in the cockpit re-scopes all three rooms
+- [x] `contracts/subapp-host.schema.json` (306a) gains the current workspace (pinned by test/subapp-host.test.js:41, test/subapp-host.test.js:49)
+- [ ] `StratumView.jsx`, `CadenceView.jsx`, `WikiView.jsx` (existing) pass the workspace from the Compose workspace provider (`src/contexts/WorkspaceContext.jsx`, existing) into the host (the builder and the rooms are tested; App's own wiring of the provider into the host memo needs the live cockpit)
+- [ ] Switching workspace in the cockpit re-scopes all three rooms (the rooms' re-read on a changed host workspace id is tested; the switch in the live cockpit is not run)
 
 **307 COMP-SUBAPP-ATTENTION-1: acceptance**
 - [ ] Stratum `GatesInbox` rows (`stratum/ui/src/components/GatesInbox.tsx`, existing) publish through the host attention sink

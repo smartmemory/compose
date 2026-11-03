@@ -42,7 +42,7 @@ export function cadenceRouteFor(target, prev = {}) {
  * here (blockers, depends-on, chain steps); a session, job, seat or question opens the Fleet pane on it; a jump from another room
  * (Fleet's ready units) lands through roomFocus.js.
  */
-export default function CadenceView({ client, host }) {
+function CadenceRoom({ client, host }) {
   const dataClient = useMemo(() => client ?? createCadenceDataClient(), [client]);
   const navigation = useNavigation();
   const scoped = useHostScope(host, 'cadence');
@@ -88,4 +88,11 @@ export default function CadenceView({ client, host }) {
       </NavProvider>
     </DataClientProvider>
   );
+}
+
+// COMP-SUBAPP-HOST-WORKSPACE-1: ONE re-scope mechanism for all three rooms: the whole room is keyed on the host's workspace id, so a
+// switch remounts it (its data provider, client and panes start fresh and the first read goes to the new workspace; nothing of the old
+// one survives in state). No package change. Cadence: the server reads are fleet-wide (server/cadence-ui-routes.js reads no workspace), so the room re-reads and claims no workspace filter.
+export default function CadenceView(props) {
+  return <CadenceRoom key={props.host?.workspace?.id ?? ''} {...props} />;
 }
