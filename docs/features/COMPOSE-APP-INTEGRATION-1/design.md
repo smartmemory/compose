@@ -33,7 +33,7 @@ already answers "search" and "docs for feature X" over HTTP.
 | Compose MCP server | `server/mcp-tool-defs.js` (51 tools), `server/compose-mcp.js:116` | n/a | Add 2 read-only tools (`app_search`, `app_links`) |
 | Detail tabs | `src/components/cockpit/contextPanelState.js:68-75`, `ContextItemDetail.jsx:55-64,156` | filtered list | Add one `apps` tab, gated like `recall` |
 
-**Wiki surfaces** (`smart-memory-wiki`): HTTP only, no MCP (grep `mcp` in `wiki/` returns only
+**Wiki surfaces** (`forge/wiki`): HTTP only, no MCP (grep `mcp` in `wiki/` returns only
 config source rows). Mac host `127.0.0.1:8791` (`port_check.py 8791`: registered `smWiki`, listening),
 every call needs header `x-wiki-owner-token` (`deploy/mac/README.md:3-5`). Routes
 (`wiki/spine/api/app.py:227-291`): `GET /identity`, `GET /health`, `POST /query/{name}`,

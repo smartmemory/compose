@@ -16,7 +16,7 @@ function listen(app) {
 }
 
 // What GET /feeds/upcoming_calls answers (a row's `setup` sets it; the loop resets it): 'absent' is the real wiki's answer for a feed it does not
-// wire (smart-memory-wiki wiki/spine/api/app.py `feed`: 404 not_found "unknown feed").
+// wire (forge/wiki wiki/spine/api/app.py `feed`: 404 not_found "unknown feed").
 let feedMode = 'absent';
 
 async function fakeWiki(calls) {
@@ -67,7 +67,7 @@ async function fakeWiki(calls) {
   app.get('/note', (req, res) => (req.query.id === 'MISSING'
     ? res.status(404).json({ code: 'not_found', message: 'no such note' })
     : res.json({ workspace: req.query.workspace, note: { id: req.query.id, text: 'hello' }, generated_at: 't' })));
-  // COMP-WIKI-DOC-PATH-LINKS-1: the answers of the wiki's /note/by-path (smart-memory-wiki wiki/spine/api/notes.py), keyed by the path asked.
+  // COMP-WIKI-DOC-PATH-LINKS-1: the answers of the wiki's /note/by-path (forge/wiki wiki/spine/api/notes.py), keyed by the path asked.
   app.get('/note/by-path', (req, res) => {
     const p = req.query.path;
     if (p === 'MISSING') return res.status(404).json({ code: 'not_found', message: 'no such note', retryable: false });

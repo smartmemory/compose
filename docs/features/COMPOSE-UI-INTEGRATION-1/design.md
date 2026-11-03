@@ -5,7 +5,7 @@ at the bottom; [read-model-contract.json](read-model-contract.json) superseded, 
 **Hold:** the rewrite brief (2026-10-29 23:55) said "after 2.0.0"; the owner LIFTED it for this set
 at 2026-10-30 00:3x (`OPS/units/COMPOSE-UI-INTEGRATION-1/wave-plan.md:3`); unit states are live.
 `OPS/` = `SmartMemory/smart-memory-ops`, `C/` = this repo, `S/` = `forge/stratum`, `W/` =
-`SmartMemory/smart-memory-wiki` (all under `/Users/ruze/reg/my/`).
+`forge/wiki` (all under `/Users/ruze/reg/my/`).
 
 ## Related Documents
 

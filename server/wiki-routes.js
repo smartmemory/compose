@@ -3,7 +3,7 @@
  *
  * The wiki's data calls are `POST /query/{name}` and the Mac wiki keeps every non-GET strictly
  * same-origin, so the browser cannot call it from Compose. This proxy makes exactly the calls of the
- * wiki DataClient contract (`smart-memory-wiki/ui/packages/wiki-components/src/data-client.d.ts`,
+ * wiki DataClient contract (`forge/wiki/ui/packages/wiki-components/src/data-client.d.ts`,
  * `DATA_CLIENT_CALLS`) and nothing else:
  *
  *   GET  /api/wiki/available           { available, workspace, frameBase } (no upstream call)
@@ -71,12 +71,12 @@ export const WIKI_PAGED_QUERIES = {
 export const GRAPH_PAGE_MAX = 200;
 export const GRAPH_QUERY = 'graph';
 
-// A doc id as the wiki's own `/note` accepts it (smart-memory-wiki wiki/spine/api/notes.py DOC_ID), minus any `..` path segment: the id is only ever
+// A doc id as the wiki's own `/note` accepts it (forge/wiki wiki/spine/api/notes.py DOC_ID), minus any `..` path segment: the id is only ever
 // the VALUE of one `id` query parameter upstream (URLSearchParams), never a path, but a traversal-shaped id has no business reaching the wiki.
 export const NOTE_ID_RE = /^[A-Za-z0-9_.:@/-]{1,512}$/;
 const DOTDOT_SEGMENT_RE = /(^|\/)\.\.(\/|$)/;
 
-// COMP-WIKI-DOC-PATH-LINKS-1: a repo-relative doc path as the wiki's `/note/by-path` accepts it (smart-memory-wiki
+// COMP-WIKI-DOC-PATH-LINKS-1: a repo-relative doc path as the wiki's `/note/by-path` accepts it (forge/wiki
 // wiki/spine/api/notes.py `rel_path_ok`), checked here too so a refused shape never reaches the wiki: 1 to DOC_PATH_MAX
 // characters, no `..`/`.`/empty segment, no leading `/` or `~`, no drive letter, no backslash, no `%` (a second encoding such as
 // `%2e%2e`), no control character (C0, DEL, C1). `source` is the wiki's SOURCE_ID: never dot-led, never holding `..`.
@@ -340,7 +340,7 @@ export function attachWikiRoutes(app, {
   });
 
   // The ONE feed. The workspace comes from config (the query string's `workspace` must equal it), nothing else of the request is read.
-  // The wiki answers a feed it does not wire with 404 `not_found` "unknown feed" (smart-memory-wiki wiki/spine/api/app.py `feed`); that, and only that,
+  // The wiki answers a feed it does not wire with 404 `not_found` "unknown feed" (forge/wiki wiki/spine/api/app.py `feed`); that, and only that,
   // becomes `null` (absent), apart from an empty feed (a 200 envelope).
   app.get(`${PREFIX}/feeds/${WIKI_FEED}`, async (req, res) => {
     const cfg = config(req);

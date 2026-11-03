@@ -1,8 +1,9 @@
 /**
  * WIKI-COMPONENTS-PUBLISH-1: where Compose finds `@wiki/components`. One table over a scratch layout: a copy of
- * lib/wiki-components-link.js under `<tmp>/a/b/c/compose/lib/`, so its sibling candidate is
- * `<tmp>/a/b/SmartMemory/smart-memory-wiki/ui/packages/wiki-components` and its installed candidate is
- * `<tmp>/a/b/c/compose/node_modules/@smartmemory/wiki-components`.
+ * lib/wiki-components-link.js under `<tmp>/a/b/forge/compose/lib/`, so its sibling candidate is the forge sibling
+ * `<tmp>/a/b/forge/wiki/ui/packages/wiki-components` (WIKI-TO-FORGE-1) and its installed candidate is
+ * `<tmp>/a/b/forge/compose/node_modules/@smartmemory/wiki-components`. The pre-move checkout
+ * `<tmp>/a/b/SmartMemory/smart-memory-wiki/...` is never a candidate.
  */
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -31,6 +32,8 @@ const ROWS = [
   { name: 'installed only', sibling: false, installed: true, env: {}, want: 'installed' },
   { name: 'sibling wins over installed', sibling: true, installed: true, env: {}, want: 'sibling' },
   { name: 'sibling only', sibling: true, installed: false, env: {}, want: 'sibling' },
+  { name: 'the pre-move SmartMemory checkout is ignored', stale: true, installed: true, env: {}, want: 'installed' },
+  { name: 'the pre-move SmartMemory checkout alone is absent', stale: true, installed: false, env: {}, want: null },
   { name: 'none forces absent', sibling: true, installed: true, env: { COMPOSE_WIKI_COMPONENTS_DIR: 'none' }, want: null },
   { name: 'override wins', sibling: true, installed: true, env: { COMPOSE_WIKI_COMPONENTS_DIR: 'override' }, want: 'override' },
   { name: 'missing override does not fall back', sibling: true, installed: true, env: { COMPOSE_WIKI_COMPONENTS_DIR: 'missing' }, want: null },
@@ -40,17 +43,19 @@ describe('resolveWikiComponentsDir', () => {
   for (const row of ROWS) {
     it(row.name, async () => {
       const base = join(root, row.name.replace(/\W+/g, '-'));
-      const compose = join(base, 'a', 'b', 'c', 'compose');
+      const compose = join(base, 'a', 'b', 'forge', 'compose');
       mkdirSync(join(compose, 'lib'), { recursive: true });
       copyFileSync(SRC, join(compose, 'lib', 'wiki-components-link.js'));
       writeFileSync(join(compose, 'package.json'), '{"type":"module"}\n');
       const dirs = {
-        sibling: join(base, 'a', 'b', 'SmartMemory', 'smart-memory-wiki', 'ui', 'packages', 'wiki-components'),
+        sibling: join(base, 'a', 'b', 'forge', 'wiki', 'ui', 'packages', 'wiki-components'),
+        stale: join(base, 'a', 'b', 'SmartMemory', 'smart-memory-wiki', 'ui', 'packages', 'wiki-components'),
         installed: join(compose, 'node_modules', '@smartmemory', 'wiki-components'),
         override: fakePackage(join(base, 'override')),
         missing: join(base, 'missing'),
       };
       if (row.sibling) fakePackage(dirs.sibling);
+      if (row.stale) fakePackage(dirs.stale);
       if (row.installed) fakePackage(dirs.installed);
       const env = { ...row.env };
       if (env.COMPOSE_WIKI_COMPONENTS_DIR && env.COMPOSE_WIKI_COMPONENTS_DIR !== 'none') env.COMPOSE_WIKI_COMPONENTS_DIR = dirs[env.COMPOSE_WIKI_COMPONENTS_DIR];

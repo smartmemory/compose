@@ -1,7 +1,7 @@
 /**
  * COMPOSE-WIKI-TAB-1: a second, scoped Tailwind pass for the `@wiki/components` screens (imported by
  * src/components/cockpit/wiki-tab.css through `@config`). The screens use the wiki's own colour names
- * (`ink`, `ground`, an inverted `neutral` scale, tinted status hues; smart-memory-wiki `ui/tailwind.config.js`).
+ * (`ink`, `ground`, an inverted `neutral` scale, tinted status hues; forge/wiki `ui/tailwind.config.js`).
  * Here those names map to Compose's tokens, and every class is emitted under `.wiki-tab` only, so
  * Compose's own `text-neutral-*`, `bg-blue-*` elsewhere keep Tailwind's defaults.
  */

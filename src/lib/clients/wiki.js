@@ -1,7 +1,7 @@
 /**
  * wiki.js — Compose's DataClient for `@wiki/components` (COMPOSE-WIKI-TAB-1).
  *
- * The contract is `smart-memory-wiki/ui/packages/wiki-components/src/data-client.d.ts` (`identity`,
+ * The contract is `forge/wiki/ui/packages/wiki-components/src/data-client.d.ts` (`identity`,
  * `featureHub`, `decisions`, `decisionsPage`, `sourcesPage`, `docsByArea`, `ledger`, `upcomingCalls`, `search`, `graphAll`, `graphPage`, `note`). Every call goes to Compose's own `/api/wiki/*` proxy
  * (server/wiki-routes.js), which holds the wiki token and builds the wiki's query envelope; the browser
  * never talks to the wiki for data. A refusal rejects with an Error carrying the answer's `code`, as the
