@@ -268,11 +268,8 @@ describe('GET /api/ribbon', () => {
     assert.deepEqual(owners('forge').map((s) => s.queueId ?? null), ['A'], 'one ask, one span: the queue\'s');
     assert.deepEqual(owners('web').map((s) => [s.start, s.end, s.open]), [[D('07:00') && new Date(D('07:00')).toISOString(), new Date(NOW).toISOString(), false]], 'no ask in the queue: the stamp is clipped at the read, not open');
     const drawn = ownerWaitsAtNow(r.body.lanes, NOW, r.body.now);
-    // The stamp clipped at the read ends at the read, so `ownerWaitsAtNow` (client, U3's file) still lists it with queueId null:
-    // the headline is compared on the queue's own spans until U3 counts only queue asks there (report-u3-data.md ## Questions).
-    const queued = drawn.filter((d) => d.queueId !== null);
-    assert.deepEqual(queued.map((d) => d.queueId), ownerAsks(r.body.owner.open, null, NOW).rows.map((q) => q.id));
-    assert.equal(queued.length, 1);
+    assert.deepEqual(drawn.map((d) => d.queueId), ownerAsks(r.body.owner.open, null, NOW).rows.map((q) => q.id));
+    assert.equal(drawn.length, 1);
   });
   it('remote mode mounts nothing', () => assert.equal(attachRibbonRoutes(express(), { remote: true }), false));
 });

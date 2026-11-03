@@ -114,6 +114,24 @@ describe('U2 F2: one ask draws one owner span', () => {
   });
 });
 
+describe('U3-FU: owner waits at now come from the queue only', () => {
+  it('an open queue ask plus a stamp clipped at the read on the same lane: only the queue ask counts at now, and the mounted marker count is that count', () => {
+    const d = clone(RIBBON);
+    const ops = d.lanes.find((l) => l.lane === 'ops');
+    const own = ops.spans.find((s) => s.kind === 'wait' && s.cause === 'owner');
+    const stamp = { ...own, queueId: undefined, unit: 'U-stamp', start: d.from, since: d.from, open: true };
+    ops.spans = reconcileOwnerSpans([...ops.spans.filter((s) => s !== own), stamp, { ...own, unit: 'U-ask', queueId: 'A' }], { asOf: Date.parse(d.now) });
+    const clipped = ops.spans.find((s) => s.kind === 'wait' && s.cause === 'owner' && !s.queueId);
+    expect(clipped, 'the stamp stays as history, clipped at the read').toMatchObject({ open: false });
+    const atNow = ownerWaitsAtNow(d.lanes, d.now, d.now);
+    expect(atNow).toEqual([{ lane: 'ops', queueId: 'A' }]);
+    render(<DayRibbon data={d} from={d.from} to={d.to} now={d.now} />);
+    const marked = screen.getAllByTestId('owner-now');
+    expect(marked.length).toBe(atNow.length);
+    expect(marked.map((m) => m.getAttribute('data-queue'))).toEqual(['A']);
+  });
+});
+
 describe('U2-DATA Q1: a Reverse with no unit opens the inbox on its queue row', () => {
   it('the card targets the queue id, and the drawer opens with that row selected and expanded', async () => {
     const card = cardFor({ kind: 'decide', at: RIBBON.now, lane: 'ops', text: 'Applied the bypass flag', reverse: 'Remove the bypass flag', queueId: 'Q2' }, { now: RIBBON.now });

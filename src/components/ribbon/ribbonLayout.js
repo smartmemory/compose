@@ -490,7 +490,8 @@ function lastStampOf(lane, cur, n) {
 export function laneState(lane, now, asOf = null) {
   const n = toMs(now);
   const at = spansAtNow(lane, n, refOf(n, asOf));
-  const owner = at.find((s) => s.kind === 'wait' && s.cause === 'owner');
+  const isOwner = (s) => s.kind === 'wait' && s.cause === 'owner';
+  const owner = at.find((s) => isOwner(s) && s.queueId) || at.find(isOwner); // U3-FU: the queue's span names the wait, a stamp is only the fallback
   const latest = [...at].sort((a, b) => realStart(b) - realStart(a) || toMs(b.end) - toMs(a.end) || (a.kind === 'wait' ? -1 : 1))[0];
   const wait = owner || (latest?.kind === 'wait' ? latest : null);
   const cur = lane?.current || null;
@@ -522,10 +523,13 @@ export function withOwnerOpen(feed, openIds, now) {
   return { ...feed, lanes: feed.lanes.map((l) => ({ ...l, spans: (l.spans || []).filter((s) => !live(s) || keep.has(s.queueId)) })) };
 }
 
-/** The owner waits the ribbon draws at now: one per open ask, `[{lane, queueId}]` (what the test compares to the headline). */
+/**
+ * The owner waits the ribbon draws at now: one per open ask, `[{lane, queueId}]` (what the test compares to the headline).
+ * The queue is the one "at now" source (`lib/owner-spans.js`): a stamp span, even one clipped at the read, is history.
+ */
 export function ownerWaitsAtNow(lanes, now, asOf = null) {
   const n = toMs(now);
-  return (lanes || []).flatMap((l) => spansAtNow(l, n, refOf(n, asOf)).filter((s) => s.kind === 'wait' && s.cause === 'owner').map((s) => ({ lane: l.lane, queueId: s.queueId ?? null })));
+  return (lanes || []).flatMap((l) => spansAtNow(l, n, refOf(n, asOf)).filter((s) => s.kind === 'wait' && s.cause === 'owner' && s.queueId).map((s) => ({ lane: l.lane, queueId: s.queueId })));
 }
 
 /** Plain names for the feed's source-level gaps (C2: they are text under the ribbon, never a box over the lanes). */
