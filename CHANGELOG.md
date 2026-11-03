@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- **COMP-DOGFOOD-EVIDENCE-GATE-1 writer tests: the completion and feature writer end-to-end tests cite a `command` receipt, a kind COMPLETE accepts, so the pre-push gate is green again** (test fixtures only, no product code; they cited `log`, which fix r1 refuses for COMPLETE with `EVIDENCE_WRONG_KIND`)
+
 - **COMP-DOGFOOD-OWNER-QUEUE-FU-1: the cockpit inbox shows every open owner-queue row again (Decided for you, FYI), and an MCP close of a non-live queue can never announce into the live owner channels** (post-land review F1, F2 MEDIUM of COMP-DOGFOOD-OWNER-QUEUE-1). The `GET /api/fleet` `queue` panel is now `readOpenQueuePanel` (every open record, sm_status's row shape) instead of the asks+security list. `closeOwnerGate` passes `SM_OWNER_QUEUE=<path>` beside `--file` and refuses a non-live queue with `OWNER_GATE_SCRATCH_UNGUARDED` when neither `NOTIFY_SPOOL` nor `OWNER_QUEUE_OUTBOX` is set. Tests: `test/owner-queue-fu1.test.js`.
 - **COMP-DOGFOOD-EVIDENCE-BRANCH-ORIGIN-1: a land-branch `sha` receipt (branch `2.0`) passes only if the commit is on `origin/2.0`, never on a local-only `2.0`** (post-land review F1 MEDIUM, F2 LOW of COMP-DOGFOOD-EVIDENCE-BRANCH-1). A SmartMemory land is a push, so `gitOnBranch` now checks `refs/remotes/origin/<branch>` only; a repo with no `origin/<branch>` keeps the "has no branch" refusal. The default-branch path (no `branch`) is unchanged: compose lands locally. The `sha` line of the `record_evidence` tool def now lists `branch?`. Tests: `test/evidence-branch.test.js` (two new rows; the fixture's `2.0` is now pushed).
 

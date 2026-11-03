@@ -72,12 +72,12 @@ class McpClient {
 }
 
 // COMP-DOGFOOD-EVIDENCE-GATE-1: record_completion refuses a call with no receipt
-// (EVIDENCE_REQUIRED). A `log` receipt the server re-checks: a fresh file in the
-// temp workspace holding the claimed line.
+// (EVIDENCE_REQUIRED). A `command` receipt (a kind COMPLETE accepts, contracts/evidence-words.json)
+// the server re-checks: a fresh log in the temp workspace holding the claimed output line.
 function receipt(cwd) {
   const p = join(cwd, 'receipt.log');
   writeFileSync(p, 'tests 1/1 pass\n');
-  return { kind: 'log', path: p, line: 'tests 1/1 pass', at: new Date().toISOString(), by: 'test' };
+  return { kind: 'command', command: 'node --test', log: p, output_line: 'tests 1/1 pass', at: new Date().toISOString(), by: 'test' };
 }
 
 function freshCwd() {
