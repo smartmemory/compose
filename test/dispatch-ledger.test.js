@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync, chmodSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -164,6 +164,24 @@ describe('dispatch ledger reader', () => {
       assert.equal(readEvents(cwd, { since: '2h' }).length, 2);
     } finally {
       Date.now = originalNow;
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('dispatch ledger reader: a parent that cannot be traversed (COMP-FLEET-USAGE-FU-1)', () => {
+  test('EACCES is a source error with the fs code, ENOENT stays an empty ledger', { skip: process.getuid?.() === 0 }, () => {
+    const cwd = freshCwd();
+    const warn = console.warn;
+    console.warn = () => {};
+    try {
+      assert.deepEqual(readEvents(cwd), [], 'no ledger yet: empty');
+      mkdirSync(join(cwd, '.compose'), { recursive: true });
+      chmodSync(join(cwd, '.compose'), 0o000);
+      assert.throws(() => readEvents(cwd), (e) => e.code === 'EACCES' && !e.message.includes(cwd));
+    } finally {
+      console.warn = warn;
+      chmodSync(join(cwd, '.compose'), 0o700);
       rmSync(cwd, { recursive: true, force: true });
     }
   });

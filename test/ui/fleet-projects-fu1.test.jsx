@@ -11,7 +11,7 @@ import { wsFetch } from '../../src/lib/wsFetch.js';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { effectiveOrder, resetFleetProjects, saveFleetProjects, selectProjectRow, useFleetProjects, useFleetRoots } from '../../src/lib/fleetProjects.js';
-import { resetProcessPoller } from '../../src/lib/processPoller.js';
+import { resetProcessPoller, subscribeProcess } from '../../src/lib/processPoller.js';
 import FleetProjectsSection from '../../src/components/vision/FleetProjectsSection.jsx';
 
 const reply = (body, status = 200) => ({ ok: status < 300, status, json: async () => body });
@@ -132,5 +132,28 @@ describe('a refused project switch (FLEET-PROJECTS-2 M1), the switch helper inje
     expect(screen.getByTestId('fleet-project-select-hub').getAttribute('aria-pressed')).toBe('false');
     cleanup();
     resetProcessPoller();
+  });
+});
+
+describe('COMP-FLEET-USAGE-FU-1 M2: a GET sent before a save and answered after it', () => {
+  beforeEach(() => { cleanup(); wsFetch.mockReset(); resetFleetProjects(); resetProcessPoller(); });
+
+  it('does not revert the confirmed order', async () => {
+    const getReplies = [];
+    wsFetch.mockImplementation((url) => (url === '/api/process'
+      ? new Promise((r) => getReplies.push((order) => r(reply({ fleet: { known: ['a', 'b'], projects: order } }))))
+      : Promise.resolve(reply({ ok: true }))));
+    function Probe() {
+      const lanes = useFleetProjects();
+      const [data, setData] = React.useState(null);
+      React.useEffect(() => subscribeProcess((s) => setData(s.data)), []);
+      return <span data-testid="order">{JSON.stringify(effectiveOrder(data?.fleet, lanes))}</span>;
+    }
+    render(<Probe />);
+    await waitFor(() => expect(getReplies).toHaveLength(1)); // GET #1 is on the wire with the old order
+    await act(async () => { await saveFleetProjects(['b', 'a']); });
+    expect(screen.getByTestId('order').textContent).toBe('["b","a"]');
+    await act(async () => getReplies[0](['a', 'b'])); // answered after the save: it predates it
+    expect(screen.getByTestId('order').textContent).toBe('["b","a"]'); // before the fix this read ["a","b"] for up to 60 s
   });
 });

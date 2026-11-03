@@ -12,6 +12,7 @@ import { RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils.js';
 import { useFleet } from '../../lib/fleetPoller.js';
 import { smPanel } from '../cockpit/fleetLogic.js';
+import SourceNote from '../cockpit/SourceNote.jsx';
 
 import { fmtPct, resetIn as resetText, RETIRED_NOTE } from '../cockpit/cost/costLogic.js';
 import CostMeter from '../cockpit/cost/CostMeter.jsx';
@@ -19,6 +20,21 @@ import useApiCredit from '../cockpit/cost/useApiCredit.js';
 
 /** The seats re-read while this scope is open, as Home's glance does (HOME_SEATS_POLL_MS). */
 export const FLEET_SEATS_POLL_MS = 60_000;
+
+/**
+ * Re-read the seats at most once per `FLEET_SEATS_POLL_MS`, riding the shared fleet poll's ticks (fleetPoller.js): that loop
+ * already pauses while the tab is hidden and fetches at once on return, so a hidden tab makes no seats call and a visible
+ * one refreshes on its first tick back. No timer of our own, hence no second visibility scheduler.
+ */
+export function useSeatsTick(reload, fleet) {
+  const last = useRef(Date.now());
+  useEffect(() => {
+    if (Date.now() - last.current < FLEET_SEATS_POLL_MS) return;
+    last.current = Date.now();
+    reload();
+  }, [fleet, reload]);
+  return last;
+}
 
 /** Pure: the fleet's two spend panels, each `{text, rows}` or `{down: reason}`. Exported for the tests. */
 export function fleetSpend(data) {
@@ -59,9 +75,9 @@ export default function FleetUsage({ client, now }) {
   const reload = useCallback(() => { stopRef.current(); stopRef.current = load(); }, [load]);
   useEffect(() => {
     reload();
-    const timer = setInterval(reload, FLEET_SEATS_POLL_MS);
-    return () => { clearInterval(timer); stopRef.current(); };
+    return () => stopRef.current();
   }, [reload]);
+  useSeatsTick(reload, fleet);
 
   const src = seats.body?.seats;
   const allRows = Array.isArray(src?.value?.seats) ? src.value.seats : [];
@@ -71,6 +87,7 @@ export default function FleetUsage({ client, now }) {
   const at = now ? Date.parse(now) : Date.now();
   return (
     <div className="flex flex-col gap-4" data-testid="usage-fleet">
+      <SourceNote source="Fleet" state={fleet} />
       <CostMeter
         seats={Array.isArray(src?.value?.seats) ? allRows : null}
         seatsError={seatError}

@@ -1,7 +1,8 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useFleet } from '../../lib/fleetPoller.js';
 import { defaultUsageClient } from '../usage/usageClient.js';
-import { fleetSpend } from '../usage/FleetUsage.jsx';
+import { fleetSpend, useSeatsTick } from '../usage/FleetUsage.jsx';
+import SourceNote from '../cockpit/SourceNote.jsx';
 import CostMeter from '../cockpit/cost/CostMeter.jsx';
 import useApiCredit from '../cockpit/cost/useApiCredit.js';
 
@@ -22,11 +23,13 @@ export function useCostMeterProps(client = defaultUsageClient) {
       .catch((err) => { if (live) setSeats({ loading: false, body: null, error: err.message || String(err) }); });
     return () => { live = false; };
   }, [client]);
+  const stopRef = useRef(() => {});
+  const reload = useCallback(() => { stopRef.current(); stopRef.current = load(); }, [load]);
   useEffect(() => {
-    let stop = load();
-    const timer = setInterval(() => { stop(); stop = load(); }, HOME_SEATS_POLL_MS);
-    return () => { clearInterval(timer); stop(); };
-  }, [load]);
+    reload();
+    return () => stopRef.current();
+  }, [reload]);
+  useSeatsTick(reload, fleet); // the shared fleet poll's ticks (paused while hidden); see FleetUsage.jsx
 
   const credit = useApiCredit(client);
   const src = seats.body?.seats;
@@ -39,6 +42,7 @@ export function useCostMeterProps(client = defaultUsageClient) {
     spend: fleet.loading && !fleet.data ? null : { ceiling, spend },
     asOf: src?.value?.generated_at ?? null,
     credit,
+    fleetState: fleet, // not a CostMeter prop: the glance shows the shared stale/unreadable note from it
   };
 }
 
@@ -48,5 +52,11 @@ export function useCostMeterProps(client = defaultUsageClient) {
  * Needs no Cadence package.
  */
 export default function HomeFleetGlance({ client = defaultUsageClient }) {
-  return <CostMeter compact {...useCostMeterProps(client)} />;
+  const { fleetState, ...meter } = useCostMeterProps(client);
+  return (
+    <>
+      <CostMeter compact {...meter} />
+      <SourceNote source="Fleet" state={fleetState} />
+    </>
+  );
 }

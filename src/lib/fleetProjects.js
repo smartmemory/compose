@@ -53,6 +53,16 @@ export function orderLanes(known, saved) {
 // save, so what it carries is newer than the saved order (another tab, a hand edit) and wins over the override.
 let seenBeforeSave = new WeakSet();
 let clearScheduled = false;
+// Bumped when a save starts and again when it is confirmed. A GET that spans a bump was answered by a server that may not
+// have seen the save yet, so its envelope is no fresher than the ones a render already saw.
+let saveEpoch = 0;
+
+export const fleetSaveEpoch = () => saveEpoch;
+
+/** The poller calls this with the epoch it read before sending the request: a response that spans a save is old news. */
+export function noteFleetResponse(fleet, epochAtRequest) {
+  if (epochAtRequest !== saveEpoch && fleet && typeof fleet === 'object') seenBeforeSave.add(fleet);
+}
 
 const sameOrder = (a, b) => Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((n, i) => n === b[i]);
 
@@ -88,6 +98,7 @@ export function setPickedLane(name) {
  * to the last confirmed order with `saveError` set when the POST fails.
  */
 export function saveFleetProjects(projects) {
+  saveEpoch += 1;
   emit({ override: projects, saveError: null, settled: false });
   const seq = ++latest;
   chain = chain.then(async () => {
@@ -98,6 +109,7 @@ export function saveFleetProjects(projects) {
       let body = null;
       try { body = await res.json(); } catch { /* no body */ }
       if (!res.ok) throw new Error(body?.error ?? `save failed (${res.status})`);
+      saveEpoch += 1;
       // the latest save confirmed: nothing is left to fail, so an earlier save's error line goes
       emit(seq === latest ? { confirmed: projects, override: projects, saveError: null, settled: true } : { confirmed: projects });
     } catch (error) {

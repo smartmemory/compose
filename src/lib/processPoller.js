@@ -8,7 +8,7 @@
 import { useEffect, useState } from 'react';
 import { wsFetch } from './wsFetch.js';
 import { INITIAL_SOURCE, sourceOk, sourceFail } from './sourceState.js';
-import { resetFleetProjects } from './fleetProjects.js';
+import { fleetSaveEpoch, noteFleetResponse, resetFleetProjects } from './fleetProjects.js';
 
 export const PROCESS_POLL_MS = 60_000;
 
@@ -26,9 +26,12 @@ async function poll() {
   if (inflight) return;
   inflight = true;
   try {
+    const epoch = fleetSaveEpoch();
     const res = await wsFetch('/api/process');
     if (!res.ok) throw new Error(`process route ${res.status}`);
-    emit(sourceOk(await res.json()));
+    const body = await res.json();
+    noteFleetResponse(body?.fleet, epoch); // a GET sent before a save and answered after it must not revert the saved order
+    emit(sourceOk(body));
   } catch (error) {
     emit(sourceFail(state, error)); // the last good data stays, marked stale (sourceState.js)
   } finally {

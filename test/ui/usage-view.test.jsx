@@ -9,7 +9,7 @@ import FleetUsage, { FLEET_SEATS_POLL_MS } from '../../src/components/usage/Flee
 import HomeFleetGlance from '../../src/components/vision/HomeFleetGlance.jsx';
 import HomeSections from '../../src/components/vision/HomeSections.jsx';
 import { deriveHomeSections } from '../../src/components/vision/homeSectionsState.js';
-import { resetFleetPoller } from '../../src/lib/fleetPoller.js';
+import { resetFleetPoller, FLEET_POLL_MS } from '../../src/lib/fleetPoller.js';
 
 const prov = (r, e, a) => ({ reported: { dispatch_count: r, usd: 0 }, estimated: { dispatch_count: e, usd: 0 }, absent: { dispatch_count: a, usd: 0 } });
 
@@ -232,7 +232,7 @@ describe('FleetUsage seat polling (COST-METER M1 / PROCESS-DATA M1)', () => {
   const body = (pct, stale) => ({ v: 1, generated_at: NOW, seats: { value: { generated_at: NOW, seats: [SEAT({ five_h: { used_pct: pct, resets_at: null } })] }, error: null, ts: 1, stale } });
 
   it('the second poll reaches the meter, and a stale body says so until then', async () => {
-    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] });
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, json: async () => FLEET_BODY })));
     resetFleetPoller();
     const answers = [body(10, true), body(90, false)];
@@ -248,7 +248,7 @@ describe('FleetUsage seat polling (COST-METER M1 / PROCESS-DATA M1)', () => {
   });
 
   it('an older answer never lands over a newer one, and unmount stops the poll', async () => {
-    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] });
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, json: async () => FLEET_BODY })));
     resetFleetPoller();
     const pending = [];
@@ -264,4 +264,66 @@ describe('FleetUsage seat polling (COST-METER M1 / PROCESS-DATA M1)', () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(FLEET_SEATS_POLL_MS * 2); });
     expect(client.getSeats).toHaveBeenCalledTimes(2);
   });
+});
+
+describe('COMP-FLEET-USAGE-FU-1', () => {
+  afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); delete document.visibilityState; });
+  const setVisibility = (v) => { Object.defineProperty(document, 'visibilityState', { value: v, configurable: true }); document.dispatchEvent(new Event('visibilitychange')); };
+  const seatsClient = () => ({ getSeats: vi.fn(async () => seatsBody([SEAT()])), getCredit: undefined });
+
+  it('OBS M2: an empty range with an unreadable build history still shows the source banner', async () => {
+    const cur = usage({ empty: true });
+    cur.incomplete = { marked: true, history_unreadable: 'EACCES: build history unreadable', usd_unknown_count: 0, dispatches_missing_usd: 0 };
+    render(<UsageView client={fakeClient(cur)} now="2026-10-03T12:00:00" initialScope="compose" />);
+    await waitFor(() => screen.getByText('No dispatches in this range'));
+    expect(screen.getByTestId('usage-incomplete').textContent).toContain('Build history unreadable (EACCES: build history unreadable)');
+  });
+
+  it('L1: hidden for 60 s makes no seats call, and coming back visible refreshes once', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] });
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, json: async () => FLEET_BODY })));
+    resetFleetPoller();
+    const client = seatsClient();
+    render(<FleetUsage client={client} now={NOW} />);
+    await waitFor(() => expect(client.getSeats).toHaveBeenCalledTimes(1));
+    await act(async () => { setVisibility('hidden'); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(FLEET_SEATS_POLL_MS * 2); });
+    expect(client.getSeats).toHaveBeenCalledTimes(1);
+    await act(async () => { setVisibility('visible'); await vi.advanceTimersByTimeAsync(0); });
+    await waitFor(() => expect(client.getSeats).toHaveBeenCalledTimes(2));
+    await act(async () => { await vi.advanceTimersByTimeAsync(FLEET_POLL_MS); }); // the next fleet tick is 15 s on: not 60 s since the read
+    expect(client.getSeats).toHaveBeenCalledTimes(2);
+  });
+
+  it('L1: Home\'s glance pauses while hidden the same way', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] });
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, json: async () => FLEET_BODY })));
+    resetFleetPoller();
+    const client = seatsClient();
+    render(<HomeFleetGlance client={client} />);
+    await waitFor(() => expect(client.getSeats).toHaveBeenCalledTimes(1));
+    await act(async () => { setVisibility('hidden'); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(FLEET_SEATS_POLL_MS * 2); });
+    expect(client.getSeats).toHaveBeenCalledTimes(1);
+    await act(async () => { setVisibility('visible'); await vi.advanceTimersByTimeAsync(0); });
+    await waitFor(() => expect(client.getSeats).toHaveBeenCalledTimes(2));
+  });
+
+  for (const [name, el] of [['Usage > Seats and fleet', (c) => <FleetUsage client={c} now={NOW} />], ['Home glance', (c) => <HomeFleetGlance client={c} />]]) {
+    it(`SOURCE-FAULTS M2: ${name} says the dollars are old after one good read and a failed refresh`, async () => {
+      vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] });
+      const good = { generated: NOW, sources: { sm_status: { value: { queue: { value: [], error: null }, ceiling: { value: { line: '$7 of $50', pct: 14, warn: false }, error: null }, spend: { value: { head: 'last 1h $7', rows: [] }, error: null } }, error: null, ts: 1, stale: false } } };
+      let n = 0;
+      vi.stubGlobal('fetch', vi.fn(async () => (++n === 1 ? { ok: true, status: 200, json: async () => good } : { ok: false, status: 503, json: async () => ({}) })));
+      resetFleetPoller();
+      render(el(seatsClient()));
+      await waitFor(() => expect(n).toBeGreaterThanOrEqual(1));
+      await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+      expect(screen.queryByTestId('source-note')).toBeNull(); // healthy: no note
+      await act(async () => { await vi.advanceTimersByTimeAsync(FLEET_POLL_MS); });
+      const note = await screen.findByTestId('source-note');
+      expect(note.textContent).toMatch(/^Fleet unreadable since \d\d:\d\d: fleet route 503; showing the last good read from \d\d:\d\d$/);
+      expect(note.getAttribute('data-stale')).toBe('true');
+    });
+  }
 });

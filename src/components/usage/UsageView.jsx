@@ -219,6 +219,18 @@ function ComposeUsage({ client, now, scopeToggle }) {
 
       {state.error && <div className="text-[12px] text-destructive">Could not load usage: {state.error}</div>}
 
+      {/* the banner shows whatever the range holds: an empty range must not hide an unreadable source */}
+      {cur && cur.incomplete?.marked && (
+        <div className="flex items-center gap-2 text-[11px] text-[hsl(var(--warning))]" data-testid="usage-incomplete">
+          <TriangleAlert className="w-3.5 h-3.5" />
+          {cur.incomplete.history_unreadable && <>Build history unreadable ({cur.incomplete.history_unreadable}): cache rate, build outcomes and wasted spend are missing. </>}
+          {(cur.incomplete.usd_unknown_count > 0 || cur.incomplete.dispatches_missing_usd > 0) && <>
+            Cost incomplete: {plural(cur.incomplete.usd_unknown_count, 'call')} with unknown cost in this range's build records
+            {cur.incomplete.dispatches_missing_usd ? `, ${plural(cur.incomplete.dispatches_missing_usd, 'dispatch', 'dispatches')} without a cost` : ''}.
+          </>}
+        </div>
+      )}
+
       {cur && cur.empty && (
         <EmptyState icon={BarChart3} title="No dispatches in this range"
           description="Compose has not dispatched any agents in this workspace for the selected period." />
@@ -226,16 +238,6 @@ function ComposeUsage({ client, now, scopeToggle }) {
 
       {cur && !cur.empty && (
         <>
-          {cur.incomplete.marked && (
-            <div className="flex items-center gap-2 text-[11px] text-[hsl(var(--warning))]" data-testid="usage-incomplete">
-              <TriangleAlert className="w-3.5 h-3.5" />
-              {cur.incomplete.history_unreadable && <>Build history unreadable ({cur.incomplete.history_unreadable}): cache rate, build outcomes and wasted spend are missing. </>}
-              {(cur.incomplete.usd_unknown_count > 0 || cur.incomplete.dispatches_missing_usd > 0) && <>
-                Cost incomplete: {plural(cur.incomplete.usd_unknown_count, 'call')} with unknown cost in this range's build records
-                {cur.incomplete.dispatches_missing_usd ? `, ${plural(cur.incomplete.dispatches_missing_usd, 'dispatch', 'dispatches')} without a cost` : ''}.
-              </>}
-</div>
-          )}
           <section className="grid grid-cols-2 md:grid-cols-4 gap-2" aria-label="Usage summary">
             {tilesFor(cur, prev).map((tile) => <Tile key={tile.label} {...tile} />)}
           </section>

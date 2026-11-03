@@ -6,7 +6,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, readFileSync, writeFileSync, existsSync, chmodSync } from 'node:fs';
+import { mkdtempSync, rmSync, readFileSync, writeFileSync, existsSync, chmodSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { appendBuildHistory, readBuildHistory } from '../lib/build-history.js';
@@ -283,6 +283,22 @@ test('readBuildHistory: an unreadable file warns and throws with the fs code and
   } finally {
     console.warn = realWarn;
     chmodSync(join(dir, 'build-history.jsonl'), 0o600);
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('readBuildHistory: a data dir whose parent cannot be traversed is an error with the fs code, not an empty history', { skip: process.getuid?.() === 0 }, () => {
+  const dir = mkdtempSync(join(tmpdir(), 'bh-parent-'));
+  const origWarn = console.warn;
+  console.warn = () => {};
+  try {
+    mkdirSync(join(dir, 'locked'));
+    chmodSync(join(dir, 'locked'), 0o000);
+    assert.throws(() => readBuildHistory(join(dir, 'locked')), (e) => e.code === 'EACCES');
+    assert.deepEqual(readBuildHistory(join(dir, 'never-created')), [], 'ENOENT stays an empty history');
+  } finally {
+    console.warn = origWarn;
+    chmodSync(join(dir, 'locked'), 0o700);
     rmSync(dir, { recursive: true, force: true });
   }
 });
