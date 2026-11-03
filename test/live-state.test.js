@@ -283,6 +283,82 @@ test('CLI as a process: exit 2 on usage, exit 3 off a workspace, stdout JSON on 
   assert.equal(JSON.parse(ok.stdout).view.workspace.root, root);
 });
 
+// ── COMP-DOGFOOD-LIVE-STATE-KEY-1: the store remembers every keyed event ─────
+
+test('key: a superseded order still answers its key, so the replay writes nothing', () => {
+  const { dataDir } = workspace();
+  const a = addOrder(dataDir, { text: 'keep the lane small', source: 'ledger.md#ab', key: 'owner-ledger:ab' }, { now: NOW });
+  assert.equal(a.created, true);
+  assert.equal(a.order.key, 'owner-ledger:ab');
+  supersedeOrder(dataDir, { id: 'LO-1', superseded_by: 'manual' }, { now: NOW });
+  const again = addOrder(dataDir, { text: 'keep the lane small', source: 'ledger.md#ab', key: 'owner-ledger:ab' }, { now: NOW });
+  assert.equal(again.created, false);
+  assert.equal(again.handled, true);
+  assert.deepEqual(again.superseded, []);
+  assert.equal(again.order.id, 'LO-1');
+  const store = readStore(dataDir);
+  assert.equal(store.live_orders.length, 1);
+  assert.equal(store.next_seq, 2, 'a handled key burns no id');
+  assert.deepEqual(activeOrders(store, NOW), [], 'the retired order stays retired');
+});
+
+test('key: a handled key also wins over a different text and over supersedes (nothing is retired by the skipped add)', () => {
+  const { dataDir } = workspace();
+  addOrder(dataDir, { text: 'one', source: 's', key: 'k1' }, { now: NOW });
+  addOrder(dataDir, { text: 'two', source: 's' }, { now: NOW });
+  const r = addOrder(dataDir, { text: 'reworded', source: 's', key: 'k1', supersedes: ['LO-2'] }, { now: NOW });
+  assert.equal(r.handled, true);
+  assert.deepEqual(activeOrders(readStore(dataDir), NOW).map((o) => o.id).sort(), ['LO-1', 'LO-2']);
+});
+
+test('key: without a key the behavior is as before (no `handled`, a retired order can be added again)', () => {
+  const { dataDir } = workspace();
+  const a = addOrder(dataDir, { text: 'same', source: 's' }, { now: NOW });
+  assert.equal('handled' in a, false);
+  assert.equal('key' in a.order, false);
+  supersedeOrder(dataDir, { id: 'LO-1', superseded_by: 'manual' }, { now: NOW });
+  const b = addOrder(dataDir, { text: 'same', source: 's' }, { now: NOW });
+  assert.equal(b.created, true);
+  assert.equal(b.order.id, 'LO-2');
+});
+
+test('key: an invalid key is refused and writes nothing', () => {
+  const { dataDir } = workspace();
+  for (const key of ['has space', 'semi;colon', 'x'.repeat(129), '', 7, 'ünï']) {
+    assert.throws(() => addOrder(dataDir, { text: 't', source: 's', key }, { now: NOW }),
+      (err) => err instanceof LiveStateError && err.code === 'invalid', `key ${JSON.stringify(key)}`);
+  }
+  assert.equal(readStore(dataDir).live_orders.length, 0);
+  assert.equal(addOrder(dataDir, { text: 't', source: 's', key: 'x'.repeat(128) }, { now: NOW }).created, true, '128 chars is the bound');
+});
+
+test('key CLI: add --key replies handled on the second call, also after a supersede', () => {
+  const { root } = workspace();
+  const add = () => JSON.parse(cliRun(['add', '--root', root, '--text', 'o', '--source', 'ledger.md#cd', '--key', 'owner-ledger:cd'], { now: NOW }));
+  assert.equal(add().created, true);
+  JSON.parse(cliRun(['supersede', '--root', root, '--id', 'LO-1', '--by', 'manual'], { now: NOW }));
+  const r = add();
+  assert.equal(r.handled, true);
+  assert.equal(r.created, false);
+  assert.deepEqual(JSON.parse(cliRun(['read', '--root', root], { now: NOW })).view.orders, []);
+});
+
+test('key: eight processes adding one key at once create one order', () => {
+  const { root, dataDir } = workspace();
+  const cli = join(REPO, 'lib', 'live-state-cli.js');
+  const env = { ...process.env };
+  delete env.COMPOSE_SESSION_PROFILE;
+  const script = `const {spawn}=require('node:child_process');let done=0;const out=[];
+    for(let i=0;i<8;i++){const c=spawn(process.execPath,[${JSON.stringify(cli)},'add','--root',${JSON.stringify(root)},'--text','race','--source','s'+i,'--key','race-1'],{env:process.env});
+      let b='';c.stdout.on('data',d=>b+=d);c.on('close',code=>{out.push([code,b.trim()]);if(++done===8)console.log(JSON.stringify(out));});}`;
+  const r = spawnSync(process.execPath, ['-e', script], { encoding: 'utf8', env });
+  assert.equal(r.status, 0, r.stderr);
+  const replies = JSON.parse(r.stdout);
+  assert.ok(replies.every(([code]) => code === 0), r.stdout);
+  assert.equal(replies.filter(([, b]) => JSON.parse(b).created).length, 1);
+  assert.equal(readStore(dataDir).live_orders.length, 1);
+});
+
 // ── the contract ─────────────────────────────────────────────────────────────
 
 test('contract: the written store and the read view validate against live-state.schema.json', () => {
