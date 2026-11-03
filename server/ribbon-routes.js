@@ -238,9 +238,11 @@ export function attachRibbonRoutes(app, { remote = false, env = process.env, dep
           row.spans.sort((x, y) => Date.parse(x.start) - Date.parse(y.start) || Date.parse(x.end) - Date.parse(y.end));
           row.idle = false;
         }
-        // F2 (U2): the queue is the "at now" owner source, so a stamp owner span that is open or repeats a queue ask is dropped.
+        // U3-DATA: a stamp is matched to its queue ask by identity, the queue draws the time it covers, an open stamp with no
+        // ask is clipped at this read (`reconcileOwnerSpans`). The queue was read, so `asOf` is this request's clock.
         for (const row of body.lanes) {
-          row.spans = reconcileOwnerSpans(row.spans);
+          row.spans = reconcileOwnerSpans(row.spans, { asOf: t0 })
+            .sort((x, y) => Date.parse(x.start) - Date.parse(y.start) || Date.parse(x.end) - Date.parse(y.end));
           row.idle = !row.current && row.spans.length === 0 && (row.marks || []).length === 0;
         }
         body.owner = { open: ow.open };

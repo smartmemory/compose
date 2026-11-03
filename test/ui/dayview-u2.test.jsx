@@ -97,8 +97,8 @@ describe('U2 F2: one ask draws one owner span', () => {
     const ops = d.lanes.find((l) => l.lane === 'ops');
     const own = ops.spans.find((s) => s.kind === 'wait' && s.cause === 'owner');
     // The stamp span starts before the window (clipped to `from`, real start in `since`), and is open (extended to now).
-    const stamp = { ...own, start: d.from, since: '2026-10-30T10:40:00-07:00', open: true };
-    ops.spans = reconcileOwnerSpans([...ops.spans.filter((s) => s !== own), stamp, { ...own, queueId: 'A' }]);
+    const stamp = { ...own, unit: own.unit ?? 'U-ask', start: d.from, since: '2026-10-30T10:40:00-07:00', open: true };
+    ops.spans = reconcileOwnerSpans([...ops.spans.filter((s) => s !== own), stamp, { ...own, unit: stamp.unit, start: d.from, since: stamp.since, queueId: 'A' }], { asOf: Date.parse(d.now) });
     render(<DayRibbon data={d} from={d.from} to={d.to} now={d.now} />);
     const drawn = screen.getByTestId('lane-ops').querySelectorAll('[data-testid="span-wait"][data-cause="owner"]');
     expect(drawn.length).toBe(1);

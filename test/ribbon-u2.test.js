@@ -21,20 +21,21 @@ const own = (start, end, over = {}) => ({ kind: 'wait', cause: 'owner', start: i
 
 describe('F2: reconcileOwnerSpans, the queue is the "at now" owner source', () => {
   const work = { kind: 'work', start: iso(5), end: iso(0) };
-  // [name, spans, kept indexes]
-  const ROWS = [
-    ['an open stamp span (extended to now) is dropped: the queue draws the ask', [work, own(3, 0, { open: true })], [0]],
-    ['a closed stamp span under a queue span is the same ask, drawn once', [own(3, 1), own(3, 0, { queueId: 'A' })], [1]],
-    ['a closed stamp span with no queue span over it is history and stays', [own(9, 7), own(2, 0, { queueId: 'B' })], [0, 1]],
-    ['an answered ask (no queue span) and an open stamp draw nothing at now', [work, own(4, 0, { open: true })], [0]],
-    ['queue spans and other waits are never touched', [own(2, 0, { queueId: 'C' }), { kind: 'wait', cause: 'review', start: iso(2), end: iso(0), open: true }], [0, 1]],
-    ['no spans', undefined, []],
-  ];
-  it('rows', () => {
-    for (const [name, spans, keep] of ROWS) assert.deepEqual(reconcileOwnerSpans(spans), keep.map((i) => spans[i]), name);
+  const AS_OF = NOW;
+  // The rule itself (identity match, subtraction, clipping, unreadable queue) is pinned in ribbon-u3-data.test.js.
+  it('an open stamp with no queue span is clipped at the read and not open; queue spans and other waits are never touched', () => {
+    const stampOpen = own(3, -1, { open: true });
+    const other = { kind: 'wait', cause: 'review', start: iso(2), end: iso(0), open: true };
+    const q = own(2, 0, { queueId: 'C' });
+    assert.deepEqual(reconcileOwnerSpans([work, stampOpen, q, other], { asOf: AS_OF }), [work, { ...stampOpen, end: iso(0), open: false }, q, other]);
+    assert.deepEqual(reconcileOwnerSpans(undefined, { asOf: AS_OF }), []);
+  });
+  it('a closed stamp with no queue span over it is history and stays', () => {
+    const spans = [own(9, 7), own(2, 0, { queueId: 'B' })];
+    assert.deepEqual(reconcileOwnerSpans(spans, { asOf: AS_OF }), spans);
   });
   it('one ask (stamp + queue) draws one owner wait at now', () => {
-    const lanes = [{ lane: 'web', spans: reconcileOwnerSpans([own(3, 0, { open: true }), own(3, 0, { queueId: 'A' })]) }];
+    const lanes = [{ lane: 'web', unit: 'U', spans: reconcileOwnerSpans([own(3, 0, { open: true, unit: 'U' }), own(3, 0, { queueId: 'A', unit: 'U' })], { asOf: AS_OF }) }];
     assert.deepEqual(ownerWaitsAtNow(lanes, NOW), [{ lane: 'web', queueId: 'A' }]);
   });
 });
