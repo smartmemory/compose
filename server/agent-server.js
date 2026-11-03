@@ -4,10 +4,13 @@ import express from 'express';
 import cors from 'cors';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { createAgentApp } from './agent-workspace.js';
+import { loopbackGuard } from './loopback-guard.js';
 
 const PORT = process.env.AGENT_PORT || 4002;
 const workspaceServer = createAgentApp({ query });
 const app = express();
+// COMP-LOOPBACK-HOST-GUARD-1: Host only (the remote-mode proxy strips Host but forwards the browser's Origin); see loopback-guard.js.
+app.use(loopbackGuard({ origin: false }));
 app.use(cors({ origin: /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/ }));
 app.use(workspaceServer.app);
 

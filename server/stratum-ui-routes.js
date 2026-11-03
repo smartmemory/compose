@@ -18,6 +18,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { resolveStratumUiDir } from '../lib/stratum-ui-link.js';
+import { loopbackAllowedHosts } from './loopback-guard.js';
 import { resolveStratumBin } from '../lib/stratum-engine.js';
 import { getTargetRoot } from './project-root.js';
 import { resolveStratumEngineDist, SPECS_PATH } from './stratum-spec-routes.js';
@@ -29,6 +30,7 @@ export async function attachStratumUiRoutes(app, { remote = false, uiDir = resol
   if (!uiDir || remote) return false;
   const { createHandler } = await import(pathToFileURL(join(uiDir, 'server', 'handler.mjs')).href);
   const handler = createHandler({
+    allowedHosts: loopbackAllowedHosts, // defense in depth: the handler refuses a non-loopback Host even if mounted without the app guard
     flowsDir: env.STRATUM_STATE_ROOT || join(homedir(), '.stratum', 'ts', 'flows'),
     stratumBin: resolveStratumBin('cli', getTargetRoot()),
     ...(engineDist ? { engineDist } : {}),

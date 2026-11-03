@@ -37,6 +37,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { getTargetRoot } from './project-root.js';
+import { isLoopbackRequest } from './loopback-guard.js';
 
 const PREFIX = '/api/wiki';
 export const WIKI_WORKSPACE = 'wiki-eng';
@@ -152,8 +153,6 @@ export function wikiChildEnv(procName, env, tokenEnv) {
   for (const name of [].concat(tokenEnv)) if (typeof name === 'string') delete out[name];
   return out;
 }
-const LOOPBACK_HOST_RE = /^(127\.0\.0\.1|localhost)(:\d{1,5})?$/;
-const LOOPBACK_ORIGIN_RE = /^https?:\/\/(127\.0\.0\.1|localhost)(:\d{1,5})?$/;
 
 /** The raw `wiki` block of `<root>/.compose/compose.json` ({} when missing or malformed). */
 export function readWikiConfig(root) {
@@ -184,8 +183,7 @@ const refuse = (res, status, code, message) => send(res, error(status, code, mes
 
 /** Loopback Host and (when present) loopback Origin; also gates POST /api/fleet/projects (COMP-COCKPIT-FLEET-PROJECTS-1). */
 export function localCaller(req) {
-  const origin = req.headers.origin;
-  return LOOPBACK_HOST_RE.test(req.headers.host ?? '') && (origin === undefined || LOOPBACK_ORIGIN_RE.test(origin));
+  return isLoopbackRequest(req);
 }
 
 /** Returns true when mounted, false when skipped (remote mode). */

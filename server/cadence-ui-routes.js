@@ -11,6 +11,7 @@ import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { resolveCadenceUiDir } from '../lib/cadence-ui-link.js';
+import { loopbackAllowedHosts } from './loopback-guard.js';
 
 const PREFIX = '/api/cadence-ui';
 
@@ -29,6 +30,7 @@ export async function attachCadenceUiRoutes(app, {
   if (!uiDir || remote) return false;
   const { createHandler } = await import(pathToFileURL(join(uiDir, 'server', 'handler.mjs')).href);
   const handler = createHandler({
+    allowedHosts: loopbackAllowedHosts, // defense in depth: the handler refuses a non-loopback Host even if mounted without the app guard
     opsRoot: resolve(opsRoot),
     stateDir: resolve(stateDir),
     scriptsDir: resolve(scriptsDir),

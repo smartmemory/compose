@@ -25,6 +25,7 @@ import { attachStratumUiRoutes, stratumUiAvailable } from './stratum-ui-routes.j
 import { attachStratumSpecRoutes } from './stratum-spec-routes.js';
 import { attachCadenceUiRoutes } from './cadence-ui-routes.js';
 import { attachWikiRoutes } from './wiki-routes.js';
+import { loopbackGuard, guardUpgrade } from './loopback-guard.js';
 
 // Re-export for Boundary Map (S02) and tests
 export { resolveComposeHost, attachAgentProxy };
@@ -122,6 +123,10 @@ ensureDataDir();
 const _authStore = createAuthStore(getDataDir());
 configureAuthStore(_authStore);
 
+// COMP-LOOPBACK-HOST-GUARD-1: local mode answers only a loopback Host/Origin (DNS rebinding makes a hostile page same-origin, so CORS
+// alone cannot stop it). First middleware, ahead of cors and both sub-app mounts. Remote mode is off here: it is reached by a
+// non-loopback Host on purpose and the auth gate below covers it.
+if (!remoteMode) app.use(loopbackGuard());
 app.use(cors({ origin: /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/ }));
 // COMPOSE-STRAT-TAB-1: /api/stratum-ui/* reads its own request bodies, so it mounts BEFORE express.json().
 await attachStratumUiRoutes(app, { remote: remoteMode });
@@ -271,6 +276,7 @@ app.get(/^\/m(\/|$)/, (_req, res) => {
 // Manual WebSocket upgrade routing — avoids the ws library bug where multiple
 // WebSocketServers on the same HTTP server write 400 on each other's connections
 server.on('upgrade', (req, socket, head) => {
+  if (!remoteMode && !guardUpgrade(req, socket)) return;
   // S02: remote-mode WS auth — check ?token= (sensitive or JWT) before upgrade
   // Token value is never logged.
   if (remoteMode && !wsUpgradeTokenOk(_authStore, req)) {
