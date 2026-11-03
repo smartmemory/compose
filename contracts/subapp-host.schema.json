@@ -20,7 +20,7 @@
   },
   "definitions": {
     "selection": {
-      "description": "What the user has selected in the host. Every field optional; an empty object means nothing is selected and every room shows everything. Rooms filter by the fields they understand: Stratum runs by `featureCode`; the Cadence belt by `unit` and `lane` only (the host sends Cadence no `featureCode`, because belt unit ids are not feature codes, and sends the lane mapped to its ops lane; COMP-SUBAPP-HOST-1-FU-1); the wiki opens `featureCode`'s hub.",
+      "description": "What the user has selected in the host. Every field optional; an empty object means nothing is selected and every room shows everything. Rooms filter by the fields they understand: Stratum runs by `featureCode`; the Cadence belt by `unit`, `featureCode` and `lane` (`featureCode` keeps the units whose stamped `features` contain that code exactly, never by id or text; the lane is sent mapped to its ops lane; COMP-SUBAPP-HOST-1-FU-1, COMP-CADENCE-FEATURE-FILTER-2); the wiki opens `featureCode`'s hub.",
       "type": "object",
       "additionalProperties": false,
       "properties": {

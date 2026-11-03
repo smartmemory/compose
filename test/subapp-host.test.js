@@ -68,6 +68,7 @@ describe('selection', () => {
     assert.deepEqual(roomScope(sel, 'stratum'), { key: 'featureCode', value: 'F-1' });
     assert.deepEqual(roomScope(sel, 'cadence'), { key: 'unit', value: 'U-1' });
     assert.deepEqual(roomScope({ lane: 'ops' }, 'cadence'), { key: 'lane', value: 'ops' });
+    assert.deepEqual(roomScope({ featureCode: 'F-1', lane: 'ops' }, 'cadence'), { key: 'featureCode', value: 'F-1' });
     assert.equal(roomScope({ lane: 'ops' }, 'stratum'), null);
     assert.equal(scopeLabel(roomScope(sel, 'wiki')), 'filtered to F-1');
     assert.equal(scopeLabel({ key: 'lane', value: 'ops' }), 'filtered to lane ops');
@@ -79,12 +80,12 @@ describe('per-room selection (COMP-SUBAPP-HOST-1-FU-1)', () => {
   const sel = { featureCode: 'F-1', lane: 'ops', unit: 'U-1' };
   const model = { configured: true, projects: [{ id: 'forge' }], laneIndex: { forge: { project: 'forge', laneIds: ['compose', 'stratum'] }, choir: { project: 'choir', laneIds: ['choir'] }, main: { project: 'sm', laneIds: ['main'] } } };
 
-  test('Cadence gets no featureCode (belt units never match one); Stratum and Wiki still get it', () => {
-    assert.deepEqual(roomSelection(sel, 'cadence'), { unit: 'U-1', lane: 'ops' });
-    assert.deepEqual(roomSelection({ featureCode: 'F-1' }, 'cadence'), {});
+  test('Cadence, Stratum and Wiki each get the featureCode (Cadence matches it against stamped features)', () => {
+    assert.deepEqual(roomSelection(sel, 'cadence'), { unit: 'U-1', featureCode: 'F-1', lane: 'ops' });
+    assert.deepEqual(roomSelection({ featureCode: 'F-1' }, 'cadence'), { featureCode: 'F-1' });
     assert.deepEqual(roomSelection(sel, 'stratum'), { featureCode: 'F-1' });
     assert.deepEqual(roomSelection(sel, 'wiki'), { featureCode: 'F-1' });
-    assert.equal(roomScope(roomSelection({ featureCode: 'F-1' }, 'cadence'), 'cadence'), null);
+    assert.deepEqual(roomScope(roomSelection({ featureCode: 'F-1' }, 'cadence'), 'cadence'), { key: 'featureCode', value: 'F-1' });
   });
 
   test('a host lane maps to the ops lane through the project model; an unmapped lane gives none', () => {

@@ -11,7 +11,7 @@ import { itemFeatureCode } from './focusedFeature.js';
 /** The selection fields each room filters by, in the order its chip names them. */
 export const ROOM_SCOPE = {
   stratum: ['featureCode'],
-  cadence: ['unit', 'lane'],
+  cadence: ['unit', 'featureCode', 'lane'],
   wiki: ['featureCode'],
 };
 

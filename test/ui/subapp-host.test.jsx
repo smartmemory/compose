@@ -56,12 +56,12 @@ describe.skipIf(!stratumLinked)('Stratum room scoped by the host', () => {
 
 // ---- Cadence
 const at = '2026-10-30T00:00:00Z';
-const unit = (id, lane = 'ops') => ({
+const unit = (id, lane = 'ops', features) => ({
   id, lane, column: 'ready', rawState: 'ready', title: `unit ${id}`, priority: 'P1', model: null,
-  since: at, blocker: null, blockers: [], decision: null, dependsOn: [], sha: null,
+  since: at, blocker: null, blockers: [], decision: null, dependsOn: [], sha: null, ...(features ? { features } : {}),
 });
 const cadenceClient = () => ({
-  getBelt: vi.fn(async () => ({ generatedAt: at, units: [unit('COMP-TUI-4'), unit('COMP-TUI-4-FIX'), unit('OTHER-1', 'main')], lanes: ['ops', 'main'], landedWindowH: 24, offBelt: 0, readiness: null, errors: [] })),
+  getBelt: vi.fn(async () => ({ generatedAt: at, units: [unit('COMP-TUI-4', 'ops', ['COMP-TUI-4']), unit('COMP-TUI-4-FIX'), unit('OTHER-1', 'main')], lanes: ['ops', 'main'], landedWindowH: 24, offBelt: 0, readiness: null, errors: [] })),
   getSeats: vi.fn(async () => ({ generatedAt: at, source: 'cadence', seats: [], recommendation: null, unassignedJobs: [], errors: [] })),
   getChains: vi.fn(async () => ({ generatedAt: at, chains: [], errors: [] })),
   getLive: vi.fn(async () => ({ generatedAt: at, lanes: [], errors: [] })),
@@ -80,10 +80,10 @@ describe.skipIf(!cadenceLinked)('Cadence room scoped by the host', () => {
     await waitFor(() => expect(unitIds(container)).toEqual(['COMP-TUI-4', 'COMP-TUI-4-FIX', 'OTHER-1']));
   });
 
-  it('selecting a feature leaves the Board unfiltered with no chip (belt units are not named after features)', async () => {
+  it('selecting a feature passes featureCode to Cadence: only units stamped with it show, with a chip (exact match, not the id)', async () => {
     const { container } = render(<CadenceView client={cadenceClient()} host={host('COMP-TUI-4')} />);
-    await waitFor(() => expect(unitIds(container)).toHaveLength(3));
-    expect(screen.queryByTestId('host-scope-chip')).toBeNull();
+    await waitFor(() => expect(unitIds(container)).toEqual(['COMP-TUI-4']));
+    expect(screen.getByTestId('host-scope-chip').textContent).toContain('filtered to COMP-TUI-4');
   });
 
   it('a selected unit shows that unit alone; no host shows every unit and no chip', async () => {
