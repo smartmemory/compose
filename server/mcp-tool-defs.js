@@ -15,7 +15,7 @@
  * against it); this is only its wire summary, so a client sees the kinds.
  */
 const EVIDENCE_PROP = {
-  description: 'Receipt for the claim, re-checked by the server (contracts/evidence.schema.json): an object {kind, at (ISO time), by (session), ...kind fields} with kind sha {repo, sha} | process {pid, launched_at, label, exit_file?, log?} (checked at launch + 120 s or later) | file {path, line?} | log {path, line} | screenshot {path, region?} | command {command, output_line, log} | pixel {path, point {x, y}, expected "#rrggbb"}; or an "ev:<id>" from `node lib/evidence-cli.js record`. Refused without one (EVIDENCE_REQUIRED) unless the workspace sets capabilities.evidence false. The accepted id comes back as evidence_id.',
+  description: 'Receipt for the claim, re-checked by the server (contracts/evidence.schema.json): an object {kind, at (ISO time), by (session), ...kind fields} with kind sha {repo, sha, branch? (a land_branches name, e.g. "2.0")} | process {pid, launched_at, label, exit_file?, log?} (checked at launch + 120 s or later) | file {path, line?} | log {path, line} | screenshot {path, region?} | command {command, output_line, log} | pixel {path, point {x, y}, expected "#rrggbb"}; or an "ev:<id>" from `node lib/evidence-cli.js record`. Refused without one (EVIDENCE_REQUIRED) unless the workspace sets capabilities.evidence false. The accepted id comes back as evidence_id.',
   anyOf: [
     { type: 'object', required: ['kind', 'at', 'by'], properties: { kind: { type: 'string', enum: ['sha', 'process', 'file', 'log', 'screenshot', 'command', 'pixel'] } } },
     { type: 'string', pattern: '^ev:[0-9a-f]{16}$' },

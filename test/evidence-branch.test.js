@@ -23,7 +23,7 @@ after(() => rmSync(SCRATCH, { recursive: true, force: true }));
 const AT = () => new Date().toISOString();
 const BY = 'test-runner';
 
-/** main: A. 2.0: A + B. feature-x: A + C. Returns the three shas. */
+/** main: A. 2.0: A + B (pushed: origin/2.0 = B). feature-x: A + C. Returns the three shas. */
 function makeRepo() {
   const cwd = mkdtempSync(join(SCRATCH, 'repo-'));
   const g = (...a) => spawnSync('git', a, { cwd, encoding: 'utf8' });
@@ -33,6 +33,7 @@ function makeRepo() {
   g('checkout', '-q', '-b', '2.0'); const b = commit('b');
   g('checkout', '-q', 'main'); g('checkout', '-q', '-b', 'feature-x'); const c = commit('c');
   g('checkout', '-q', 'main');
+  g('update-ref', 'refs/remotes/origin/2.0', b);
   return { cwd, a, b, c };
 }
 const rec = (cwd, sha, branch) => ({ kind: 'sha', repo: cwd, sha, at: AT(), by: BY, ...(branch ? { branch } : {}) });
@@ -73,6 +74,23 @@ describe('sha receipt with a declared land branch', () => {
     writeFileSync(join(other, 'f'), 'f'); g('add', '.'); g('commit', '-q', '-m', 'f');
     const sha = g('rev-parse', 'HEAD').stdout.trim();
     const r = ev.verifyEvidence(rec(other, sha, '2.0'));
+    assert.equal(r.ok, false);
+    assert.match(r.reasons[0], /no branch 2\.0/);
+  });
+  test('a commit only on a local 2.0, not on origin/2.0, is refused: a land is a push', () => {
+    const r2 = makeRepo();
+    const g = (...x) => spawnSync('git', x, { cwd: r2.cwd, encoding: 'utf8' });
+    g('update-ref', 'refs/remotes/origin/2.0', r2.a); // origin lags: B is local-only
+    const r = ev.verifyEvidence(rec(r2.cwd, r2.b, '2.0'));
+    assert.equal(r.ok, false, JSON.stringify(r));
+    assert.match(r.reasons[0], /not on the land branch \(2\.0\)/);
+    g('update-ref', 'refs/remotes/origin/2.0', r2.b); // pushed
+    assert.equal(ev.verifyEvidence(rec(r2.cwd, r2.b, '2.0')).ok, true);
+  });
+  test('a repo with a local 2.0 but no origin/2.0 keeps the has-no-branch refusal', () => {
+    const r2 = makeRepo();
+    spawnSync('git', ['update-ref', '-d', 'refs/remotes/origin/2.0'], { cwd: r2.cwd });
+    const r = ev.verifyEvidence(rec(r2.cwd, r2.b, '2.0'));
     assert.equal(r.ok, false);
     assert.match(r.reasons[0], /no branch 2\.0/);
   });
