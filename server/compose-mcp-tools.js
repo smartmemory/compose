@@ -846,12 +846,16 @@ export async function toolKillFeature({ id, reason }) {
 export async function toolCompleteFeature(args = {}) {
   const { id, commit_sha, tests_pass, files_changed, notes } = args;
   const body = {};
-  if (commit_sha !== undefined) body.commit_sha = commit_sha;
+  // COMP-DOGFOOD-LAND-1: a completion lands on a real commit, in every git workspace (guard or not).
+  const { resolveLandSha } = await import('../lib/land-sha.js');
+  const landed = resolveLandSha({ code: _featureCodeOf(id), commit_sha, branch: args.branch, repo: args.repo, evidence: args.evidence }, { root: getTargetRoot() });
+  if (landed.commit_sha !== undefined) body.commit_sha = landed.commit_sha;
   if (tests_pass !== undefined) body.tests_pass = tests_pass;
   if (files_changed !== undefined) body.files_changed = files_changed;
   if (notes !== undefined) body.notes = notes;
-  return withEvidence('complete_feature', args, { feature: _featureCodeOf(id), claim: 'COMPLETE' },
+  const result = await withEvidence('complete_feature', args, { feature: _featureCodeOf(id), claim: 'COMPLETE' },
     () => _postLifecycle(id, 'complete', body));
+  return result && typeof result === 'object' && !Array.isArray(result) ? { ...result, sha_source: landed.sha_source } : result;
 }
 
 /** The feature code behind a vision item id (falls back to the id itself). */

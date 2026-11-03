@@ -213,12 +213,14 @@ export const TOOLS = [
     name: 'complete_feature',
     effect: 'mutating',
     writes: ["feature-json"],
-    description: 'Mark a feature as complete. Only callable from the ship phase. For a managed build-mode feature (one with a feature.json) this goes through the completion gate (COMP-COMPLETION-GATE): the commit is verified and tests attested when capabilities.guard is on, ONE guarded transition is ledgered, and the gate writes the completion record, feature.status COMPLETE, ROADMAP.md and the cockpit item. A refusal (bad evidence, KILLED feature, guard refused) returns 422 and writes nothing. commit_sha is required under the guard; with the guard off a commit-less completion records a no-commit completion. Fix/plan items and items with no feature.json transition as before.',
+    description: 'Mark a feature as complete. Only callable from the ship phase. For a managed build-mode feature (one with a feature.json) this goes through the completion gate (COMP-COMPLETION-GATE): the commit is verified and tests attested when capabilities.guard is on, ONE guarded transition is ledgered, and the gate writes the completion record, feature.status COMPLETE, ROADMAP.md and the cockpit item. A refusal (bad evidence, KILLED feature, guard refused) returns 422 and writes nothing. A commit is required in every git workspace, guard or not (COMP-DOGFOOD-LAND-1): name commit_sha, or branch (its tip is taken), or neither when exactly one local or origin/ branch ends with the feature code; no match is refused SHA_REQUIRED, several SHA_AMBIGUOUS, a commit_sha off the named branch SHA_NOT_ON_BRANCH, a sha receipt for another commit EVIDENCE_SHA_MISMATCH. The result carries sha_source (given, branch-tip, feature-branch). A workspace that is not a git repo keeps the commit-less path with a WARNING. Fix/plan items and items with no feature.json transition as before.',
     inputSchema: {
       type: 'object',
       properties: {
         id: { type: 'string', description: 'Item ID' },
-        commit_sha: { type: 'string', description: 'Full 40-char commit SHA. Required to write a completion record.' },
+        commit_sha: { type: 'string', description: 'Commit SHA (7-40 hex). Must exist; with branch it must be that branch\'s tip or an ancestor. Omit to take it from branch, or from the one branch named after the feature code.' },
+        branch: { type: 'string', description: 'Git branch the work landed from; its tip is the commit when commit_sha is omitted.' },
+        repo: { type: 'string', description: 'Absolute path of the git repo holding the commit. Default: the git top level of the workspace root.' },
         tests_pass: { type: 'boolean', description: 'Defaults to true when commit_sha is provided.' },
         files_changed: { type: 'array', items: { type: 'string' }, description: 'Repo-relative paths committed in the SHA.' },
         notes: { type: 'string', description: 'One-line note for the completion record.' },
