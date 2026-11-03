@@ -312,7 +312,7 @@ export const TOOLS = [
     name: 'scaffold_feature',
     effect: 'mutating',
     writes: [],
-    description: 'Create feature folder with template stubs for all phase artifacts. Existing files are never overwritten.',
+    description: 'Create feature folder with template stubs for all phase artifacts. Existing files are never overwritten. With kind "control" (a new guard, daemon, gate, watcher or kill switch) it also sets kind in the existing feature.json, and refuses FEATURE_JSON_REQUIRED when there is none; validate_feature then requires a linked incident (CONTROL_NO_INCIDENT).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -322,6 +322,7 @@ export const TOOLS = [
           items: { type: 'string' },
           description: 'Limit to specific artifacts (e.g. ["design.md", "blueprint.md"]). Omit for all.',
         },
+        kind: { type: 'string', enum: ['control'], description: 'Set kind in the existing feature.json. Omit for an ordinary feature.' },
       },
       required: ['featureCode'],
     },
@@ -435,7 +436,7 @@ export const TOOLS = [
   {
     name: 'validate_feature',
     effect: 'read',
-    description: 'Cross-check a single feature against ROADMAP, vision-state, feature.json, folder contents, linked artifacts, and cross-references. Returns structured findings with severity (error/warning/info). FEATURE_NOT_FOUND emitted as a finding (not thrown) when the code matches strict regex but exists in no source.',
+    description: 'Cross-check a single feature against ROADMAP, vision-state, feature.json, folder contents, linked artifacts, and cross-references. Returns structured findings with severity (error/warning/info). FEATURE_NOT_FOUND emitted as a finding (not thrown) when the code matches strict regex but exists in no source. A feature with kind "control" and no linked incident artifact fails CONTROL_NO_INCIDENT (the FILING BAR rule).',
     inputSchema: {
       type: 'object',
       required: ['feature_code'],
@@ -532,8 +533,9 @@ export const TOOLS = [
       required: ['feature_code', 'artifact_type', 'path'],
       properties: {
         feature_code: { type: 'string' },
-        artifact_type: { type: 'string', description: 'e.g. "journal", "snapshot", "finding", "report-supplement", "link", "external"' },
+        artifact_type: { type: 'string', description: 'e.g. "journal", "snapshot", "finding", "report-supplement", "link", "external", "incident" (a ledger line that justifies a kind "control" feature; needs line)' },
         path: { type: 'string', description: 'Repo-relative path. Must exist; cannot contain ".." after normalization.' },
+        line: { type: 'integer', minimum: 1, description: 'Required for artifact_type "incident": the 1-based ledger line, which must start with "- " (else INCIDENT_LINE_INVALID). The path, line and first 200 characters are stored.' },
         status: { type: 'string', enum: ['current', 'superseded', 'historical'] },
         force: { type: 'boolean', description: 'Overwrite an existing entry with the same (type, path)' },
         idempotency_key: { type: 'string' },

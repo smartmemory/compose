@@ -9,6 +9,8 @@ import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { ArtifactManager, artifactKeysForMode } from './artifact-manager.js';
+import { readFeature, updateFeature } from '../lib/feature-json.js';
+import { loadFeaturesDir } from '../lib/project-paths.js';
 import { getTargetRoot, getDataDir, resolveProjectPath, switchProject, setCurrentWorkspaceId, getCurrentWorkspaceId, loadProjectConfig, isLifecycleEnabled } from './project-root.js';
 import { resolveProfile, isToolAllowed } from './mcp-tool-policy.js';
 import { getRoadmap } from '../lib/get-roadmap.js';
@@ -909,10 +911,25 @@ export function toolAssessFeatureArtifacts({ featureCode, mode = 'build' }) {
   return manager.assess(featureCode);
 }
 
-export function toolScaffoldFeature({ featureCode, only, mode = 'build' }) {
+export function toolScaffoldFeature({ featureCode, only, mode = 'build', kind }) {
   const featureRoot = resolveProjectPath('features');
+  if (kind === undefined) {
+    const manager = new ArtifactManager(featureRoot, mode);
+    return manager.scaffold(featureCode, only ? { only } : undefined);
+  }
+  // COMP-DOGFOOD-CONTROL-INCIDENT-1: `kind` goes into the existing feature.json.
+  // The tool never makes a feature.json, so with none it refuses and makes nothing.
+  if (kind !== 'control') {
+    throw new Error(`INVALID_KIND: scaffold_feature kind must be "control", got ${JSON.stringify(kind)}`);
+  }
+  const cwd = getTargetRoot();
+  if (!readFeature(cwd, featureCode, loadFeaturesDir(cwd))) {
+    throw new Error(`FEATURE_JSON_REQUIRED: ${featureCode} has no feature.json; add a roadmap entry first (add_roadmap_entry), then scaffold with kind "control". Nothing was made.`);
+  }
   const manager = new ArtifactManager(featureRoot, mode);
-  return manager.scaffold(featureCode, only ? { only } : undefined);
+  const result = manager.scaffold(featureCode, only ? { only } : undefined);
+  updateFeature(cwd, featureCode, { kind }, loadFeaturesDir(cwd));
+  return { ...result, kind };
 }
 
 // ---------------------------------------------------------------------------

@@ -50,6 +50,11 @@
       "enum": ["front", "refined", "escalated"],
       "description": "COMP-TRIAGE-5: provenance of `lane`/`triageTier` — the front estimator, the doc-reading refinement pass, or an escalation bump."
     },
+    "kind": {
+      "type": "string",
+      "enum": ["control"],
+      "description": "COMP-DOGFOOD-CONTROL-INCIDENT-1: `control` marks a new guard, daemon, gate, watcher or kill switch. validate_feature requires an `incident` artifact on it (CONTROL_NO_INCIDENT). Absent on every ordinary feature."
+    },
     "position": { "type": ["integer", "string"] },
     "parent": { "type": "string" },
     "depends_on": {
@@ -79,9 +84,11 @@
         "type": "object",
         "required": ["type", "path"],
         "properties": {
-          "type": { "type": "string", "enum": ["design", "prd", "architecture", "blueprint", "plan", "report", "journal", "snapshot"] },
+          "type": { "type": "string", "enum": ["design", "prd", "architecture", "blueprint", "plan", "report", "journal", "snapshot", "incident"] },
           "path": { "type": "string" },
-          "status": { "type": "string" }
+          "status": { "type": "string" },
+          "line": { "type": "integer", "minimum": 1, "description": "COMP-DOGFOOD-CONTROL-INCIDENT-1: 1-based line of an `incident` artifact (a ledger line)." },
+          "text": { "type": "string", "maxLength": 200, "description": "COMP-DOGFOOD-CONTROL-INCIDENT-1: first 200 characters of the incident line when it was linked, so a later rewrite of the file is visible." }
         }
       }
     },
