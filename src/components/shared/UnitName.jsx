@@ -1,6 +1,6 @@
 import React from 'react';
 import { useUnitIndex } from '@/lib/useUnitIndex.js';
-import { unitLabel, SOURCE_TEXT } from '@/lib/unitLabel.js';
+import { unitLabel, SOURCE_TEXT, PARTIAL_TEXT } from '@/lib/unitLabel.js';
 import { explain } from '@/lib/glossary.js';
 import { sourceNoteText } from '@/lib/sourceState.js';
 
@@ -12,16 +12,20 @@ import { sourceNoteText } from '@/lib/sourceState.js';
  * text is unchanged for anything reading it, and the same text stays in the native title. Never a button or link.
  * COMP-COCKPIT-SOURCE-FAULTS-1 (FORGE-SMALL-BATCH-3 M1-M2): a failed index reads `source=unavailable`, distinct from
  * a pending request, and names from a retained index after a failed refresh say so in the explanation.
+ * COMP-SOURCE-ENVELOPE-1: an index that answered but is incomplete (`partial`) gives a missing unit "name unavailable",
+ * not "no title recorded", and a found name's explanation says the index is incomplete.
  */
 export default function UnitName({ id, lane, compact = false }) {
   const src = useUnitIndex();
-  const { title, code, source } = unitLabel(id, src.data, lane, { error: src.error });
+  const partial = src.partial?.length ? src.partial : null;
+  const { title, code, source } = unitLabel(id, src.data, lane, { error: src.error, partial });
+  const sourceText = source === 'unavailable' && !src.error && partial ? PARTIAL_TEXT : SOURCE_TEXT[source];
   const gloss = explain(code, lane, src.data);
   const [shown, setShown] = React.useState(false);
   const tipId = React.useId();
   const hover = [
-    title, code, source in SOURCE_TEXT ? SOURCE_TEXT[source] : null, gloss && gloss !== title ? gloss : null,
-    src.stale ? sourceNoteText('unit index', src, { short: true }) : null,
+    title, code, sourceText ?? null, gloss && gloss !== title ? gloss : null,
+    src.stale || partial ? sourceNoteText('unit index', src, { short: true }) : null,
   ].filter(Boolean).join('\n');
   const codeEl = <span className="font-mono text-[11px] text-muted-foreground">{code}</span>;
   return (

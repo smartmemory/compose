@@ -12,6 +12,9 @@ export const SOURCE_TEXT = {
   unavailable: 'the unit names could not be read (unit index unavailable)',
 };
 
+/** COMP-SOURCE-ENVELOPE-1: the explanation for a unit missing from an index its producer reported incomplete. */
+export const PARTIAL_TEXT = 'name unavailable: the unit index is incomplete and this unit is not in the part it read';
+
 /** Exact id first (preferring `lane` when several lanes share it), then a lane-qualified `lane/id`. */
 function findUnit(units, id, lane) {
   const same = units.filter((u) => u.id === id);
@@ -27,12 +30,15 @@ function findUnit(units, id, lane) {
 
 /**
  * → `{title, code, source}`; source is a titleSource, 'none' (known hole or unknown unit), 'loading' (no response yet) or
- * 'unavailable' (COMP-COCKPIT-SOURCE-FAULTS-1, RULE-PLAIN M2: the index request finished and failed, `opts.error`).
+ * 'unavailable' (COMP-COCKPIT-SOURCE-FAULTS-1, RULE-PLAIN M2: the index request finished and failed, `opts.error`; or
+ * COMP-SOURCE-ENVELOPE-1: the unit is missing from an index whose producer said it is incomplete, `opts.partial`, so the
+ * miss is not a known title hole). A unit the partial index did read keeps its title.
  */
-export function unitLabel(id, index, lane, { error = null } = {}) {
+export function unitLabel(id, index, lane, { error = null, partial = null } = {}) {
   const code = String(id ?? '');
   if (!index || !Array.isArray(index.units)) return { title: null, code, source: error ? 'unavailable' : 'loading' };
   const u = findUnit(index.units, code, lane);
-  if (!u || !u.title) return { title: null, code, source: 'none' };
+  if (!u) return { title: null, code, source: partial?.length ? 'unavailable' : 'none' };
+  if (!u.title) return { title: null, code, source: 'none' };
   return { title: u.title, code: u.id, source: u.titleSource ?? 'none' };
 }

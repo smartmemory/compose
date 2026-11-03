@@ -8,7 +8,7 @@
  */
 import { useEffect, useState } from 'react';
 import { wsFetch } from './wsFetch.js';
-import { INITIAL_SOURCE, sourceOk, sourceFail } from './sourceState.js';
+import { INITIAL_SOURCE, sourceFromBody, sourceFail } from './sourceState.js';
 
 export const FLEET_POLL_MS = 15_000;
 
@@ -28,7 +28,7 @@ async function poll() {
   try {
     const res = await wsFetch('/api/fleet');
     if (!res.ok) throw new Error(`fleet route ${res.status}`);
-    emit(sourceOk(await res.json()));
+    emit(sourceFromBody(await res.json()));
   } catch (error) {
     emit(sourceFail(state, error)); // the last good data stays, marked stale (sourceState.js)
   } finally {

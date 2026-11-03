@@ -10,6 +10,7 @@
  * or the unit index is still loading it draws a skeleton. Each count links to the place that lists those things.
  * COMP-COCKPIT-SOURCE-FAULTS-1 (WHAT-LINE M1): a source whose last refresh failed counts as unknown (its retained body
  * is not current), so its counts take the C6 words, and the shared SourceNote under the line names the source and why.
+ * COMP-SOURCE-ENVELOPE-1: so does an index that answered but whose producer reported it incomplete (`partial`).
  */
 import React from 'react';
 import { useFleet } from '../../../lib/fleetPoller.js';
@@ -110,9 +111,11 @@ export default function WhatLine({ onOpenFleet, onNavigate, onCountOpen }) {
   const { loading: fleetLoading } = fleetSrc;
   const { loading: indexLoading } = indexSrc;
   const fleet = fleetSrc.error ? null : fleetSrc.data;
-  const index = indexSrc.error ? null : indexSrc.data;
+  // COMP-SOURCE-ENVELOPE-1: an index the producer says is partial is not a count either ("0 waiting" would be a guess).
+  const indexUnknown = Boolean(indexSrc.error || indexSrc.partial?.length);
+  const index = indexUnknown ? null : indexSrc.data;
   const fleetWhy = fleetSrc.error ? sourceNoteText('fleet', fleetSrc, { short: true }) : null;
-  const indexWhy = indexSrc.error ? sourceNoteText('unit index', indexSrc, { short: true }) : null;
+  const indexWhy = indexUnknown ? sourceNoteText('unit index', indexSrc, { short: true }) : null;
   const agent = useAgentState();
   const [lastVisitAt] = React.useState(() => readLastVisit());
   const { state: notifyState } = useNotifyState(); // NOTIFY-ACTIONS-1: the chip's state, so the owner counts agree
@@ -189,7 +192,7 @@ export default function WhatLine({ onOpenFleet, onNavigate, onCountOpen }) {
         onClick={() => (onCountOpen ? onCountOpen('landed') : onNavigate?.('process'))}
       />
       {asOf && <span data-testid="what-asof" className="text-[11px] text-muted-foreground">{asOf}</span>}
-      {(fleetSrc.error || indexSrc.error) && (
+      {(fleetSrc.error || indexUnknown) && (
         <span className="basis-full">
           <SourceNote source="Fleet" state={fleetSrc} />
           <SourceNote source="Unit index" state={indexSrc} />

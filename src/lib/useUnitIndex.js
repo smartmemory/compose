@@ -8,7 +8,7 @@
  */
 import { useEffect, useState } from 'react';
 import { wsFetch } from './wsFetch.js';
-import { INITIAL_SOURCE, sourceOk, sourceFail } from './sourceState.js';
+import { INITIAL_SOURCE, sourceFromBody, sourceFail } from './sourceState.js';
 
 export const UNIT_INDEX_POLL_MS = 120_000;
 
@@ -29,7 +29,7 @@ async function poll() {
     const res = await wsFetch('/api/units/index');
     if (!res.ok) throw new Error(`unit index route ${res.status}`);
     const data = await res.json();
-    emit({ ...sourceOk(data), asOf: data.asOf ?? null });
+    emit({ ...sourceFromBody(data), asOf: data.asOf ?? null }); // ENVELOPE-1: a producer-reported fault is `partial`
   } catch (error) {
     emit({ ...sourceFail(state, error), asOf: state.asOf }); // the last good index stays, marked stale
   } finally {
