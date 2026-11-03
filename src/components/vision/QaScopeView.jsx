@@ -11,8 +11,10 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { wsFetch } from '../../lib/wsFetch.js';
 import EntityLink from '../shared/EntityLink.jsx';
+import { isDocPath } from '../../lib/entityParts.js';
 
-// COMP-UI-LINKS-2: `files` rows are repo paths and open in the wiki; route rows are app URLs with no page in the cockpit.
+// COMP-UI-LINKS-2: a `files` row that is a markdown doc opens in the wiki (it opens documents, not source files); route rows are
+// app URLs with no page in the cockpit.
 function RouteList({ testid, label, routes, empty, files = false }) {
   return (
     <div className="mt-3 first:mt-0" data-testid={testid}>
@@ -24,8 +26,8 @@ function RouteList({ testid, label, routes, empty, files = false }) {
       ) : (
         <ul className="text-[12px] font-mono space-y-0.5">
           {routes.map(r => (
-            <li key={r} title={files ? undefined : 'No target: an app route has no page in the cockpit'}>
-              {files ? <EntityLink kind="file" id={r} className="text-[12px]" /> : r}
+            <li key={r} title={files && isDocPath(r) ? undefined : files ? 'No target: the wiki opens documents, not source files' : 'No target: an app route has no page in the cockpit'}>
+              {files && isDocPath(r) ? <EntityLink kind="file" id={r} className="text-[12px]" /> : r}
             </li>
           ))}
         </ul>

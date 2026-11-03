@@ -8,6 +8,7 @@
  */
 import React, { useState, useMemo } from 'react';
 import EntityLink from '../shared/EntityLink.jsx';
+import { isDocPath } from '../../lib/entityParts.js';
 import { CheckCircle } from 'lucide-react';
 
 function relativeTime(ts) {
@@ -89,9 +90,9 @@ export default function ContextErrorLog({ featureCode, errors = [], items = [] }
             )}
           </button>
           {isExpanded && (
-            // COMP-UI-LINKS-2: outside the row button (a button cannot hold a button); the file only when the error names one
+            // COMP-UI-LINKS-2: outside the row button (a button cannot hold a button); the file only when the error names a markdown doc (the wiki opens documents, not source files)
             <div className="flex items-center gap-3 px-7 pb-1" data-testid="context-error-links">
-              {(e.file || e.path) && <EntityLink kind="file" id={e.file || e.path} className="text-[10px]" />}
+              {isDocPath(e.file || e.path) && <EntityLink kind="file" id={e.file || e.path} className="text-[10px]" />}
               <EntityLink kind="view" id="sessions" label="Open in Sessions" className="text-[10px]" />
             </div>
           )}

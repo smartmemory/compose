@@ -18,6 +18,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useProjectModel } from '../../lib/fleetProjects.js';
 import EntityLink from '../shared/EntityLink.jsx';
+import { isDocPath } from '../../lib/entityParts.js';
 import {
   DECIDER_KEYS, DECIDER_LABELS, STANDING_LEGEND, decisionsUrl, projectOfRoot, rowSource, rowTags, rowWhen, statusLabel, toggleDecider,
 } from './decisionsPaneLogic.js';
@@ -67,8 +68,8 @@ function FilterChip({ text, onFilter, className, testid, children }) {
   );
 }
 
-/** A reference that is a repo path opens in the wiki; any other kind (a commit hash, a queue id) has no doc to open. */
-const looksLikePath = (v) => typeof v === 'string' && /^[\w.-]+(\/[\w.#-]+)+$/.test(v);
+/** A reference that is a repo markdown doc opens in the wiki; any other kind (a commit hash, a queue id) has no doc to open. */
+const looksLikePath = (v) => isDocPath(v) && /^[\w.-]+(\/[\w.#-]+)+$/.test(v);
 
 function DecisionRow({ row, openLine, openQueue, onOpenFile, onFilter }) {
   const [open, setOpen] = useState(false);

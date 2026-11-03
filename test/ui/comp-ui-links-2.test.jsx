@@ -147,11 +147,11 @@ describe('Journal, Context panel, Agent stream', () => {
   });
   it('an inline-code span that is exactly one path links, and stays code', () => {
     const nav = makeNav();
-    const { container } = withNav(<LinkedMarkdown content={'built `lib/gate-jev.js` and `npm run build COMP-X-1`'} />, nav);
-    const link = screen.getByRole('link', { name: 'lib/gate-jev.js' });
+    const { container } = withNav(<LinkedMarkdown content={'built `docs/gate-jev.md` and `npm run build COMP-X-1`'} />, nav);
+    const link = screen.getByRole('link', { name: 'docs/gate-jev.md' });
     expect(link.querySelector('code')).not.toBeNull();
     fireEvent.click(link);
-    expect(nav.openFile).toHaveBeenCalledWith('lib/gate-jev.js');
+    expect(nav.openFile).toHaveBeenCalledWith('docs/gate-jev.md');
     expect(container.querySelectorAll('a')).toHaveLength(1);
   });
   it('degrade: tokens the cockpit cannot open stay plain text', () => {
@@ -166,10 +166,10 @@ describe('Journal, Context panel, Agent stream', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open in Sessions' }));
     expect(nav.openView).toHaveBeenCalledWith('sessions');
     cleanup();
-    withNav(<ContextErrorLog featureCode="F-1" errors={[{ featureCode: 'F-1', tool: 'Bash', message: 'bad', file: 'src/a.js' }]} items={[]} />, nav);
+    withNav(<ContextErrorLog featureCode="F-1" errors={[{ featureCode: 'F-1', tool: 'Bash', message: 'bad', file: 'docs/a.md' }]} items={[]} />, nav);
     fireEvent.click(screen.getByText('bad'));
-    fireEvent.click(screen.getByRole('button', { name: 'src/a.js' }));
-    expect(nav.openFile).toHaveBeenCalledWith('src/a.js');
+    fireEvent.click(screen.getByRole('button', { name: 'docs/a.md' }));
+    expect(nav.openFile).toHaveBeenCalledWith('docs/a.md');
   });
   it('a build message names its feature as a link', () => {
     const nav = makeNav();
@@ -235,5 +235,16 @@ describe('A file link needs a Wiki tab', () => {
     withNav(<EntityLink kind="file" id="docs/a/b.md" />, makeNav({ canNavigate: (k) => k !== 'file' }));
     expect(screen.queryByRole('button')).toBeNull();
     expect(screen.getByText('docs/a/b.md').getAttribute('title')).toMatch(/No file named/);
+  });
+});
+
+describe('A source path is not a wiki document', () => {
+  it('stays text: the tokenizer and the Context error row both leave a .js path alone', () => {
+    expect(entityParts('see lib/gate-jev.js and docs/a/b.md').map((p) => p.kind)).toEqual(['text', 'file']);
+    const nav = makeNav();
+    withNav(<ContextErrorLog featureCode="F-1" errors={[{ featureCode: 'F-1', tool: 'Bash', message: 'bad', file: 'src/a.js' }]} items={[]} />, nav);
+    fireEvent.click(screen.getByText('bad'));
+    expect(screen.queryByRole('button', { name: 'src/a.js' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Open in Sessions' })).toBeTruthy();
   });
 });

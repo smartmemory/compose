@@ -4,10 +4,10 @@
  * target is the renderer's question (`LinkedText` asks the navigation context and leaves an unresolvable token as plain text),
  * so a stray ALL-CAPS-WITH-DASHES word never turns into a dead link.
  *
- * A feature code is two or more dash-joined upper-case segments (`COMP-UI-LINKS-2`). A path is repo-relative, has a directory part and a known doc/code extension.
+ * A feature code is two or more dash-joined upper-case segments (`COMP-UI-LINKS-2`). A path is a repo-relative markdown doc with a directory part: the wiki opens documents, and its doc lookup answers 404 for a source file, so a code path (`lib/x.js`) is left as text.
  */
 const FEATURE = String.raw`\b[A-Z][A-Z0-9]*(?:-[A-Z0-9]+){1,}\b`;
-const PATH = String.raw`(?<![\w/.:-])(?:[\w.-]+/)+[\w.-]+\.(?:md|json|jsonl|js|jsx|ts|tsx|py|ya?ml|toml|sh|css|html)\b(?:#L?\d+)?`;
+const PATH = String.raw`(?<![\w/.:-])(?:[\w.-]+/)+[\w.-]+\.md\b(?:#L?\d+)?`;
 const TOKEN = new RegExp(`(${PATH})|(${FEATURE})`, 'g');
 
 /** @returns {Array<{kind: 'text'|'file'|'feature', value: string}>} the parts, in order; their values join back to `text` */
@@ -52,3 +52,6 @@ export function parseEntityHref(href) {
   const at = rest.indexOf(':');
   return at > 0 ? { kind: rest.slice(0, at), id: rest.slice(at + 1) } : null;
 }
+
+/** True for a path the wiki can open as a document (markdown, optionally with a `#L<n>` anchor). */
+export const isDocPath = (p) => typeof p === 'string' && /\.md(#.*)?$/i.test(p);
