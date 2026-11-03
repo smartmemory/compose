@@ -12,7 +12,8 @@ import CompletionBadge from './shared/CompletionBadge.jsx';
 import BranchComparePanel from './BranchComparePanel.jsx';
 import DriftRibbon from './DriftRibbon.jsx';
 import StartBuildPopover from './StartBuildPopover.jsx';
-import EntityLink, { LinkedText } from '../shared/EntityLink.jsx';
+import EntityLink, { LinkedText, noTargetReason } from '../shared/EntityLink.jsx';
+import { useNavigation } from '../../lib/navigation.jsx';
 import { useVisionStore } from './useVisionStore.js';
 import { wsFetch } from '../../lib/wsFetch.js';
 import { notify } from '../cockpit/NotificationBar.jsx';
@@ -50,6 +51,9 @@ function ConfidenceControl({ level, onChange }) {
 /** The item's docs (`item.files`, repo-relative paths) as links. Nothing renders for an item with none. */
 export function ItemFiles({ files, onOpenFile }) {
   const list = Array.isArray(files) ? files.filter((f) => typeof f === 'string' && f) : [];
+  // COMP-UI-LINKS-3: the same rule as EntityLink's file links: with no Wiki tab to open it (canNavigate says so) the file is text with the reason.
+  const nav = useNavigation();
+  const canOpen = (path) => (nav?.canNavigate ? nav.canNavigate('file', path) : true);
   if (list.length === 0) return null;
   return (
     <div data-testid="item-files">
@@ -57,14 +61,24 @@ export function ItemFiles({ files, onOpenFile }) {
       <ul className="space-y-0.5">
         {list.map((path) => (
           <li key={path}>
-            <button
-              type="button"
-              title={path}
-              onClick={() => onOpenFile?.(path)}
-              className="w-full text-left text-xs font-mono text-accent hover:underline truncate px-2 py-0.5 rounded hover:bg-muted/50"
-            >
-              {path.split('/').pop()}
-            </button>
+            {canOpen(path) ? (
+              <button
+                type="button"
+                title={path}
+                onClick={() => onOpenFile?.(path)}
+                className="w-full text-left text-xs font-mono text-accent hover:underline truncate px-2 py-0.5 rounded hover:bg-muted/50"
+              >
+                {path.split('/').pop()}
+              </button>
+            ) : (
+              <span
+                title={noTargetReason({ openFile: onOpenFile }, 'file', path)}
+                data-no-target=""
+                className="block w-full text-xs font-mono text-muted-foreground truncate px-2 py-0.5"
+              >
+                {path.split('/').pop()}
+              </span>
+            )}
           </li>
         ))}
       </ul>
@@ -75,9 +89,11 @@ export function ItemFiles({ files, onOpenFile }) {
 /** A pending gate's artifact (`design.md`, ...) by name; with the feature code and `onOpenFile` it opens that doc
  *  (`docs/features/<CODE>/<artifact>`) as ItemFiles does (COMP-WIKI-GRAPH-DOC-LINKS-1). */
 export function GateArtifact({ name, featureCode, onOpenFile }) {
+  const nav = useNavigation();
   if (!name) return null;
   if (!featureCode || !onOpenFile) return <span className="font-mono">{name}</span>;
   const path = `docs/features/${featureCode}/${name}`;
+  if (nav?.canNavigate && !nav.canNavigate('file', path)) return <span className="font-mono text-muted-foreground" title={noTargetReason({ openFile: onOpenFile }, 'file', path)} data-no-target="">{name}</span>;
   return (
     <button type="button" title={path} onClick={() => onOpenFile(path)} data-testid="gate-artifact-link" className="font-mono text-accent hover:underline">
       {name}

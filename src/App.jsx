@@ -279,6 +279,8 @@ function CockpitView({
   // COMP-WIKI-DOC-PATH-LINKS-1: onOpenFile(path) opens any repo doc path in the wiki (navigateToWiki); it is the one
   // destructured above for COMP-WIKI-GATEVIEW-DOC-LINK-1, and a second binding is a syntax error that blanked the cockpit.
   wikiDoc, onOpenDoc,
+  // COMP-UI-LINKS-3: the Wiki pane named in the URL, and the callback that reports the pane showing
+  wikiPane, onWikiPaneChange,
   // COMP-AUDIT-18: Home
   agentErrors, onStopAgent, untriagedIdeas, cadenceAvailable, onJumpToGate, onNavigate, onOpenFleet,
   // COMP-AUDIT-17: view keys reachable by clicks (Settings default-view picker)
@@ -429,7 +431,7 @@ function CockpitView({
       // The selected item's feature wins over the session's (COMPOSE-WIKI-TAB-1).
       const item = selectedItemId ? items.find(i => i.id === selectedItemId) : null;
       const code = item?.featureCode || item?.feature_code || item?.lifecycle?.featureCode || featureCode || '';
-      return <WikiView featureCode={code} host={subappHost} workspace={wikiTab?.workspace} frameBase={wikiTab?.frameBase} docOpen={wikiDoc} />;
+      return <WikiView featureCode={code} host={subappHost} workspace={wikiTab?.workspace} frameBase={wikiTab?.frameBase} docOpen={wikiDoc} availability={wikiTab?.availability} urlPane={wikiPane} onPaneChange={onWikiPaneChange} />;
     }
     case 'qa-scope':
       return <QaScopeView featureCode={featureCode} />;
@@ -988,21 +990,26 @@ function AppInner() {
   // COMP-COCKPIT-URL-SYNC-1: the URL follows the tab and pane. A change pushes `?view=[&pane=]` (the ribbon hash is dropped
   // off Day); the first run only normalises the load URL (replace, no entry); `popstate` reads view and pane back, and the
   // Day view re-reads its own hash when it remounts. State that already matches the URL never pushes.
+  // COMP-UI-LINKS-3: the Wiki's pane rides the URL too (`wikiPane` is what WikiView reports; null until it first mounts). A pane
+  // that only fills in a URL already on this view without one (the Wiki's first report) replaces the entry: one tab switch, one Back step.
+  const [wikiPane, setWikiPane] = useState(() => (parseUrl(window.location.search, '', null).view === 'wiki' ? parseUrl(window.location.search, '', null).pane : null));
   const urlSynced = useRef(false);
   useEffect(() => {
-    const state = { view: activeView, pane: sessionsPane };
+    const state = { view: activeView, pane: activeView === 'wiki' ? wikiPane : sessionsPane };
     if (urlSynced.current && sameUrlState(window.location.search, state)) return;
     const { ribbonHash } = parseUrl(window.location.search, window.location.hash, isRibbonHash);
+    const cur = parseUrl(window.location.search, '', null);
+    const fillsPane = cur.view === state.view && cur.pane === null;
     const url = `${window.location.pathname}${buildUrl({ ...state, ribbonHash }, window.location.search)}`;
-    window.history[urlSynced.current ? 'pushState' : 'replaceState'](window.history.state, '', url);
+    window.history[urlSynced.current && !fillsPane ? 'pushState' : 'replaceState'](window.history.state, '', url);
     urlSynced.current = true;
-  }, [activeView, sessionsPane]);
+  }, [activeView, sessionsPane, wikiPane]);
   useEffect(() => {
     const onPop = () => {
       const { view, pane } = parseUrl(window.location.search, '', null);
       if (!view) return;
       setActiveView(view);
-      if (pane) setSessionsPane(pane);
+      if (pane) (view === 'wiki' ? setWikiPane : setSessionsPane)(pane);
     };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
@@ -1253,10 +1260,13 @@ function AppInner() {
 
   // (navigateToWiki is declared here, ahead of navigationValue, which hands it to rooms as `openFile`; comment above its old spot)
   const [wikiDoc, setWikiDoc] = useState(null);
+  // COMP-UI-LINKS-3: every caller (roadmap file buttons, gate artifacts, row and node double-clicks) goes through `canNavigate('file')`:
+  // with no Wiki tab the click does nothing here (the controls render as text with the reason) rather than switching to a room that bounces to Day.
   const navigateToWiki = useCallback((path) => {
+    if (!canNavigate('file', typeof path === 'string' && path ? path : 'wiki')) return;
     setWikiDoc(typeof path === 'string' && path ? { path } : null);
     handleViewChange('wiki');
-  }, [handleViewChange]);
+  }, [handleViewChange, canNavigate]);
   useEffect(() => { if (activeView !== 'wiki') setWikiDoc(null); }, [activeView]);
 
   // COMP-UI-LINKS-1: a cross-room jump (Fleet → a Cadence unit, a room → a Fleet session, a Stratum run → its step). The focus is
@@ -1600,6 +1610,8 @@ function AppInner() {
                       focusedGateId={focusedGateId}
                       wikiTab={wikiTab}
                       wikiDoc={wikiDoc}
+                      wikiPane={wikiPane}
+                      onWikiPaneChange={setWikiPane}
                       onOpenDoc={openItemDoc}
                       onFocusHandled={handleGateFocusHandled}
                       onOpenFile={navigateToWiki}

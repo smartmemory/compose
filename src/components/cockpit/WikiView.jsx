@@ -11,7 +11,7 @@ const PANES = [
   { key: 'search', label: 'Search' }, { key: 'graph', label: 'Graph' }, { key: 'area', label: 'Area' }, { key: 'feature', label: 'Feature' },
   { key: 'decisions', label: 'Decisions' }, { key: 'sources', label: 'Sources' }, { key: 'ledger', label: 'Ledger' }, { key: 'full', label: 'Document' },
 ];
-const PANE_KEYS = PANES.map((p) => p.key);
+export const PANE_KEYS = PANES.map((p) => p.key);
 
 // COMPOSE-WIKI-GRAPH-1b: the Graph (2D, 3D and WebGL inside it) is its own package entry, loaded only when someone opens it:
 // WikiView is statically imported by App.jsx, so the cockpit chunk must not grow.
@@ -129,14 +129,18 @@ const GRAPH_ASPECT_HINT = 'grouping by feature aspect is not built yet';
  * COMP-SUBAPP-HOST-1: `host` (contracts/subapp-host.schema.json) goes into the provider; its selected feature wins over
  * `featureCode` (the session's, a display fallback) and opens that feature's hub. The chip's × goes back to Search, unscoped.
  */
-export default function WikiView({ featureCode: fallbackCode, host, workspace, frameBase, client, docOpen }) {
+export default function WikiView({ featureCode: fallbackCode, host, workspace, frameBase, client, docOpen, availability, urlPane, onPaneChange }) {
   const dataClient = useMemo(() => client ?? createWikiDataClient(), [client]);
   const scoped = useHostScope(host, 'wiki');
   const featureCode = scoped.scope ? (scoped.cleared ? '' : scoped.scope.value) : (fallbackCode ?? '');
   const [code, setCode] = useState(featureCode);
   const [draft, setDraft] = useState(featureCode);
   // COMP-COCKPIT-WIKI-TAB-ORDER-1: open on Search, the widest view; a caller deep-linking a feature (featureCode) still lands on its hub.
-  const [pane, setPane] = usePaneMemory('wiki', featureCode ? 'feature' : 'search', PANE_KEYS, !!featureCode);
+  // COMP-UI-LINKS-3: `urlPane` (the shell's `?pane=`) opens that pane, and again on Back; `onPaneChange` tells the shell which pane is showing.
+  const wantPane = PANE_KEYS.includes(urlPane) ? urlPane : null;
+  const [pane, setPane] = usePaneMemory('wiki', wantPane ?? (featureCode ? 'feature' : 'search'), PANE_KEYS, !!featureCode || !!wantPane);
+  useEffect(() => { if (wantPane && wantPane !== pane) setPane(wantPane); }, [wantPane]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { onPaneChange?.(pane); }, [pane]); // eslint-disable-line react-hooks/exhaustive-deps
   const [search, setSearch] = useState({ query: featureCode, workspace: undefined });
   const [doc, setDoc] = useState(null); // WIKI-UI-LINKS-1: the last clicked doc, {workspace, docId}
   const nav = useNavigation();
@@ -161,15 +165,21 @@ export default function WikiView({ featureCode: fallbackCode, host, workspace, f
     if (!first && (scoped.scope || scoped.cleared)) setPane(featureCode ? 'feature' : 'search');
   }, [featureCode]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // COMP-UI-LINKS-3: a request made while the workspace is still null (the availability fetch is in flight) waits for it and then opens,
+  // once: `handledDoc` is the request object already resolved, so a later workspace change does not reopen it. A Wiki that resolves
+  // to unavailable never gets a workspace; `docWaiting` then says so in the pane.
+  const handledDoc = useRef(null);
   useEffect(() => {
     const docPath = docOpen?.path;
-    if (!docPath) return undefined;
+    if (!docPath || !workspace || handledDoc.current === docOpen) return undefined;
     let live = true;
+    const done = (fn) => { if (!live) return; handledDoc.current = docOpen; fn(); };
     resolveDocTarget(dataClient, { workspace, docPath, featureId: featureOfDocPath(docFileOf(docPath)) ?? featureCode })
-      .then((target) => { if (!live) return; if (target) onNavigate(target); else setPane('feature'); })
-      .catch(() => { if (live) setPane('feature'); });
+      .then((target) => done(() => { if (target) onNavigate(target); else setPane('feature'); }))
+      .catch(() => done(() => setPane('feature')));
     return () => { live = false; };
-  }, [docOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [docOpen, workspace]); // eslint-disable-line react-hooks/exhaustive-deps
+  const docWaiting = docOpen?.path && !workspace && (availability === 'no' || availability === 'yes') ? docOpen.path : null;
 
   const appUrl = `${frameBase}/ui/`;
   const hrefFor = (target) => `${frameBase}/ui${wikiPath(target)}`;
@@ -267,6 +277,12 @@ export default function WikiView({ featureCode: fallbackCode, host, workspace, f
             </>
           )}
         />
+        {docWaiting && (
+          <p className="px-3 py-2 text-xs text-muted-foreground border-b border-border" data-testid="wiki-doc-unavailable">
+            The Wiki is not available here, so {docWaiting} cannot be opened.
+            {availability === 'yes' ? ' The Wiki answered without a workspace.' : ' Its package is not built in, or the project has no wiki configured.'}
+          </p>
+        )}
         <div className={`flex-1 min-h-0 ${pane === 'full' ? 'flex flex-col' : pane === 'graph' ? 'relative' : 'overflow-auto p-4'}`}>
           {pane === 'feature' && (code
             ? <FeatureHub featureId={code} workspace={workspace} onNavigate={onNavigate} hrefFor={hrefFor} />
