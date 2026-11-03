@@ -6,7 +6,7 @@
  */
 import React from 'react';
 
-export const MARK_SHAPES = new Set(['land', 'deploy', 'deployFail', 'decide']);
+export const MARK_SHAPES = new Set(['land', 'deploy', 'deployFail', 'decide', 'refused']);
 
 const f1 = (n) => Math.round(n * 10) / 10;
 const INK = 'hsl(var(--foreground))';
@@ -15,6 +15,8 @@ const STYLE = {
   deploy: { fill: INK },
   deployFail: { fill: 'var(--rb-alert)' },
   decide: { fill: 'var(--rb-accent)' },
+  // COMP-DOGFOOD-LAUNCH-GATE-1: a launch the gate refused, an alert-coloured cross.
+  refused: { fill: 'none', stroke: 'var(--rb-alert)', strokeWidth: 2, strokeLinecap: 'round' },
 };
 
 /** The mark of `kind` centred on (cx, cy), `r` its half-size; null for a kind that is not drawn as a shape. */
@@ -23,6 +25,10 @@ export function MarkShape({ kind, cx, cy, r = 4.5 }) {
   if (!style) return null;
   if (kind === 'land') {
     return <path data-shape="check" style={style} d={`M${f1(cx - r)} ${f1(cy)}L${f1(cx - r / 3)} ${f1(cy + r * 0.7)}L${f1(cx + r)} ${f1(cy - r * 0.7)}`} />;
+  }
+  if (kind === 'refused') {
+    const d = r * 0.8;
+    return <path data-shape="cross" style={style} d={`M${f1(cx - d)} ${f1(cy - d)}L${f1(cx + d)} ${f1(cy + d)}M${f1(cx + d)} ${f1(cy - d)}L${f1(cx - d)} ${f1(cy + d)}`} />;
   }
   if (kind === 'decide') {
     // DT#17: a filled square in the accent, which survives 12 px.

@@ -60,7 +60,7 @@ function ribbonRoute(root) {
   const warnings = [];
   attachRibbonRoutes({ get: (_p, h) => { handler = h; }, locals: {} }, { deps: {
     now: () => NOW, warn: (m) => warnings.push(m), info: () => {}, dataDir: () => join(root, 'data'), projectRoot: () => root,
-    loadSnapshots: async () => [], loadGateLog: async () => [], loadSeats: async () => ({ seats: [] }),
+    loadSnapshots: async () => [], loadGateLog: async () => [], loadLaunchEvents: async () => [], loadSeats: async () => ({ seats: [] }),
     ledger: { get: async () => ({ value: [] }), rows: () => [] }, loadOutage: async () => ({ state: 'ok', since: null }),
     eta: async () => ({ p50: '2h', p80: '3h', asOf: 'a', raw: 'r' }),
     loadOwnerQueue: async () => [],

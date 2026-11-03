@@ -1,0 +1,173 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://smartmemory.ai/compose/contracts/launch-events.schema.json",
+  "title": "Launch and hop events (COMP-DOGFOOD-LAUNCH-GATE-1)",
+  "version": "1.0.0",
+  "description": "One row per launch state or governor order, appended to <workspace>/.compose/data/feature-events.jsonl through lib/feature-events.js appendEvent (via lib/launch-events-cli.js). `tool` is the event kind. The writers are detach_job.py (launch.*) and the hop-governor log ingest (hop.*); no model writes any of them. A `launch.running` row counts as running only with an `evidence_id`: the CLI re-checks its `process` receipt with contracts/evidence.schema.json's checker before it is stored.",
+  "_source": "smart-memory-ops/units/COMP-DOGFOOD-LAUNCH-GATE-1/brief.md",
+  "_roadmap": "COMP-DOGFOOD-1 row C",
+  "oneOf": [
+    { "$ref": "#/definitions/launch.requested" },
+    { "$ref": "#/definitions/launch.running" },
+    { "$ref": "#/definitions/launch.refused" },
+    { "$ref": "#/definitions/launch.failed" },
+    { "$ref": "#/definitions/launch.queued" },
+    { "$ref": "#/definitions/launch.dequeued" },
+    { "$ref": "#/definitions/hop.order" },
+    { "$ref": "#/definitions/hop.outcome" }
+  ],
+  "definitions": {
+    "iso": { "type": "string", "format": "date-time" },
+    "text": { "type": "string", "maxLength": 2000 },
+    "name": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "nullableName": { "type": ["string", "null"], "maxLength": 200 },
+    "attempt": { "description": "0 for the first run of the job, N after the Nth gate retry (detach_job GATE_RETRY_MAX).", "type": "integer", "minimum": 0, "maximum": 20 },
+    "common": {
+      "type": "object",
+      "required": ["tool", "ts", "source", "idempotency_key"],
+      "properties": {
+        "ts": { "$ref": "#/definitions/iso" },
+        "source": { "enum": ["detach_job", "hop-governor"] },
+        "idempotency_key": { "type": "string", "minLength": 1, "maxLength": 300 },
+        "actor": { "type": "string" },
+        "build_id": { "type": ["string", "null"] },
+        "replayed": { "description": "Written from the local spool after Compose could not be reached.", "type": "boolean" }
+      }
+    },
+    "launchCommon": {
+      "type": "object",
+      "required": ["label", "mark", "session"],
+      "properties": {
+        "label": { "$ref": "#/definitions/name" },
+        "mark": { "description": "detach_job's per-launch mark `<label>:<token>`.", "$ref": "#/definitions/name" },
+        "session": { "$ref": "#/definitions/name" },
+        "unit": { "$ref": "#/definitions/nullableName" },
+        "lane": { "$ref": "#/definitions/nullableName" }
+      }
+    },
+    "launch.requested": {
+      "allOf": [{ "$ref": "#/definitions/common" }, { "$ref": "#/definitions/launchCommon" }, {
+        "type": "object",
+        "required": ["tool", "engine", "model", "pid", "launched_at", "brief", "report"],
+        "properties": {
+          "tool": { "const": "launch.requested" },
+          "engine": { "$ref": "#/definitions/name" },
+          "model": { "$ref": "#/definitions/nullableName" },
+          "seat": { "$ref": "#/definitions/nullableName" },
+          "priority": { "$ref": "#/definitions/nullableName" },
+          "work_kind": { "$ref": "#/definitions/nullableName" },
+          "for_id": { "description": "jobs.py --for: the job this launch continues (job_wall's `<label>-W<n>` reroute passes it).", "$ref": "#/definitions/nullableName" },
+          "brief": { "type": "string", "pattern": "^/" },
+          "report": { "type": "string", "pattern": "^/" },
+          "pid": { "type": "integer", "minimum": 1 },
+          "launched_at": { "$ref": "#/definitions/iso" }
+        }
+      }]
+    },
+    "launch.running": {
+      "allOf": [{ "$ref": "#/definitions/common" }, { "$ref": "#/definitions/launchCommon" }, {
+        "type": "object",
+        "required": ["tool", "attempt", "at", "pid", "receipt"],
+        "properties": {
+          "tool": { "const": "launch.running" },
+          "attempt": { "$ref": "#/definitions/attempt" },
+          "at": { "$ref": "#/definitions/iso" },
+          "pid": { "type": "integer", "minimum": 1 },
+          "receipt": { "description": "A `process` receipt (contracts/evidence.schema.json#/definitions/process).", "type": "object" },
+          "evidence_id": { "description": "Set by the CLI when the receipt passed the re-check; null only on a replayed row whose re-check failed (then `evidence_refused` says why, and readers do not count it as running).", "type": ["string", "null"], "pattern": "^ev:" },
+          "evidence_refused": { "type": "array", "items": { "type": "string" } }
+        }
+      }]
+    },
+    "launch.refused": {
+      "allOf": [{ "$ref": "#/definitions/common" }, { "$ref": "#/definitions/launchCommon" }, {
+        "type": "object",
+        "required": ["tool", "attempt", "at", "exit_code", "gate_line"],
+        "properties": {
+          "tool": { "const": "launch.refused" },
+          "attempt": { "$ref": "#/definitions/attempt" },
+          "at": { "$ref": "#/definitions/iso" },
+          "exit_code": { "const": 77 },
+          "gate_line": { "description": "The shim's refusal line, verbatim (prefix kept).", "$ref": "#/definitions/text" }
+        }
+      }]
+    },
+    "launch.failed": {
+      "allOf": [{ "$ref": "#/definitions/common" }, { "$ref": "#/definitions/launchCommon" }, {
+        "type": "object",
+        "required": ["tool", "attempt", "at", "exit_code"],
+        "properties": {
+          "tool": { "const": "launch.failed" },
+          "attempt": { "$ref": "#/definitions/attempt" },
+          "at": { "$ref": "#/definitions/iso" },
+          "exit_code": { "type": ["integer", "string"] }
+        }
+      }]
+    },
+    "launch.queued": {
+      "allOf": [{ "$ref": "#/definitions/common" }, { "$ref": "#/definitions/launchCommon" }, {
+        "type": "object",
+        "required": ["tool", "attempt", "at", "gate_line", "meter", "seat", "frees_at", "frees_at_source", "retry", "retry_max"],
+        "properties": {
+          "tool": { "const": "launch.queued" },
+          "attempt": { "$ref": "#/definitions/attempt" },
+          "at": { "$ref": "#/definitions/iso" },
+          "gate_line": { "$ref": "#/definitions/text" },
+          "meter": { "description": "OWNER D-0068: fable for the owner chat's launches, overall for every other session.", "enum": ["fable", "overall"] },
+          "seat": { "$ref": "#/definitions/nullableName" },
+          "frees_at": { "description": "When that meter's window resets on the seat, from `usage_watch.py status --json`; null when it could not be read (frees_at_source says why).", "oneOf": [{ "$ref": "#/definitions/iso" }, { "type": "null" }] },
+          "frees_at_source": { "$ref": "#/definitions/text" },
+          "retry": { "description": "Who relaunches it: `reroute` = job_watch's job_wall reroute to the seat usage_watch pick names (label <label>-W1); `gate-retry` = detach_job's in-wrapper retry for a host-load refusal.", "enum": ["reroute", "gate-retry"] },
+          "retry_max": { "type": "integer", "minimum": 0 }
+        }
+      }]
+    },
+    "launch.dequeued": {
+      "allOf": [{ "$ref": "#/definitions/common" }, { "$ref": "#/definitions/launchCommon" }, {
+        "type": "object",
+        "required": ["tool", "at", "reason"],
+        "properties": {
+          "tool": { "const": "launch.dequeued" },
+          "at": { "$ref": "#/definitions/iso" },
+          "reason": { "enum": ["exhausted", "stopped", "no-brief"] },
+          "detail": { "$ref": "#/definitions/text" }
+        }
+      }]
+    },
+    "hop.order": {
+      "allOf": [{ "$ref": "#/definitions/common" }, {
+        "type": "object",
+        "required": ["tool", "session", "target", "mode", "at", "line"],
+        "properties": {
+          "tool": { "const": "hop.order" },
+          "session": { "$ref": "#/definitions/name" },
+          "target": { "$ref": "#/definitions/name" },
+          "why": { "$ref": "#/definitions/text" },
+          "mode": { "enum": ["dry", "live"] },
+          "at": { "$ref": "#/definitions/iso" },
+          "line": { "$ref": "#/definitions/text" },
+          "lane": { "$ref": "#/definitions/nullableName" }
+        }
+      }]
+    },
+    "hop.outcome": {
+      "allOf": [{ "$ref": "#/definitions/common" }, {
+        "type": "object",
+        "required": ["tool", "session", "outcome", "mode", "at", "line"],
+        "properties": {
+          "tool": { "const": "hop.outcome" },
+          "session": { "$ref": "#/definitions/name" },
+          "outcome": { "description": "HOPPED (confirmed: new pid with a live socket, old pids gone), HOP-UNCONFIRMED, HOP-FAILED, CANCEL, DRY-RUN-HOP (dry mode: the hop it would have run).", "enum": ["hopped", "unconfirmed", "failed", "cancel", "dry-run"] },
+          "from": { "$ref": "#/definitions/nullableName" },
+          "target": { "$ref": "#/definitions/nullableName" },
+          "new_pid": { "type": ["integer", "null"] },
+          "old_pids": { "type": "array", "items": { "type": "integer" } },
+          "mode": { "enum": ["dry", "live"] },
+          "at": { "$ref": "#/definitions/iso" },
+          "line": { "$ref": "#/definitions/text" },
+          "lane": { "$ref": "#/definitions/nullableName" }
+        }
+      }]
+    }
+  }
+}

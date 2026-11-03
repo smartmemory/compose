@@ -286,7 +286,7 @@ export const asOfClock = (asOf, now) => (HAS_ZONE.test(String(asOf)) ? clock(asO
 /**
  * The tooltip for one drawn item, as the mock's wording (lines joined with "\n"). `item.kind` picks the shape:
  * `work`, `wait`, `notRecorded`, `land`, `deploy`, `deployFail`, `decide`, `cluster`, `current`, `next`, `eta`,
- * `prev`, `hold`, `outage`, `region`, `seatReset`, `expiry`, `alert`. Span items carry `lane`, `start`, `end`, `now`.
+ * `prev`, `hold`, `outage`, `region`, `seatReset`, `expiry`, `alert`, `refused`. Span items carry `lane`, `start`, `end`, `now`.
  */
 export function tipText(item) {
   const { now } = item;
@@ -316,6 +316,9 @@ export function tipText(item) {
       return `Deploy failed · ${titleOf(item)}\n${when(item.at, now)} · click for detail`;
     case 'decide':
       return `Decided for you · ${titleOf(item)}\n${when(item.at, now)} · click for detail`;
+    case 'refused':
+      // COMP-DOGFOOD-LAUNCH-GATE-1: the short words on the lane, the gate's whole line here.
+      return `${item.text || 'refused'} · ${item.label || titleOf(item)}\n${item.full || ''}\n${when(item.at, now)}`;
     case 'cluster':
       return `${item.count} events near ${when(item.at, now)}\nclick to open`;
     case 'current': {

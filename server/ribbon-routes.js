@@ -2,7 +2,10 @@
  * ribbon-routes.js — `GET /api/ribbon?from=<iso>&to=<iso>` (COMP-COCKPIT-RIBBON-FEED-1): the one feed of the Day ribbon.
  * Reads the stamp files (through the unit index), the quota snapshots, the owner queue, gate.log, the seats, the cadence
  * outage state, the ops ledger's decisions (the Decisions pane's reader, COMP-COCKPIT-DECISIONS-1) and the ETA reader, and hands them
- * to `buildRibbon`.
+ * to `buildRibbon`. COMP-DOGFOOD-LAUNCH-GATE-1: also the fleet workspace's launch and hop events (lib/launch-events.js): a gate
+ * refusal is a `refused` mark on the job's lane, a refused unit is never drawn as running, the retry queue is `launches.queue`
+ * (and `GET /api/launch-queue`), and the hop governor's orders and outcomes are each lane's `hops`. Reading that source first
+ * appends the governor log's new lines to the event store (`ingestGovernorLog`), the one write this route makes besides the ETA history.
  * Read-only. Loopback only: absent in remote mode, like `/api/process`. One failing source goes to `sourceErrors` and renders
  * as not recorded; the route never answers 500 for one source.
  */
@@ -20,8 +23,10 @@ import { queueDecisions, unitsIn } from '../lib/decisions-ledger.js';
 import { groupOf, stripTag } from '../lib/owner-queue-class.js';
 import { reconcileOwnerSpans } from '../lib/owner-spans.js';
 import { ledgerDecisions, ledgerPath } from './decisions-routes.js';
+import { applyLaunchFeed, blockedUnits, ingestGovernorLog, readLaunchEvents, retryQueue } from '../lib/launch-events.js';
 
 export const RIBBON_ROUTE = '/api/ribbon';
+export const LAUNCH_QUEUE_ROUTE = '/api/launch-queue';
 const WINDOW_MAX_MS = 31 * 86_400_000;
 const RESPONSE_TTL_MS = 120_000;
 const RESPONSE_MAX = 20;
@@ -124,6 +129,9 @@ export function attachRibbonRoutes(app, { remote = false, env = process.env, dep
     snapshots: env.COMPOSE_RIBBON_SNAPSHOTS || join(homedir(), '.claude', 'usage', 'snapshots.jsonl'),
     ownerQueue: env.COMPOSE_RIBBON_OWNER_QUEUE || join(opsRoot, 'coordination', 'owner-queue.jsonl'),
     gateLog: env.COMPOSE_RIBBON_GATE_LOG || join(opsRoot, 'status', 'launch-gate', 'gate.log'),
+    // The fleet workspace detach_job writes to (launch_events.py: the parent of the ops repo), never the cockpit's current project.
+    launchRoot: env.COMPOSE_LAUNCH_EVENTS_ROOT || dirname(opsRoot),
+    hopLog: env.COMPOSE_HOP_GOVERNOR_LOG || join(homedir(), '.claude', 'logs', 'hop-governor.log'),
   };
   const eta = deps.eta ?? createEtaReader({
     python: env.COMPOSE_FLEET_PYTHON || 'python3',
@@ -140,6 +148,10 @@ export function attachRibbonRoutes(app, { remote = false, env = process.env, dep
   const ownerQueue = createSourceCache('ribbon owner queue', deps.loadOwnerQueue ?? (() => readJsonl(files.ownerQueue)), cacheOpts(SOURCE_TTL_MS));
   const ledger = deps.ledger ?? ledgerDecisions(ledgerPath(env, opsRoot), { now, warn, info });
   const gateLog = createSourceCache('ribbon gate.log', deps.loadGateLog ?? (async () => parseGateLog(await readFile(files.gateLog, 'utf8'))), cacheOpts(SOURCE_TTL_MS));
+  const launchEvents = createSourceCache('ribbon launch events', deps.loadLaunchEvents ?? (async () => {
+    try { ingestGovernorLog(files.launchRoot, files.hopLog, { warn }); } catch (e) { warn(`[ribbon] WARNING hop-governor log not ingested (${e?.message ?? e}): its new orders are missing until the next read`); }
+    return readLaunchEvents(files.launchRoot);
+  }), cacheOpts(SOURCE_TTL_MS));
   const seats = createSourceCache('ribbon seats', deps.loadSeats ?? (() => readSeats({
     python: env.COMPOSE_FLEET_PYTHON || 'python3',
     script: env.COMPOSE_USAGE_WATCH || join(homedir(), '.claude', 'scripts', 'usage_watch.py'), env,
@@ -186,13 +198,25 @@ export function attachRibbonRoutes(app, { remote = false, env = process.env, dep
   app.locals.warmRibbon = async () => {
     const t0 = now();
     try {
-      const [u] = await Promise.all([units.get(), snapshots.get(), ownerQueue.get(), gateLog.get(), seats.get(), ledger.get()]);
+      const [u] = await Promise.all([units.get(), snapshots.get(), ownerQueue.get(), gateLog.get(), seats.get(), ledger.get(), launchEvents.get()]);
       if (u.value) await etaFor(true, u.value.units, {});
       info(`[ribbon] warm done in ${now() - t0} ms`);
     } catch (error) {
       warn(`[ribbon] warm failed: ${String(error?.message ?? error)}`);
     }
   };
+
+  // The retry queue alone (COMP-DOGFOOD-LAUNCH-GATE-1 box 4): what `launches.queue` of the ribbon holds, read fresh. Mounted before the ribbon
+  // route, so a test that keeps the last `get` handler still gets the ribbon.
+  app.get(LAUNCH_QUEUE_ROUTE, async (_req, res) => {
+    res.set('cache-control', 'no-store');
+    try {
+      res.json(retryQueue(deps.loadLaunchEvents ? await deps.loadLaunchEvents() : readLaunchEvents(files.launchRoot), now()));
+    } catch (error) {
+      warn(`[launch-queue] failed: ${String(error?.message ?? error)}`);
+      res.status(500).json({ error: safeReason(String(error?.message ?? error)) });
+    }
+  });
 
   app.get(RIBBON_ROUTE, async (req, res) => {
     res.set('cache-control', 'no-store');
@@ -209,7 +233,7 @@ export function attachRibbonRoutes(app, { remote = false, env = process.env, dep
     if (hit && t0 - hit.at < RESPONSE_TTL_MS) return res.json({ ...withPaused(hit.body, paused), ageS: Math.max(0, Math.floor((t0 - Date.parse(hit.body.asOf)) / 1000)) });
     try {
       const base = `http://127.0.0.1:${req.socket.localPort}`;
-      const [u, snap, oq, gl, st, led, outage] = await Promise.all([
+      const [u, snap, oq, gl, st, led, outage, le] = await Promise.all([
         settle(async () => { const e = await units.get(); if (!e.value) throw new Error(e.error ?? 'unit index unavailable'); return e.value; }),
         settle(async () => { const e = await snapshots.get(); if (!e.value) throw new Error(e.error ?? 'snapshots unavailable'); return e.value; }),
         settle(async () => { const e = await ownerQueue.get(); if (!e.value) throw new Error(e.error ?? 'owner queue unavailable'); return e.value; }),
@@ -217,6 +241,7 @@ export function attachRibbonRoutes(app, { remote = false, env = process.env, dep
         settle(async () => { const e = await seats.get(); if (!e.value) throw new Error(e.error ?? 'seats unavailable'); return e.value; }),
         settle(async () => { const e = await ledger.get(); if (!e.value) throw new Error(e.error ?? 'ledger unavailable'); return ledger.rows(e.value); }),
         settle(() => (deps.loadOutage ?? (() => loopbackJson(base, '/api/cadence-ui/outage')))()),
+        settle(async () => { const e = await launchEvents.get(); if (!e.value) throw new Error(e.error ?? 'launch events unavailable'); return e.value; }),
       ]);
       const sourceErrors = {};
       if (u.error) sourceErrors.stamps = u.error;
@@ -226,6 +251,7 @@ export function attachRibbonRoutes(app, { remote = false, env = process.env, dep
       if (led.error) sourceErrors.ledger = led.error;
       if (outage.error) sourceErrors.outage = outage.error;
       if (st.error) sourceErrors.seats = st.error;
+      if (le.error) sourceErrors.launches = le.error;
       for (const [lane, c] of Object.entries(u.value?.coverage ?? {})) if (c?.error) sourceErrors.stamps = [sourceErrors.stamps, safeReason(c.error)].filter(Boolean).join('; ');
 
       const unitList = u.value?.units ?? [];
@@ -238,7 +264,7 @@ export function attachRibbonRoutes(app, { remote = false, env = process.env, dep
         from: a.ms, to: b.ms, now: t0, asOf: u.value ? Date.parse(u.value.asOf) : t0,
         units: unitList, snapshots: snap.value ?? [], ownerQueue: oq.value ?? [], decisions,
         gateEntries: gl.value ?? [], outage: outage.value ?? null, seats: st.value?.seats ?? null,
-        etas, history, sourceErrors, warn,
+        etas, history, sourceErrors, warn, blockedUnits: le.value ? blockedUnits(le.value) : null,
       });
       // C3: owner waits from the owner queue, on the lane each one belongs to. A queue that could not be read is unknown
       // (`owner.open: null`, the ribbon then drops nothing), never an empty list. The reason stays in `sourceErrors.ownerQueue`
@@ -275,6 +301,9 @@ export function attachRibbonRoutes(app, { remote = false, env = process.env, dep
         }
         body.owner = { open: ow.open };
       }
+      // An unread event store is unknown (`launches.queue: null`), never an empty queue; the reason is in `sourceErrors.launches`.
+      if (le.value) applyLaunchFeed(body, le.value, { units: unitList, from: a.ms, to: b.ms, now: t0 });
+      else body.launches = { queue: null };
       responses.set(key, { at: t0, body });
       while (responses.size > RESPONSE_MAX) responses.delete(responses.keys().next().value);
       res.json(withPaused(body, paused));
@@ -283,5 +312,6 @@ export function attachRibbonRoutes(app, { remote = false, env = process.env, dep
       res.status(500).json({ error: String(error?.message ?? error) });
     }
   });
+
   return true;
 }

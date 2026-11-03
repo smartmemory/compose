@@ -203,7 +203,7 @@ describe('GET /api/ribbon', () => {
   const deps = (over = {}) => ({
     now: () => NOW, warn: () => {}, dataDir: () => dataDir,
     loadUnits: async () => ({ units: [unit('U1', 'forge', FULL)], coverage: {}, asOf: new Date(NOW).toISOString() }),
-    loadSnapshots: async () => [], loadGateLog: async () => [], loadSeats: async () => ({ seats: [] }),
+    loadSnapshots: async () => [], loadGateLog: async () => [], loadLaunchEvents: async () => [], loadSeats: async () => ({ seats: [] }),
     loadOwnerQueue: async () => [{ id: 'X', by: 'forge-main', ts: D('05:00') / 1000, text: 'APPLIED: yes. Reverse = no.' }],
     ledger: { get: async () => ({ value: [] }), rows: (e) => buildDecisions(e) }, loadOutage: async () => ({ state: 'ok', since: null }),
     eta: async () => ({ p50: '2h', p80: '3h', asOf: 'a', raw: 'r' }),
@@ -217,7 +217,7 @@ describe('GET /api/ribbon', () => {
   }
   // [name, query, deps override, status, check(body)]
   const ROWS = [
-    ['a good window answers with the contract keys', `from=${FROM}&to=${TO}`, {}, 200, (b) => assert.deepEqual(Object.keys(b), ['from', 'to', 'now', 'live', 'asOf', 'ageS', 'lanes', 'bands', 'pins', 'coverage', 'history', 'notRecorded', 'sourceErrors', 'owner'])],
+    ['a good window answers with the contract keys', `from=${FROM}&to=${TO}`, {}, 200, (b) => assert.deepEqual(Object.keys(b), ['from', 'to', 'now', 'live', 'asOf', 'ageS', 'lanes', 'bands', 'pins', 'coverage', 'history', 'notRecorded', 'sourceErrors', 'owner', 'launches'])],
     ['the eta carries prev null on the first reading and is written to the history file', `from=${FROM}&to=${TO}`, { loadUnits: async () => ({ units: [unit('U5', 'forge', { ready_at: T('10:00'), dispatched_at: T('11:00') })], coverage: {}, asOf: new Date(NOW).toISOString() }) }, 200, (b) => assert.deepEqual(lane(b).eta, { p50: '2h', p80: '3h', asOf: 'a', raw: 'r', prev: null })],
     ['DAYVIEW-FIX-1 U2-DATA (FEED-1 M5): a loader that throws with a home path answers 200 with the path cut from sourceErrors and notRecorded', `from=${FROM}&to=${TO}`, { loadSnapshots: async () => { throw new Error("ENOENT: open '/Users/review-probe/.claude/usage/snapshots.jsonl'"); } }, 200, (b) => {
       assert.equal(/\/Users\//.test(JSON.stringify([b.sourceErrors, b.notRecorded, b.owner])), false);

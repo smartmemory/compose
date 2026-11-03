@@ -89,7 +89,7 @@ const LEGEND = [
   ['unknown', 's-unknown', 'waiting, cause not recorded'], ['norec', 's-norec', 'not recorded'],
   ['paused', 's-paused', 'paused project (muted, never counted)'],
   ['hold', 'band-hold', 'launch hold'], ['outage', 'band-outage', 'outage'],
-  ['land', 'shape', 'landed'], ['deploy', 'shape', 'deployed'], ['deployFail', 'shape', 'deploy failed'], ['decide', 'shape', 'decided for you'],
+  ['land', 'shape', 'landed'], ['deploy', 'shape', 'deployed'], ['deployFail', 'shape', 'deploy failed'], ['decide', 'shape', 'decided for you'], ['refused', 'shape', 'launch refused at the gate'],
   ['cluster', '#', 'events grouped (count)'], ['alert', '⚠', 'alert'], ['eta', '◆', 'expected landing'], ['reset', '│', 'seat reset (AHEAD)'],
   ['now', '│', 'now'],
 ];
@@ -416,6 +416,10 @@ export default function DayRibbon({
                   <line className="tk-gap" x1={x} x2={x} y1={ry + 10} y2={ry + 22} />
                   {/* AD#16: a drawn shape, the same at every size and in every font. */}
                   <MarkShape kind={m.kind} cx={x} cy={ry + 5} r={4.5} />
+                  {/* COMP-DOGFOOD-LAUNCH-GATE-1: a refusal says so in words beside its cross; the full gate line is the tip. */}
+                  {m.kind === 'refused' && (
+                    <text className="tk alert" data-testid="mark-refused-text" x={x + 7} y={ry + 9}>{fitText(m.text || 'refused', Math.max(0, Math.min(220, R.X1 - x - 10)), PX.label)}</text>
+                  )}
                 </>
               )}
             </g>
@@ -527,6 +531,13 @@ export default function DayRibbon({
           {words}
         </span>
       ))}
+      {/* COMP-DOGFOOD-LAUNCH-GATE-1: launches the gate refused that wait in the retry queue (Compose state), labels on hover. */}
+      {data?.launches?.queue?.count > 0 && (
+        <span data-key="queue" data-testid="launch-queue" style={{ color: 'var(--rb-alert)' }}
+          data-tip={`Retry queue · ${data.launches.queue.count} refused launch${data.launches.queue.count === 1 ? '' : 'es'}\n${data.launches.queue.entries.map((q) => `${q.label} (${q.meter} meter, ${q.seat || 'seat ?'}${q.frees_at ? `, frees ${clock(q.frees_at, now)}` : ''})`).join('\n')}`}>
+          {data.launches.queue.count} queued
+        </span>
+      )}
     </div>
   );
   const title = windowTitle(from, to, now);

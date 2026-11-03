@@ -106,7 +106,7 @@ async function route(over) {
   let handler = null;
   attachRibbonRoutes({ get: (_p, h) => { handler = h; }, locals: {} }, { deps: {
     now: () => NOW, warn: () => {}, info: () => {}, dataDir: () => '/nonexistent/ribbon-owner-identity-test',
-    loadSnapshots: async () => [], loadGateLog: async () => [], loadSeats: async () => ({ seats: [] }),
+    loadSnapshots: async () => [], loadGateLog: async () => [], loadLaunchEvents: async () => [], loadSeats: async () => ({ seats: [] }),
     ledger: { get: async () => ({ value: [] }), rows: () => [] }, loadOutage: async () => ({ state: 'ok', since: null }),
     eta: async () => ({ p50: '2h', p80: '3h', asOf: 'a', raw: 'r' }), ...over,
   } });
