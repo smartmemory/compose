@@ -12,6 +12,7 @@ import { wsFetch } from '../../src/lib/wsFetch.js';
 import { ROOMS, locateView } from '../../lib/view-keys.js';
 import { resetFleetProjects } from '../../src/lib/fleetProjects.js';
 import { resetPaneMemory } from '../../src/components/cockpit/PaneSwitcher.jsx';
+import { WorkspaceProvider } from '../../src/contexts/WorkspaceContext.jsx';
 
 const ok = (body) => ({ ok: true, status: 200, json: async () => body, text: async () => '' });
 const at = '2026-11-01T00:00:00Z';
@@ -109,7 +110,7 @@ describe('every room, every view (the depth walk)', () => {
       cleanup(); localStorage.clear(); sessionStorage.clear(); resetFleetProjects(); resetPaneMemory();
       window.history.pushState({}, '', `/?view=${view}`);
       stubFetch();
-      const { container } = render(<App />);
+      const { container } = render(<WorkspaceProvider><App /></WorkspaceProvider>); // as src/main.jsx mounts it: the Wiki check waits on the provider
       await waitFor(() => expect(screen.getAllByRole('tab').length).toBeGreaterThan(0));
       // Reached: a view that sits in a views row or switcher is the selected pane once its availability settles.
       const reached = locateView(view)?.sub ? view : null;

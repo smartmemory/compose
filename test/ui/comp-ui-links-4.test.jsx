@@ -6,6 +6,7 @@ import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent, cleanup, act } from '@testing-library/react';
 import { wikiUnavailableMessage } from '../../src/components/cockpit/WikiView.jsx';
+import { WorkspaceProvider } from '../../src/contexts/WorkspaceContext.jsx';
 
 const DOC = 'docs/features/F-1/design.md';
 const ITEM = { id: 'i1', type: 'feature', title: 'Has docs', status: 'planned', files: [DOC] };
@@ -28,7 +29,8 @@ async function renderApp(search) {
   const { useVisionStore } = await import('../../src/components/vision/useVisionStore.js');
   useVisionStore.setState({ items: [ITEM], uiCommand: null });
   const { default: App } = await import('../../src/App.jsx');
-  return render(<App />);
+  // Mounted as src/main.jsx mounts it: inside the WorkspaceProvider, whose settled read (here `{}`, no id) the Wiki check waits on.
+  return render(<WorkspaceProvider><App /></WorkspaceProvider>);
 }
 const FLEET = { generated: '2026-11-03T08:00:00Z', sources: { sm_status: { value: { sessions: { value: [{ name: 's1', busy: true }], error: null }, jobs: { value: [], error: null }, queue: { value: [], error: null } }, error: null, ts: 1, stale: false } } };
 const row = (container) => container.querySelector('[data-item-id="i1"]');

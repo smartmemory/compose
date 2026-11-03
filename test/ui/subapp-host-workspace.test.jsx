@@ -150,3 +150,57 @@ describe.skipIf(!wikiLinked)('Wiki room on a workspace switch', () => {
     expect(screen.queryByTestId('wiki-checking')).toBeNull();
   }, 15000);
 });
+
+// Fix r1: the first availability check runs once the provider settles WITHOUT an id (an empty or a failed `/api/workspace`), against the
+// server's target root, and the Wiki leaves "checking" for the real answer. The real provider, hook and room, the server faked.
+function Probe({ client }) {
+  const { workspace } = useWorkspace();
+  const tab = useWikiTabState();
+  return (
+    <>
+      <span data-testid="probe-availability">{tab.availability}</span>
+      <WikiView client={client} host={buildSubappHost({ workspace })} workspace={tab.workspace} frameBase={tab.frameBase}
+        availability={tab.availability} recheckFailed={tab.recheckFailed} />
+    </>
+  );
+}
+const NO_ID_ANSWERS = {
+  'answers with no id': async () => json({}),
+  'fails (HTTP 500)': async () => ({ ok: false, status: 500, json: async () => ({}) }),
+  'fails (network)': async () => { throw new Error('connection refused'); },
+};
+function stubNoId(workspaceAnswer, availableBody) {
+  const calls = { available: 0 };
+  vi.stubGlobal('fetch', vi.fn(async (url) => {
+    if (url === '/api/workspace') return workspaceAnswer();
+    if (url === '/api/health') return json({});
+    if (url === '/api/wiki/available') { calls.available += 1; return json(availableBody); }
+    throw new Error(`unexpected fetch ${url}`);
+  }));
+  return calls;
+}
+
+describe.skipIf(!wikiLinked)('Wiki availability when the workspace read gives no id (fix r1)', () => {
+  it('the provider settles with no id: the availability check runs, exactly once', async () => {
+    const calls = stubNoId(NO_ID_ANSWERS['answers with no id'], { available: false });
+    render(<WorkspaceProvider><Probe client={wikiClient()} /></WorkspaceProvider>);
+    await waitFor(() => expect(calls.available).toBe(1));
+    await act(async () => { await new Promise((r) => setTimeout(r, 50)); });
+    expect(calls.available).toBe(1);
+  });
+
+  for (const [how, answer] of Object.entries(NO_ID_ANSWERS)) {
+    for (const [body, want] of [[{ available: false }, 'no'], [{ available: true, workspace: 'wiki-root', frameBase: 'http://127.0.0.1:8791' }, 'yes']]) {
+      it(`/api/workspace ${how}, the wiki says ${want}: the tab and room leave "checking"`, async () => {
+        vi.spyOn(console, 'warn').mockImplementation(() => {});
+        stubNoId(answer, body);
+        const client = wikiClient();
+        render(<WorkspaceProvider><Probe client={client} /></WorkspaceProvider>);
+        await waitFor(() => expect(screen.getByTestId('probe-availability').textContent).toBe(want));
+        expect(screen.queryByTestId('wiki-checking')).toBeNull();
+        expect(screen.queryByTestId('wiki-unavailable')).toBeNull();
+        if (want === 'yes') await waitFor(() => expect(client.featuresPage).toHaveBeenCalledWith({ workspace: 'wiki-root', size: 50 }));
+      });
+    }
+  }
+});
