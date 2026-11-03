@@ -52,16 +52,20 @@ const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 const cut = (arr, n) => ({ shown: arr.slice(0, n), more: Math.max(0, arr.length - n) });
 export const LAST_HOUR_SHOWN = 3;
 
+export const CODEX_DAILY_NOT_REPORTED = 'Codex daily: not reported';
+/** A Codex account is known by its vendor (or, for an older body, by carrying `codex_daily`), never by the daily block alone. */
+export const isCodexAccount = (s) => s?.vendor === 'codex' || Boolean(s?.codex_daily);
+
 /**
- * Pure: the meter's data lines. Retired seats are counted, never listed as rows. A row carrying `codex_daily` is the
- * Codex line (points against the cap in the data), every other row is a seat line.
+ * Pure: the meter's data lines. Retired seats are counted, never listed as rows. A Codex account (`vendor: codex`) is the
+ * Codex line (points against the cap in its `codex_daily` block; a missing block reads "not reported"), every other row is a seat line.
  */
 export function meterRows(seats, spend, now) {
   const all = Array.isArray(seats) ? seats : [];
   const retired = all.filter((s) => s.retired === true);
   const active = all.filter((s) => s.retired !== true);
-  const codexRow = active.find((s) => s.codex_daily);
-  const seatLines = active.filter((s) => !s.codex_daily).map((s) => ({
+  const codexRow = active.find(isCodexAccount);
+  const seatLines = active.filter((s) => !isCodexAccount(s)).map((s) => ({
     id: s.id,
     label: s.label,
     five: { pct: fmtPct(s.five_h?.used_pct), n: num(s.five_h?.used_pct), reset: resetIn(s.five_h?.resets_at, now) },
@@ -83,9 +87,10 @@ export function meterRows(seats, spend, now) {
   const codex = codexRow ? {
     label: codexRow.label,
     pts: typeof codexRow.today_pts === 'number' ? codexRow.today_pts : null,
-    cap: codexRow.codex_daily.cap_pct,
-    state: codexRow.codex_daily.off ? 'cap off' : codexRow.codex_daily.state ?? '—',
-    off: codexRow.codex_daily.off === true,
+    reported: Boolean(codexRow.codex_daily),
+    cap: codexRow.codex_daily ? codexRow.codex_daily.cap_pct : null,
+    state: !codexRow.codex_daily ? 'not reported' : codexRow.codex_daily.off ? 'cap off' : codexRow.codex_daily.state ?? '—',
+    off: codexRow.codex_daily?.off === true,
     // F2: the Codex row's own windows, when the reader carries them (null n renders the "n/a" track).
     five: { n: num(codexRow.five_h?.used_pct), reset: resetIn(codexRow.five_h?.resets_at, now) },
     seven: { n: num(codexRow.seven_d?.used_pct), reset: resetIn(codexRow.seven_d?.resets_at, now) },

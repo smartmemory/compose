@@ -7,7 +7,7 @@
  */
 import React, { useState } from 'react';
 import { cn } from '@/lib/utils.js';
-import { fillPct, seatPairs, sessionChip, RETIRED_NOTE } from './costLogic.js';
+import { fillPct, seatPairs, sessionChip, RETIRED_NOTE, CODEX_DAILY_NOT_REPORTED } from './costLogic.js';
 
 const MUTED = 'text-muted-foreground';
 const WARN = 'text-[hsl(var(--warning))]';
@@ -123,11 +123,12 @@ export default function CostBars({ rows, seats, seatsError, pending, spend, spen
               <Pair
                 name="Codex"
                 testId="cost-meter-codex"
-                title={`${cx.label}: ${cx.pts ?? '—'}/${cx.cap ?? '—'} pts today against the daily cap${cx.state !== 'ok' ? ` (${cx.state})` : ''}`}
+                title={cx.reported ? `${cx.label}: ${cx.pts ?? '—'}/${cx.cap ?? '—'} pts today against the daily cap${cx.state !== 'ok' ? ` (${cx.state})` : ''}` : `${cx.label}: ${CODEX_DAILY_NOT_REPORTED}`}
               >
                 {cx.five.n !== null && <Col n={cx.five.n} pctText={`${Math.round(cx.five.n ?? 0)}%`} reset={cx.five.reset} base={FIVE} state={barState(fillPct(cx.five.n), false)} testId="cost-meter-5h-codex" title={`Codex 5h used ${Math.round(cx.five.n)}%, resets in ${cx.five.reset}`} />}
-                <Col n={cx.seven.n} pctText={`${Math.round(cx.seven.n ?? 0)}%`} reset={cx.seven.reset} base={WEEK} state={barState(null, cx.state !== 'ok')} testId="cost-meter-7d-codex" title={`Codex 7d used ${cx.seven.n === null ? 'n/a' : `${Math.round(cx.seven.n)}%`}, resets in ${cx.seven.reset}`} />
+                <Col n={cx.seven.n} pctText={`${Math.round(cx.seven.n ?? 0)}%`} reset={cx.seven.reset} base={WEEK} state={barState(null, cx.reported && cx.state !== 'ok')} testId="cost-meter-7d-codex" title={`Codex 7d used ${cx.seven.n === null ? 'n/a' : `${Math.round(cx.seven.n)}%`}, resets in ${cx.seven.reset}`} />
               </Pair>
+              {!cx.reported && <span className={cn('block text-[10px]', MUTED)} data-testid="cost-meter-codex-unreported">{CODEX_DAILY_NOT_REPORTED}</span>}
             </div>
           )}
         </div>

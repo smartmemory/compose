@@ -14,7 +14,7 @@
 import React from 'react';
 import { cn } from '@/lib/utils.js';
 import {
-  meterRows, fmtPct, asOfText, RETIRED_NOTE, apiCreditText, DOLLARS_PER_SEAT_NOTE,
+  meterRows, fmtPct, asOfText, RETIRED_NOTE, CODEX_DAILY_NOT_REPORTED, apiCreditText, DOLLARS_PER_SEAT_NOTE,
 } from './costLogic.js';
 import CostBars, { pressable, PRESS } from './CostBars.jsx';
 
@@ -91,10 +91,14 @@ export default function CostMeter({ seats, seatsError = null, loading = false, s
 
       {rows.codex && (
         <Line title="Codex points today" testId="cost-meter-codex">
-          <span className="text-[12px] font-mono">
-            {rows.codex.pts ?? '—'} / {rows.codex.cap ?? '—'} pts{' '}
-            <span className={cn(rows.codex.state !== 'ok' && 'text-[hsl(var(--warning))]', rows.codex.state === 'ok' && MUTED)}>{rows.codex.state}</span>
-          </span>
+          {rows.codex.reported ? (
+            <span className="text-[12px] font-mono">
+              {rows.codex.pts ?? '—'} / {rows.codex.cap ?? '—'} pts{' '}
+              <span className={cn(rows.codex.state !== 'ok' && 'text-[hsl(var(--warning))]', rows.codex.state === 'ok' && MUTED)}>{rows.codex.state}</span>
+            </span>
+          ) : (
+            <span className="text-[12px] text-[hsl(var(--warning))]" data-testid="cost-meter-codex-unreported">{CODEX_DAILY_NOT_REPORTED}</span>
+          )}
         </Line>
       )}
 

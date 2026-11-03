@@ -5,6 +5,7 @@ import { render, screen, waitFor, fireEvent, cleanup, act } from '@testing-libra
 import UsageView from '../../src/components/usage/UsageView.jsx';
 import { locateView } from '../../lib/view-keys.js';
 import CostMeter from '../../src/components/cockpit/cost/CostMeter.jsx';
+import FleetUsage, { FLEET_SEATS_POLL_MS } from '../../src/components/usage/FleetUsage.jsx';
 import HomeFleetGlance from '../../src/components/vision/HomeFleetGlance.jsx';
 import HomeSections from '../../src/components/vision/HomeSections.jsx';
 import { deriveHomeSections } from '../../src/components/vision/homeSectionsState.js';
@@ -162,6 +163,18 @@ const COST_ROWS = [
     render(<CostMeter seats={[SEAT(), CODEX(10)]} now={NOW} />);
     expect(mt('cost-meter-codex')).toContain('6 / 10 pts');
   }],
+  ['a Codex account with no codex_daily block says "Codex daily: not reported", it is not a plain seat (COST-METER M2)', async () => {
+    const bare = SEAT({ id: 'codex', label: 'Codex prolite', vendor: 'codex', today_pts: 4, five_h: { used_pct: null, resets_at: null }, seven_d: { used_pct: 19, resets_at: null, status: 'ok' } });
+    const { unmount } = render(<CostMeter seats={[SEAT(), bare]} now={NOW} />);
+    expect(mt('cost-meter-codex-unreported')).toBe('Codex daily: not reported');
+    expect(screen.queryByTestId('cost-meter-seat-codex')).toBeNull();
+    expect(screen.queryByTestId('cost-meter-seat-seat1')).toBeTruthy();
+    unmount();
+    render(<CostMeter bars seats={[SEAT(), bare]} now={NOW} />);
+    expect(mt('cost-meter-codex-unreported')).toBe('Codex daily: not reported');
+    expect(screen.getByTestId('cost-meter-codex').getAttribute('title')).toContain('Codex daily: not reported');
+    expect(screen.queryByTestId('cost-meter-seat-codex')).toBeNull();
+  }],
   ['seats pending: a skeleton, never 0%', async () => {
     render(<CostMeter seats={null} loading now={NOW} />);
     expect(screen.getByTestId('cost-meter-skeleton')).toBeTruthy();
@@ -212,4 +225,43 @@ const COST_ROWS = [
 describe('CostMeter', () => {
   afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
   for (const [name, run] of COST_ROWS) it(name, run);
+});
+
+describe('FleetUsage seat polling (COST-METER M1 / PROCESS-DATA M1)', () => {
+  afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); });
+  const body = (pct, stale) => ({ v: 1, generated_at: NOW, seats: { value: { generated_at: NOW, seats: [SEAT({ five_h: { used_pct: pct, resets_at: null } })] }, error: null, ts: 1, stale } });
+
+  it('the second poll reaches the meter, and a stale body says so until then', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, json: async () => FLEET_BODY })));
+    resetFleetPoller();
+    const answers = [body(10, true), body(90, false)];
+    const client = { getSeats: vi.fn(async () => answers[Math.min(client.getSeats.mock.calls.length - 1, 1)]) };
+    render(<FleetUsage client={client} now={NOW} />);
+    await waitFor(() => expect(mt('usage-seat-seat1')).toContain('10%'));
+    expect(mt('usage-seats-stale')).toContain('stale');
+    expect(client.getSeats).toHaveBeenCalledTimes(1);
+    await act(async () => { await vi.advanceTimersByTimeAsync(FLEET_SEATS_POLL_MS); });
+    await waitFor(() => expect(mt('usage-seat-seat1')).toContain('90%'));
+    expect(client.getSeats).toHaveBeenCalledTimes(2);
+    expect(screen.queryByTestId('usage-seats-stale')).toBeNull();
+  });
+
+  it('an older answer never lands over a newer one, and unmount stops the poll', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, json: async () => FLEET_BODY })));
+    resetFleetPoller();
+    const pending = [];
+    const client = { getSeats: vi.fn(() => new Promise((r) => pending.push(r))) };
+    const { unmount } = render(<FleetUsage client={client} now={NOW} />);
+    await waitFor(() => expect(pending).toHaveLength(1));
+    fireEvent.click(screen.getByLabelText('Refresh seats'));
+    await waitFor(() => expect(pending).toHaveLength(2));
+    await act(async () => pending[1](body(90, false)));
+    await act(async () => pending[0](body(10, false))); // the older read resolves last
+    expect(mt('usage-seat-seat1')).toContain('90%');
+    unmount();
+    await act(async () => { await vi.advanceTimersByTimeAsync(FLEET_SEATS_POLL_MS * 2); });
+    expect(client.getSeats).toHaveBeenCalledTimes(2);
+  });
 });

@@ -7,7 +7,7 @@
  * dollars per seat, so a seat row shows quota used, never $. Mounted only while the fleet scope is picked, so the
  * Compose-dispatched scope starts no fleet poll.
  */
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils.js';
 import { useFleet } from '../../lib/fleetPoller.js';
@@ -16,6 +16,9 @@ import { smPanel } from '../cockpit/fleetLogic.js';
 import { fmtPct, resetIn as resetText, RETIRED_NOTE } from '../cockpit/cost/costLogic.js';
 import CostMeter from '../cockpit/cost/CostMeter.jsx';
 import useApiCredit from '../cockpit/cost/useApiCredit.js';
+
+/** The seats re-read while this scope is open, as Home's glance does (HOME_SEATS_POLL_MS). */
+export const FLEET_SEATS_POLL_MS = 60_000;
 
 /** Pure: the fleet's two spend panels, each `{text, rows}` or `{down: reason}`. Exported for the tests. */
 export function fleetSpend(data) {
@@ -42,6 +45,8 @@ export default function FleetUsage({ client, now }) {
   const { ceiling, spend } = fleetSpend(fleet.data);
   const credit = useApiCredit(client);
   const [seats, setSeats] = useState({ loading: true, body: null, error: null });
+  // One request sequence: the mount read, a poll tick and the Refresh button each cancel the one before, so an older answer
+  // never lands over a newer one. A stale-while-revalidate answer (`seats.stale`) is followed by the fresh value on the next tick.
   const load = useCallback(() => {
     let live = true;
     setSeats((s) => ({ ...s, loading: true }));
@@ -50,7 +55,13 @@ export default function FleetUsage({ client, now }) {
       .catch((err) => { if (live) setSeats({ loading: false, body: null, error: err.message || String(err) }); });
     return () => { live = false; };
   }, [client]);
-  useEffect(() => load(), [load]);
+  const stopRef = useRef(() => {});
+  const reload = useCallback(() => { stopRef.current(); stopRef.current = load(); }, [load]);
+  useEffect(() => {
+    reload();
+    const timer = setInterval(reload, FLEET_SEATS_POLL_MS);
+    return () => { clearInterval(timer); stopRef.current(); };
+  }, [reload]);
 
   const src = seats.body?.seats;
   const allRows = Array.isArray(src?.value?.seats) ? src.value.seats : [];
@@ -91,8 +102,8 @@ export default function FleetUsage({ client, now }) {
       <section className="rounded-lg border border-border bg-card p-3 flex flex-col gap-2">
         <div className="flex items-center gap-2">
           <h3 className="text-[12px] font-medium text-card-foreground mr-auto">Seats</h3>
-          {src?.stale && <span className="text-[11px] text-muted-foreground">refreshing…</span>}
-          <button type="button" onClick={load} aria-label="Refresh seats" className="p-1 rounded hover:bg-muted">
+          {src?.stale && <span className="text-[11px] text-muted-foreground" data-testid="usage-seats-stale">stale, refreshing…</span>}
+          <button type="button" onClick={reload} aria-label="Refresh seats" className="p-1 rounded hover:bg-muted">
             <RefreshCw className={cn('w-3.5 h-3.5', seats.loading && 'animate-spin')} />
           </button>
         </div>
