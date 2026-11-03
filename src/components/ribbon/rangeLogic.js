@@ -4,7 +4,7 @@
  * A window is `{from, to}`, both ISO strings WITH an offset (what `/api/ribbon` takes and what the URL hash carries).
  * Presets are wall-clock arithmetic in the offset of `now` (an ISO string's own offset, else the browser's), the same way
  * `ribbonLayout.js` reads clocks, so a window means the same thing in every zone and test. A DST change inside a window
- * shifts nothing here: the offset of `now` is used throughout.
+ * shifts nothing in a fixed-offset `now`; in the browser's own zone the presets read each edge on the local clock (see `inBrowserZone`).
  */
 import { offsetMs, toMs } from './ribbonLayout.js';
 
@@ -44,12 +44,33 @@ const dayStart = (ms, off) => Math.floor((ms + off) / DAY) * DAY - off;
 
 const win = (fromMs, toMs2, off) => ({ from: isoAt(fromMs, off), to: isoAt(toMs2, off) });
 
+// Presets and the browser's DST. `now` reaches them as an ISO string with ONE fixed offset, which cannot say when the zone
+// changes it. When that offset is the browser's own at `now`, the browser's zone rules are known: the day's edges are read
+// on the local clock and each end carries the offset in force at ITS instant, so a day that holds a clock change still starts
+// and ends on its local hours. Any other offset (a fixture, a UTC `Z` string) has no rules to use: it stays one fixed offset.
+const browserOff = (ms) => -new Date(ms).getTimezoneOffset() * MIN;
+const inBrowserZone = (now) => typeof now !== 'string' || zoneOf(now) === browserOff(toMs(now));
+/** Local midnight that starts the day holding `now`. */
+function midnightOf(now) {
+  if (!inBrowserZone(now)) return dayStart(toMs(now), zoneOf(now));
+  const t = new Date(toMs(now));
+  return new Date(t.getFullYear(), t.getMonth(), t.getDate()).getTime();
+}
+/** `anchor` moved by `shift` on the wall clock (a calendar step, not elapsed time): 30 h after a local midnight is 06:00 the next day. */
+function wallShift(now, anchor, shift) {
+  if (!inBrowserZone(now)) return anchor + shift;
+  const d = new Date(anchor + browserOff(anchor) + shift);
+  return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds()).getTime();
+}
+const winFor = (now, a, b) => (inBrowserZone(now) ? { from: isoAt(a, browserOff(a)), to: isoAt(b, browserOff(b)) } : win(a, b, zoneOf(now)));
+const aroundDay = (now, fromShift, toShift) => { const d = midnightOf(now); return winFor(now, wallShift(now, d, fromShift), wallShift(now, d, toShift)); };
+
 /** Named table: each preset resolves `(now)` to a window with the right-of-now section visible. */
 export const PRESETS = {
-  '6h': (now) => { const n = toMs(now); return win(n - 4 * HOUR, n + 2 * HOUR, zoneOf(now)); },
-  day: (now) => { const off = zoneOf(now); const d = dayStart(toMs(now), off); return win(d - 6 * HOUR, d + 30 * HOUR, off); },
-  '3d': (now) => { const off = zoneOf(now); const d = dayStart(toMs(now), off); return win(d - 2 * DAY, d + 2 * DAY, off); },
-  week: (now) => { const off = zoneOf(now); const d = dayStart(toMs(now), off); return win(d - 6 * DAY, d + 2 * DAY, off); },
+  '6h': (now) => { const n = toMs(now); return winFor(now, n - 4 * HOUR, n + 2 * HOUR); },
+  day: (now) => aroundDay(now, -6 * HOUR, 30 * HOUR),
+  '3d': (now) => aroundDay(now, -2 * DAY, 2 * DAY),
+  week: (now) => aroundDay(now, -6 * DAY, 2 * DAY),
 };
 export const PRESET_KEYS = ['6h', 'day', '3d', 'week'];
 export const PRESET_LABEL = { '6h': '6h', day: 'Day', '3d': '3 days', week: 'Week' };
@@ -61,7 +82,8 @@ const containsNow = (w, now) => toMs(w.from) <= toMs(now) && toMs(now) <= toMs(w
 export function activePreset(w) {
   const width = widthOf(w);
   const ref = '2026-01-01T12:00:00Z';
-  return PRESET_KEYS.find((k) => widthOf(PRESETS[k](ref)) === width) || null;
+  // Within an hour: a window that holds a clock change is an hour wider or narrower than its preset's nominal width.
+  return PRESET_KEYS.find((k) => Math.abs(widthOf(PRESETS[k](ref)) - width) <= HOUR) || null;
 }
 
 /** Live window: the preset's own anchoring. Past window: keep its centre, take the preset's width. */

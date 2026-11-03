@@ -138,6 +138,43 @@ describe('buildRibbon', () => {
       assert.equal(lane(r).seat, 'seat2');
       assert.equal(lane(r).spans.some((s) => s.cause === 'quota'), true);
     }],
+    ['DAYVIEW-FIX-1 U2-DATA (FEED-1 M1): a landing with no start stamp is a notRecorded span from the window start, not nothing', { units: [unit('M1', 'forge', { landed_at: T('04:00') })], history: HIST(T('00:00')) }, (r) => {
+      assert.deepEqual(lane(r).spans.map((s) => [s.kind, s.unit, s.start, s.end]), [['notRecorded', 'M1', T('00:00'), T('04:00')]]);
+    }],
+    ['DAYVIEW-FIX-1 U2-DATA (FEED-1 M1): ... and from the previous landing of the lane when there is one', { units: [unit('P1', 'forge', FULL), unit('M1', 'forge', { landed_at: T('06:00') })], history: HIST(T('00:00')) }, (r) => {
+      assert.deepEqual(lane(r).spans.filter((s) => s.unit === 'M1').map((s) => [s.kind, s.start, s.end]), [['notRecorded', T('04:00'), T('06:00')]]);
+    }],
+    ['DAYVIEW-FIX-1 U2-DATA (FEED-1 M2): recorded work on an unlanded unit stays drawn in a past window, with no current unit', {
+      to: D('06:00'), now: NOW, units: [unit('M2', 'forge', { ready_at: T('02:00'), dispatched_at: T('02:10'), author_done_at: T('02:40') })], history: HIST(T('00:00')),
+    }, (r) => {
+      const l = lane(r);
+      assert.deepEqual([r.live, l.current, l.idle], [false, null, false]);
+      assert.deepEqual(l.spans.filter((s) => s.kind === 'work').map((s) => [s.job, s.start, s.end]), [['authoring', T('02:10'), T('02:40')]]);
+    }],
+    ['DAYVIEW-FIX-1 U2-DATA (FEED-1 M3): no dispatch or landing history anywhere is a notRecorded span, not a thrown RangeError', { units: [unit('M3', 'forge', { ready_at: T('02:00') }, { state: 'ready' })] }, (r) => {
+      const n = lane(r).spans.filter((s) => s.kind === 'notRecorded');
+      assert.deepEqual(n.map((s) => [s.start, s.end]), [[T('00:00'), T('23:00')]]);
+      assert.match(n[0].why, /no dispatch or landing stamp exists yet/);
+    }],
+    ['DAYVIEW-FIX-1 U2-DATA (FEED-1 M5): a source error carrying a home path keeps its meaning and loses the path, in sourceErrors and notRecorded', {
+      units: [unit('U1', 'forge', FULL)], history: HIST(T('00:00')),
+      sourceErrors: { quota: "ENOENT: no such file or directory, open '/Users/review-probe/.claude/usage/snapshots.jsonl'", holds: 'EACCES /home/ops/status/launch-gate/gate.log and ~/.claude/x.json (about ~5 min)' },
+    }, (r) => {
+      const all = JSON.stringify([r.sourceErrors, r.notRecorded]);
+      assert.equal(/\/Users\/|\/home\/|~\//.test(all), false, all);
+      assert.match(r.sourceErrors.quota, /ENOENT: no such file or directory, open 'snapshots\.jsonl'/);
+      assert.match(r.notRecorded.find((n) => n.source === 'quota').why, /^could not be read: ENOENT.*snapshots\.jsonl/);
+      assert.match(r.sourceErrors.holds, /about ~5 min/);
+    }],
+    ['DAYVIEW-FIX-1 U2-DATA (RIBBON-MARKS-1 M1): a decide mark carries the unit its text names (what Reverse acts on) and its queue id; one naming none carries null', {
+      units: [unit('U1', 'forge', FULL)], history: HIST(T('00:00')),
+      decisions: queueDecisions([
+        { id: 'Q-1', by: 'forge-main', ts: D('05:00') / 1000, text: 'APPLIED (COMP-FOO-1): ship it. Reverse = revert abc.' },
+        { id: 'Q-2', by: 'forge-main', ts: D('06:00') / 1000, text: 'APPLIED: no unit named. Reverse = undo.' },
+      ]),
+    }, (r) => {
+      assert.deepEqual(lane(r).marks.filter((m) => m.kind === 'decide').map((m) => [m.queueId, m.unit]), [['Q-1', 'COMP-FOO-1'], ['Q-2', null]]);
+    }],
     ['an unlisted lane is drawn in the ops group', { units: [unit('U1', 'newlane', FULL)], history: HIST(T('00:00')), warn: () => {} }, (r) => assert.equal(lane(r, 'newlane').group, 'ops')],
   ];
   for (const [name, input, check] of ROWS) it(name, () => check(buildRibbon({ ...LIVE, ...input })));
@@ -180,6 +217,10 @@ describe('GET /api/ribbon', () => {
   const ROWS = [
     ['a good window answers with the contract keys', `from=${FROM}&to=${TO}`, {}, 200, (b) => assert.deepEqual(Object.keys(b), ['from', 'to', 'now', 'live', 'asOf', 'ageS', 'lanes', 'bands', 'pins', 'coverage', 'history', 'notRecorded', 'sourceErrors', 'owner'])],
     ['the eta carries prev null on the first reading and is written to the history file', `from=${FROM}&to=${TO}`, { loadUnits: async () => ({ units: [unit('U5', 'forge', { ready_at: T('10:00'), dispatched_at: T('11:00') })], coverage: {}, asOf: new Date(NOW).toISOString() }) }, 200, (b) => assert.deepEqual(lane(b).eta, { p50: '2h', p80: '3h', asOf: 'a', raw: 'r', prev: null })],
+    ['DAYVIEW-FIX-1 U2-DATA (FEED-1 M5): a loader that throws with a home path answers 200 with the path cut from sourceErrors and notRecorded', `from=${FROM}&to=${TO}`, { loadSnapshots: async () => { throw new Error("ENOENT: open '/Users/review-probe/.claude/usage/snapshots.jsonl'"); } }, 200, (b) => {
+      assert.equal(/\/Users\//.test(JSON.stringify([b.sourceErrors, b.notRecorded, b.owner])), false);
+      assert.match(b.sourceErrors.quota, /ENOENT: open 'snapshots\.jsonl'/);
+    }],
     ['the ledger unreadable: sourceErrors.ledger is set and the owner-queue decide mark still comes back', `from=${FROM}&to=${TO}`, { ledger: { get: async () => ({ value: null, error: 'ENOENT ledger.md' }), rows: () => [] } }, 200, (b) => {
       assert.match(b.sourceErrors.ledger, /ENOENT/);
       assert.equal(lane(b).marks.filter((m) => m.kind === 'decide' && m.source === 'owner-queue').length, 1);

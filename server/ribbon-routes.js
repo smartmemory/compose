@@ -15,7 +15,7 @@ import { createEtaReader } from './ops-status-routes.js';
 import { readSeats } from './usage-routes.js';
 import { getDataDir } from './project-root.js';
 import { buildUnitIndex } from '../lib/unit-index.js';
-import { buildRibbon, computeHistory, etaWithPrev, parseGateLog, remainingByLane } from '../lib/ribbon-feed.js';
+import { buildRibbon, computeHistory, etaWithPrev, parseGateLog, remainingByLane, safeReason } from '../lib/ribbon-feed.js';
 import { queueDecisions, unitsIn } from '../lib/decisions-ledger.js';
 import { groupOf, stripTag } from '../lib/owner-queue-class.js';
 import { ledgerDecisions, ledgerPath } from './decisions-routes.js';
@@ -80,7 +80,7 @@ export function ownerWaits({ queue = [], units = [], lanes = [], from, to, now }
 }
 
 /** Each source reads to `{value}` or `{error}` (never throws). */
-const settle = async (fn) => { try { return { value: await fn() }; } catch (e) { return { error: String(e?.message ?? e).slice(0, 200) }; } };
+const settle = async (fn) => { try { return { value: await fn() }; } catch (e) { return { error: safeReason(String(e?.message ?? e)).slice(0, 200) }; } };
 
 async function readJsonl(file) {
   const out = [];
@@ -154,7 +154,7 @@ export function attachRibbonRoutes(app, { remote = false, env = process.env, dep
       while (i < lanes.length) {
         const lane = lanes[i++];
         const r = await settle(() => eta(lane, remaining[lane]));
-        if (r.error || r.value?.error) { failed.push(`${lane}: ${r.error ?? r.value.error}`); out[lane] = null; continue; }
+        if (r.error || r.value?.error) { failed.push(`${lane}: ${safeReason(r.error ?? r.value.error)}`); out[lane] = null; continue; }
         const { eta: withPrev, append } = etaWithPrev(lane, r.value, rows);
         out[lane] = withPrev;
         if (append) { rows.push(append); await appendFile(histFile, `${JSON.stringify(append)}\n`).catch((e) => warn(`[ribbon] eta history not written: ${e.message}`)); }
@@ -211,7 +211,7 @@ export function attachRibbonRoutes(app, { remote = false, env = process.env, dep
       if (led.error) sourceErrors.ledger = led.error;
       if (outage.error) sourceErrors.outage = outage.error;
       if (st.error) sourceErrors.seats = st.error;
-      for (const [lane, c] of Object.entries(u.value?.coverage ?? {})) if (c?.error) sourceErrors.stamps = [sourceErrors.stamps, c.error].filter(Boolean).join('; ');
+      for (const [lane, c] of Object.entries(u.value?.coverage ?? {})) if (c?.error) sourceErrors.stamps = [sourceErrors.stamps, safeReason(c.error)].filter(Boolean).join('; ');
 
       const unitList = u.value?.units ?? [];
       const live = t0 >= a.ms && t0 <= b.ms;

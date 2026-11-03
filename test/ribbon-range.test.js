@@ -5,6 +5,7 @@
  * day fixture's) and states the exact window, hash or mark list it must return.
  */
 import { test } from 'node:test';
+import { execFileSync } from 'node:child_process';
 import assert from 'node:assert/strict';
 import {
   activePreset, applyPreset, clampWindow, clusterMarks, formatHash, fromLocalInput, parseHash, PRESETS, recentre, step, toLocalInput,
@@ -74,3 +75,22 @@ const ROWS = [
 for (const row of ROWS) {
   test(row.name, () => assert.deepEqual(row.run(), row.want));
 }
+
+// DAYVIEW-FIX-1 U2-DATA (RIBBON-RANGE-1 M2): the presets keep their local-day edges across a DST change. A child process pins the
+// zone (a fixed TZ with DST; this process's own zone is the machine's). America/New_York ends DST at 02:00 on 2026-11-01.
+test('presets in a DST zone: each end carries its own offset and stays on its local hour', () => {
+  const run = (now) => JSON.parse(execFileSync(process.execPath, ['--input-type=module', '-e',
+    `import { PRESETS, activePreset } from './src/components/ribbon/rangeLogic.js'; const n = ${JSON.stringify(now)};
+     const out = Object.fromEntries(Object.keys(PRESETS).map((k) => [k, PRESETS[k](n)])); out.active = activePreset(out.day); console.log(JSON.stringify(out));`,
+  ], { env: { ...process.env, TZ: 'America/New_York' }, encoding: 'utf8', cwd: new URL('..', import.meta.url).pathname }));
+  const before = run('2026-10-31T16:40:00-04:00'); // the day before the change
+  assert.deepEqual(before.day, w('2026-10-30T18:00:00-04:00', '2026-11-01T06:00:00-05:00'));
+  assert.deepEqual(before['3d'], w('2026-10-29T00:00:00-04:00', '2026-11-02T00:00:00-05:00'));
+  assert.deepEqual(before.week, w('2026-10-25T00:00:00-04:00', '2026-11-02T00:00:00-05:00'));
+  assert.deepEqual(before['6h'], w('2026-10-31T12:40:00-04:00', '2026-10-31T18:40:00-04:00'));
+  assert.equal(before.active, 'day', 'a window that holds the change still reads as the Day preset');
+  const during = run('2026-11-01T10:00:00-05:00'); // the day of the change, after it
+  assert.deepEqual(during.day, w('2026-10-31T18:00:00-04:00', '2026-11-02T06:00:00-05:00'));
+  const spring = run('2026-03-07T12:00:00-05:00'); // the clock change of 2026-03-08, forward
+  assert.deepEqual(spring.day, w('2026-03-06T18:00:00-05:00', '2026-03-08T06:00:00-04:00'));
+});
