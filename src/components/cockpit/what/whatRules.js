@@ -38,32 +38,56 @@ export function whatInputs({ fleet, agent, index, now = Date.now(), lastVisitAt 
   };
 }
 
+const LANDINGS_UNKNOWN = 'the unit index is incomplete or not loaded';
+const RUNNING_UNKNOWN = 'the fleet is unreadable';
+
 /** What the inputs cannot say, in words ("the unit index is incomplete"), or null when every rule input is known. */
 export function unknownWhat(i) {
   const parts = [];
-  if (i.landedInWindow === null) parts.push('the unit index is incomplete or not loaded');
+  if (i.landedInWindow === null) parts.push(LANDINGS_UNKNOWN);
   if (i.waitingAny === null) parts.push(i.units ? 'the owner queue is unreadable' : 'the unit index or the owner queue is unreadable');
-  if (i.isRunning === null) parts.push('the fleet is unreadable');
+  if (i.isRunning === null) parts.push(RUNNING_UNKNOWN);
   return parts.length ? [...new Set(parts)].join('; ') : null;
 }
 
 // A positive known signal decides its state whatever else is unknown; only a verdict that needs an unknown input is Unknown.
 const positive = (i) => i.landedInWindow === true || i.isRunning === true || i.waitingAny === true;
 
-/** Ordered, first match wins. `when` is the plain-words rule shown on hover. */
+/**
+ * Ordered, first match wins. `id` is the stable key (React key, current-row marker); `state` and `when` are the display
+ * words for known inputs. `words(i)`, when present, returns `{state, when}` replacing them while an input the words speak
+ * about is unknown (COMP-COCKPIT-UNKNOWN-FU-2): a clause about landings, running or waiting appears only when that input is known.
+ */
 export const WHAT_RULES = [
-  { state: 'Unknown', when: 'no landing, running agent or open ask is known, and a source the answer needs is unknown (the fleet is unreadable, or the unit index is incomplete or not loaded)', test: (i) => !positive(i) && unknownWhat(i) !== null },
-  { state: 'Moving', when: `a unit landed in the last ${MOVING_WINDOW_H} hours`, test: (i) => i.landedInWindow === true },
-  { state: 'Working, nothing landed', when: `something is running (Compose's agent, a busy session or a live job) and nothing landed in the last ${MOVING_WINDOW_H} hours`, test: (i) => i.isRunning === true },
-  { state: 'Stalled', when: 'nothing is running and at least one unit waits on a review or on you', test: (i) => i.waitingAny === true },
-  { state: 'Idle', when: `nothing is running, nothing waits and nothing landed in the last ${MOVING_WINDOW_H} hours, all three known`, test: () => true },
+  { id: 'unknown', state: 'Unknown', when: 'no landing, running agent or open ask is known, and a source the answer needs is unknown (the fleet is unreadable, or the unit index is incomplete or not loaded)', test: (i) => !positive(i) && unknownWhat(i) !== null },
+  { id: 'moving', state: 'Moving', when: `a unit landed in the last ${MOVING_WINDOW_H} hours`, test: (i) => i.landedInWindow === true },
+  {
+    id: 'working',
+    state: 'Working, nothing landed',
+    when: `something is running (Compose's agent, a busy session or a live job) and nothing landed in the last ${MOVING_WINDOW_H} hours`,
+    words: (i) => (i.landedInWindow === null
+      ? { state: 'Working', when: `something is running (Compose's agent, a busy session or a live job); whether a unit landed in the last ${MOVING_WINDOW_H} hours is unknown because ${LANDINGS_UNKNOWN}` }
+      : null),
+    test: (i) => i.isRunning === true,
+  },
+  {
+    id: 'stalled',
+    state: 'Stalled',
+    when: 'nothing is running and at least one unit waits on a review or on you',
+    words: (i) => (i.isRunning === null
+      ? { state: 'Stalled', when: `at least one unit waits on a review or on you; whether anything is running is unknown because ${RUNNING_UNKNOWN}` }
+      : null),
+    test: (i) => i.waitingAny === true,
+  },
+  { id: 'idle', state: 'Idle', when: `nothing is running, nothing waits and nothing landed in the last ${MOVING_WINDOW_H} hours, all three known`, test: () => true },
 ];
 
-/** The matching row of `WHAT_RULES` for raw inputs; the Unknown row also carries `reason`, what is unknown. */
+/** The matching row of `WHAT_RULES` for raw inputs, with `state`/`when` worded from what is known; the Unknown row also carries `reason`. */
 export function whatRule(raw) {
   const i = whatInputs(raw);
   const row = WHAT_RULES.find((r) => r.test(i));
-  return row.state === 'Unknown' ? { ...row, reason: unknownWhat(i) } : row;
+  const out = { ...row, ...(row.words?.(i) ?? {}) };
+  return row.id === 'unknown' ? { ...out, reason: unknownWhat(i) } : out;
 }
 
 export function whatState(raw) {

@@ -73,14 +73,27 @@ const STATE_ROWS = [
 // COMP-COCKPIT-UNKNOWN-FU-1: unknown index (null) or unknown fleet x what else is known. A positive known signal still wins.
 const UNKNOWN_ROWS = [
   ['unknown index, fleet quiet', raw({ index: null }), 'Unknown'],
-  ['unknown index, agent running', raw({ index: null, agent: { status: 'working', category: 'writing' } }), 'Working, nothing landed'],
-  ['unknown index, a job running', raw({ index: null, fleet: fleetBody({ jobs: 1 }) }), 'Working, nothing landed'],
+  ['unknown index, agent running', raw({ index: null, agent: { status: 'working', category: 'writing' } }), 'Working'],
+  ['unknown index, a job running', raw({ index: null, fleet: fleetBody({ jobs: 1 }) }), 'Working'],
   ['unknown index, owner ask open', raw({ index: null, fleet: fleetBody({ queue: 1 }) }), 'Stalled'],
   ['known index, a landing 1 h ago', raw({ index: indexOf([unit('A', { landedAt: hoursAgo(1) })]) }), 'Moving'],
   ['known index with a landing, fleet down', raw({ fleet: FLEET_DOWN, index: indexOf([unit('A', { landedAt: hoursAgo(1) })]) }), 'Moving'],
   ['known quiet index, fleet down (running and owner asks unknown)', raw({ fleet: FLEET_DOWN, index: indexOf([]) }), 'Unknown'],
   ['known index waiting on review, fleet down', raw({ fleet: FLEET_DOWN, index: indexOf([unit('A', { waiting: 'review' })]) }), 'Stalled'],
   ['control: everything known and quiet', raw({ index: indexOf([]) }), 'Idle'],
+];
+
+// COMP-COCKPIT-UNKNOWN-FU-2: the words claim only what is known. [name, raw, id, exact label, exact hover text]
+const RUN = "something is running (Compose's agent, a busy session or a live job)";
+const WORDS_ROWS = [
+  ['unknown index x agent running: no "nothing landed"', raw({ index: null, agent: { status: 'working', category: 'writing' } }), 'working', 'Working',
+    `${RUN}; whether a unit landed in the last 2 hours is unknown because the unit index is incomplete or not loaded`],
+  ['unknown fleet x waiting known: no "nothing is running"', raw({ fleet: null, index: indexOf([unit('A', { waiting: 'review' })]) }), 'stalled', 'Stalled',
+    'at least one unit waits on a review or on you; whether anything is running is unknown because the fleet is unreadable'],
+  ['known index x busy session: the known wording, unchanged', raw({ fleet: fleetBody({ busy: 1 }), index: indexOf([unit('A', { landedAt: hoursAgo(3) })]) }), 'working', 'Working, nothing landed',
+    `${RUN} and nothing landed in the last 2 hours`],
+  ['known fleet x waiting known: the known wording, unchanged', raw({ index: indexOf([unit('A', { waiting: 'review' })]) }), 'stalled', 'Stalled',
+    'nothing is running and at least one unit waits on a review or on you'],
 ];
 
 const ROWS = [
@@ -169,6 +182,22 @@ const ROWS = [
     expect(screen.getByTestId('what-state').textContent).toBe('Unknown');
     expect(screen.getByTestId('what-state').getAttribute('title')).toMatch(/unit index is incomplete/);
     expect(screen.getByTestId('what-count-review').getAttribute('data-known')).toBe('false');
+  }],
+  ['whatRule words: exact label and hover text per row, with a stable id apart from the label', () => {
+    expect(WORDS_ROWS.map(([name, r]) => { const w = whatRule(r); return [name, w.id, w.state, w.when]; }))
+      .toEqual(WORDS_ROWS.map(([name, , id, state, when]) => [name, id, state, when]));
+    expect(WHAT_RULES.map((r) => r.id)).toEqual(['unknown', 'moving', 'working', 'stalled', 'idle']);
+  }],
+  ['an agent working while the unit index is incomplete (real pollers): the word is Working, never "nothing landed" (FU-1 review probe a)', async () => {
+    resetPollers();
+    routeFetch({ '/api/fleet': fleetBody(), '/api/units/index': { units: [], error: 'queues dir unreadable (ENOTDIR)' } });
+    render(<WhatLine onOpenFleet={vi.fn()} onNavigate={vi.fn()} />);
+    await screen.findByTestId('what-line');
+    act(() => { window.dispatchEvent(new CustomEvent('compose:agent-status', { detail: { status: 'working', category: 'writing' } })); });
+    expect(screen.getByTestId('what-state').textContent).toBe('Working');
+    const cur = screen.getAllByTestId('what-rule').find((li) => li.getAttribute('data-current') === 'true');
+    expect(cur.textContent).toContain('whether a unit landed in the last 2 hours is unknown because the unit index is incomplete or not loaded');
+    expect(cur.textContent).not.toContain('nothing landed');
   }],
   ['an unknown count with an earlier reading shows that value and its age, muted (C6)', () => {
     const w = countWords({ n: null, label: 'waiting on you', why: 'owner queue not reachable, retrying', last: { n: 1, at: NOW - 4 * 60_000 }, now: NOW });

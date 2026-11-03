@@ -173,8 +173,8 @@ export default function WhatLine({ onOpenFleet, onNavigate, onCountOpen }) {
           <span className="block mb-1 font-semibold">How this word is chosen (first match wins)</span>
           <ol className="list-decimal pl-4 space-y-1">
             {WHAT_RULES.map((r) => (
-              <li key={r.state} data-testid="what-rule" data-current={r.state === rule.state ? 'true' : 'false'} className={r.state === rule.state ? 'font-semibold' : 'text-muted-foreground'}>
-                {r.state === rule.state ? '▶ ' : ''}<b>{r.state}</b>: {r.when}
+              <li key={r.id} data-testid="what-rule" data-current={r.id === rule.id ? 'true' : 'false'} className={r.id === rule.id ? 'font-semibold' : 'text-muted-foreground'}>
+                {r.id === rule.id ? '▶ ' : ''}<b>{r.id === rule.id ? rule.state : r.state}</b>: {r.id === rule.id ? rule.when : r.when}
               </li>
             ))}
           </ol>
