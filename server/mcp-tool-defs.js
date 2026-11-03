@@ -156,6 +156,28 @@ export const TOOLS = [
     },
   },
   {
+    name: 'record_evidence',
+    effect: 'mutating',
+    writes: [],
+    description: 'Mint a checked receipt id (ev:<id>) to quote in a status line. The server re-checks the evidence against the machine (contracts/evidence.schema.json) and stores it with the subject in the evidence store; a refused receipt writes nothing. An ev:<id> string is refused (nothing to mint).',
+    inputSchema: {
+      type: 'object',
+      required: ['evidence', 'subject'],
+      properties: {
+        evidence: { type: 'object', description: 'The receipt: sha, process, file, log, screenshot, command or pixel (contracts/evidence.schema.json)' },
+        subject: {
+          type: 'object',
+          description: 'What the receipt backs',
+          properties: {
+            unit: { type: 'string', description: 'Unit code (or give feature)' },
+            feature: { type: 'string', description: 'Feature code (or give unit)' },
+            claim: { type: 'string', description: 'The state word (LANDED, RUNNING, ...) or a short phrase' },
+          },
+        },
+      },
+    },
+  },
+  {
     name: 'bind_session',
     effect: 'setup',
     description: 'Bind the current agent session to a lifecycle feature. Call once per session after creating/identifying the feature. Binding is one-shot — calling again on a bound session returns already_bound.',

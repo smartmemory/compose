@@ -9,11 +9,11 @@
  * Register in .mcp.json:
  *   { "mcpServers": { "compose": { "command": "node", "args": ["server/compose-mcp.js"] } } }
  *
- * Tools: 55, defined in server/mcp-tool-defs.js (the single source; the
+ * Tools: 56, defined in server/mcp-tool-defs.js (the single source; the
  * dispatch switch below must match it). tools/list is trimmed twice:
  *   1. tool surface (COMPOSE-UX-SIMPLIFY-2, server/mcp-tool-policy.js):
- *      core (default, 39 tools: hides the 16 judgment/backfill/xref/resume
- *      tools nobody calls), lean (12 builder tools + 3 setup), full (all 55).
+ *      core (default, 40 tools: hides the 16 judgment/backfill/xref/resume
+ *      tools nobody calls), lean (12 builder tools + 3 setup), full (all 56).
  *      Pick with COMPOSE_TOOL_SURFACE or capabilities.toolSurface.
  *   2. profile x phase (COMP-MCP-ENFORCE-1) when phaseScopedTools is on.
  * A hidden tool is still callable by name; only the menu shrinks.
@@ -47,6 +47,7 @@ import {
   toolLiveOrderAdd,
   toolLiveOrderSupersede,
   toolLiveStateConfigure,
+  toolRecordEvidence,
   toolIterationStart,
   toolIterationReport,
   toolIterationAbort,
@@ -165,6 +166,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         case 'live_order_add':           result = toolLiveOrderAdd(args); break;
         case 'live_order_supersede':     result = toolLiveOrderSupersede(args); break;
         case 'live_state_configure':     result = toolLiveStateConfigure(args); break;
+        case 'record_evidence':          result = await toolRecordEvidence(args); break;
         case 'set_workspace':            result = toolSetWorkspace(args); break;
         case 'get_workspace':            result = toolGetWorkspace(); break;
         case 'get_feature_lifecycle':    result = toolGetFeatureLifecycle(args); break;

@@ -1096,6 +1096,26 @@ export function toolLiveOrderSupersede({ id, superseded_by, reason } = {}) {
 export function toolLiveStateConfigure({ rules_dir } = {}) {
   return configureLiveState(_liveStateDataDir(), { root: _liveStateRoot(), rules_dir });
 }
+/**
+ * COMP-DOGFOOD-RECORD-EVIDENCE-1: mint a checked receipt id from MCP. The same
+ * checkEvidence + recordEvidence pair the CLI uses; a refused receipt writes
+ * nothing. An `ev:<id>` string is refused (there is nothing to mint).
+ */
+export async function toolRecordEvidence({ evidence, subject } = {}, o = {}) {
+  const { checkEvidence, recordEvidence, evidenceError } = await import('../lib/evidence.js');
+  if (typeof evidence === 'string') {
+    throw evidenceError('EVIDENCE_REF_NOT_MINTABLE', 'record_evidence', ['pass the evidence object; an ev:<id> is already recorded']);
+  }
+  const named = subject && typeof subject === 'object' && !Array.isArray(subject)
+    && [subject.unit, subject.feature].some((v) => typeof v === 'string' && v.trim())
+    && typeof subject.claim === 'string' && subject.claim.trim();
+  if (!named) {
+    throw evidenceError('EVIDENCE_SUBJECT_REQUIRED', 'record_evidence', ['subject needs a `unit` or `feature` code and a `claim` (the state word or a short phrase)']);
+  }
+  const accepted = checkEvidence(evidence, 'record_evidence', o);
+  const rec = recordEvidence(accepted.evidence, { checks: accepted.checks, subject, ...o });
+  return { evidence_id: rec.id, checks: rec.checks, subject: rec.subject };
+}
 export function _getBoundFeatureCode() { return sessionContext().featureCode; }
 /** @internal test seam */
 export function _testOnly_setSessionContext({ profile, boundFeatureCode } = {}) {

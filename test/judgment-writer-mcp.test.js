@@ -206,8 +206,8 @@ describe('compose-mcp judgment registry parity', () => {
       ...source.slice(switchStart, switchEnd).matchAll(/^\s*case '([^']+)'/gm),
     ].map((match) => match[1]);
 
-    assert.equal(definitionNames.length, 55, 'TOOLS definition count');
-    assert.equal(dispatchNames.length, 55, 'dispatch case count');
+    assert.equal(definitionNames.length, 56, 'TOOLS definition count');
+    assert.equal(dispatchNames.length, 56, 'dispatch case count');
     assert.deepEqual(
       [...definitionNames].sort(),
       [...dispatchNames].sort(),
@@ -451,8 +451,8 @@ describe('COMP-JUDGMENT-GOAL-MIGRATE S3 — MCP reachability', () => {
     // Adding an op must not add a tool: the registry stays at its pinned size.
     // The invariant is unchanged; this was re-pinned after retiring the
     // unrelated canon_override_grant tool on 2026-09-08.
-    assert.equal(definitionNames.length, 55, 'TOOLS definition count');
-    assert.equal(dispatchNames.length, 55, 'dispatch case count');
+    assert.equal(definitionNames.length, 56, 'TOOLS definition count');
+    assert.equal(dispatchNames.length, 56, 'dispatch case count');
     assert.deepEqual(
       definitionNames.filter((name) => name.startsWith('judgment_') || name.startsWith('get_judgment_')).sort(),
       [...JUDGMENT_TOOLS].sort(),
@@ -674,13 +674,13 @@ describe('mcp-tool-policy — judgment entries', () => {
 });
 
 describe('COMPOSE-UX-SIMPLIFY-2 — tools/list surfaces', () => {
-  // 55 defined (COMP-DOGFOOD-LIVE-STATE-1 added four live-state tools to core); core hides the 16
+  // 56 defined (COMP-DOGFOOD-LIVE-STATE-1 added four live-state tools to core; COMP-DOGFOOD-RECORD-EVIDENCE-1 one more); core hides the 16
   // parked tools, lean lists the 15 builder+setup tools, full lists all.
   const rows = [
-    { surface: undefined, expected: 39, label: 'default (core)' },
-    { surface: 'core', expected: 39, label: 'core' },
+    { surface: undefined, expected: 40, label: 'default (core)' },
+    { surface: 'core', expected: 40, label: 'core' },
     { surface: 'lean', expected: 15, label: 'lean' },
-    { surface: 'full', expected: 55, label: 'full' },
+    { surface: 'full', expected: 56, label: 'full' },
   ];
   for (const { surface, expected, label } of rows) {
     test(`tools/list on ${label} surface lists ${expected} tools`, async () => {

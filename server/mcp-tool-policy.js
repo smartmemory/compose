@@ -54,6 +54,8 @@ const IMPLEMENTER_DENY = [
   // COMP-DOGFOOD-LIVE-STATE-1: owner orders are re-injected into every session
   // after a compaction; an implementer must not be able to write one.
   'live_order_add', 'live_order_supersede', 'live_state_configure',
+  // COMP-DOGFOOD-RECORD-EVIDENCE-1: the profile that makes a claim must not mint its own receipt.
+  'record_evidence',
 ];
 
 /** Reviewer (read-only) may call only these. */

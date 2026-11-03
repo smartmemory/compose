@@ -290,6 +290,8 @@ Features that were never registered with the guard need nothing else. Features r
 
 Signed descriptors live in `.compose/guard-upgrades/<sha256>/` (immutable) with `current` pointing at the live generation; commit them like any other workspace canon. A backfill refuses with `signature_not_approved` when the prompt is cancelled or cannot be shown (SSH session, `tmux` without `pam_reattach`), and with `upgrade_descriptor_unavailable` on a machine that has not run `enrol`. Admins who want the "one approval, one signature" property to hold against their own other `sudo` use can add `Defaults timestamp_timeout=0` to sudoers. Without macOS custody (Linux, CI), `compose guard descriptors` still writes the unsigned candidate and prints the `ssh-keygen -Y sign` command for an operator key.
 
+**Minting a receipt.** A state claim (`LANDED`, `DONE`, ...) quotes an `ev:<id>` the server has re-checked: from MCP call `record_evidence` with an `evidence` object and a `subject` (`unit` or `feature`, plus `claim`), from a shell run `node lib/evidence-cli.js record '<evidence json>' --subject '<subject json>'`. Both print the id and store the same record (`~/.compose/evidence.jsonl`); implementer and reviewer profiles cannot call the MCP tool.
+
 ## Remote access (mobile PWA from anywhere)
 
 The mobile cockpit at `/m` can be reached from outside localhost — bring your own tunnel, compose handles auth and pairing:
