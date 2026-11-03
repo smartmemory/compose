@@ -28,6 +28,8 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
+    // Owner rule: at most 4 test workers (the default is every core; 11 workers drove the load to ~30 on 2026-11-03).
+    maxWorkers: 4,
     // COMP-UITEST-ISOLATION-1: explicit (already the default) — guard against a
     // future default flip. A fresh per-file environment is what keeps these
     // global-mutating suites (globalThis.fetch/WebSocket/EventSource) from
