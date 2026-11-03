@@ -289,7 +289,7 @@ describe('Wave 6 integration — COMP-OBS-TIMELINE', () => {
 
     // 3. Start iteration loop (emits kind=iteration, stage=start)
     const iterStartR = await tlPost(ctx.port, `/api/vision/items/${item.id}/lifecycle/iteration/start`, {
-      loopType: 'review', maxIterations: 3,
+      loopType: 'review', maxIterations: 2,
     });
     assert.equal(iterStartR.status, 200);
 
@@ -484,7 +484,7 @@ describe('Wave 6 integration — COMP-OBS-STATUS', () => {
     const item = ctx.store.createItem({ type: 'feature', title: 'STATUS iter update test' });
     await tlPost(ctx.port, `/api/vision/items/${item.id}/lifecycle/start`, { featureCode: 'COMP-OBS-STATUS-INT3' });
     await tlPost(ctx.port, `/api/vision/items/${item.id}/lifecycle/iteration/start`, {
-      loopType: 'review', maxIterations: 5,
+      loopType: 'review', maxIterations: 2,
     });
     ctx.broadcasts.length = 0;
 
@@ -1179,7 +1179,7 @@ describe('Wave 6 integration — COMP-OBS-STEPDETAIL budget endpoint', () => {
 
     // Start iteration
     const startRes = await bdPost(ctx.port, `/api/vision/items/${item.id}/lifecycle/iteration/start`, {
-      loopType: 'review', maxIterations: 5,
+      loopType: 'review', maxIterations: 2,
     });
     assert.equal(startRes.status, 200, `iteration start failed: ${JSON.stringify(startRes.body)}`);
 

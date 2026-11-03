@@ -1,0 +1,98 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "iteration-loop.schema.json",
+  "title": "IterationLoop",
+  "description": "The review/coverage iteration loop on a feature (COMP-DOGFOOD-REVIEW-LOOP-1, row E of COMP-DOGFOOD-1). Routes: POST /api/vision/items/:id/lifecycle/iteration/{start,report,abort} (server/vision-routes.js), MCP tools start_iteration_loop, report_iteration_result, abort_iteration_loop. The owner rules are smart-memory-ops claude/rules/review-loop.md:6 (max 2 review rounds, 1 for BOUNDED, a 3rd only for a security HIGH) and :8 (same class in round 2, or a 3rd round asked for, means no one more round: write an alternatives note and offer REDESIGN). Every refusal is a coded 4xx `{error, code}` that writes nothing. Codes: ROUND_CAP_EXCEEDED (400), FINDING_INVALID (400), FINDING_CLASS_REQUIRED (400), NEEDS_REDESIGN (409), REDESIGN_NOTE_REQUIRED (400).",
+  "_source": "smart-memory-ops units/COMP-DOGFOOD-1/plan-dag.md row E",
+  "_roadmap": "COMP-DOGFOOD-REVIEW-LOOP-1",
+  "oneOf": [
+    { "$ref": "#/definitions/startBody" },
+    { "$ref": "#/definitions/reportBody" },
+    { "$ref": "#/definitions/abortBody" },
+    { "$ref": "#/definitions/loopState" }
+  ],
+  "definitions": {
+    "tier": {
+      "description": "Sets the review cap. bounded 1, standard 2, security 2 (a security loop may take a 3rd round, see loopState.security_extension). Other loop types ignore it.",
+      "type": "string",
+      "enum": ["bounded", "standard", "security"]
+    },
+    "startBody": {
+      "type": "object",
+      "required": ["loopType"],
+      "properties": {
+        "loopType": { "type": "string", "enum": ["review", "coverage"] },
+        "tier": { "$ref": "#/definitions/tier", "description": "Review loops only. Default standard." },
+        "maxIterations": { "type": "integer", "minimum": 1, "description": "A review loop above its tier's cap is refused ROUND_CAP_EXCEEDED." },
+        "wallClockTimeout": { "type": ["number", "null"], "minimum": 0 },
+        "maxActions": { "type": ["integer", "null"], "minimum": 0 }
+      }
+    },
+    "finding": {
+      "description": "One review finding. A HIGH or MEDIUM names its class: the kind of defect, so that the same kind coming back in the next round is detectable. Free text, compared trimmed and case-insensitive.",
+      "type": "object",
+      "required": ["severity"],
+      "properties": {
+        "severity": { "type": "string", "enum": ["HIGH", "MEDIUM", "LOW"] },
+        "class": { "type": "string", "minLength": 1 },
+        "title": { "type": "string" }
+      },
+      "if": { "properties": { "severity": { "enum": ["HIGH", "MEDIUM"] } }, "required": ["severity"] },
+      "then": { "required": ["class"] }
+    },
+    "reportResult": {
+      "description": "One iteration result. For a review loop `findings` are validated as `finding`; for a coverage loop only `passing` is read.",
+      "type": "object",
+      "properties": {
+        "clean": { "type": "boolean" },
+        "passing": { "type": "boolean" },
+        "summary": { "type": "string" },
+        "actionCount": { "type": "number" },
+        "findings": { "type": "array" },
+        "failures": { "type": "array" }
+      }
+    },
+    "reportBody": {
+      "type": "object",
+      "required": ["result"],
+      "properties": { "result": { "$ref": "#/definitions/reportResult" } }
+    },
+    "abortBody": {
+      "type": "object",
+      "properties": {
+        "reason": { "type": "string" },
+        "redesign_note": { "type": "string", "minLength": 1, "description": "Repo-relative path (to the Compose project root) of the alternatives note. Required, and must exist, when the loop has needs_redesign (REDESIGN_NOTE_REQUIRED)." }
+      }
+    },
+    "round": {
+      "type": "object",
+      "required": ["n", "classes", "high_classes"],
+      "properties": {
+        "n": { "type": "integer", "minimum": 1 },
+        "classes": { "type": "array", "items": { "type": "string" }, "description": "Distinct classes of this round's HIGH and MEDIUM findings, trimmed and lower-cased." },
+        "high_classes": { "type": "array", "items": { "type": "string" }, "description": "The subset of `classes` carried by a HIGH." }
+      }
+    },
+    "loopState": {
+      "description": "lifecycle.iterationState. The review-only fields (tier, cap, capped_from, rounds, needs_redesign, security_extension) are absent on a coverage loop.",
+      "type": "object",
+      "required": ["loopType", "loopId", "status", "count", "maxIterations"],
+      "properties": {
+        "loopType": { "type": "string", "enum": ["review", "coverage"] },
+        "loopId": { "type": "string" },
+        "status": { "type": "string", "enum": ["running", "complete"] },
+        "count": { "type": "integer", "minimum": 0 },
+        "maxIterations": { "type": "integer", "minimum": 1 },
+        "outcome": { "type": ["string", "null"], "enum": ["clean", "max_reached", "action_limit", "timeout", "same_class", "aborted", null], "description": "same_class leaves status `running` (needs_redesign true): the loop closes only through abort with a redesign_note." },
+        "tier": { "$ref": "#/definitions/tier" },
+        "cap": { "type": "integer", "minimum": 1 },
+        "capped_from": { "type": ["integer", "null"], "description": "The settings (or default) value that was lowered to the cap; null when nothing was lowered." },
+        "rounds": { "type": "array", "items": { "$ref": "#/definitions/round" } },
+        "needs_redesign": { "type": "boolean" },
+        "security_extension": { "type": "boolean", "description": "True once a security loop was granted its 3rd round because round 2 carried a HIGH of a new class." },
+        "abort_reason": { "type": ["string", "null"] },
+        "redesign_note": { "type": ["string", "null"] }
+      }
+    }
+  }
+}

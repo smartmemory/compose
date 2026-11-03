@@ -28,7 +28,7 @@ import path from 'node:path';
 import { writeFeatureGroupToDisk } from './feature-scan.js';
 import { ArtifactManager } from './artifact-manager.js';
 import { recordIteration, checkCumulativeBudget, readBudget } from '../lib/budget-ledger.js';
-import { SchemaValidator } from './schema-validator.js';
+import { SchemaValidator, loadSchema } from './schema-validator.js';
 import { appendPhaseHistory } from './lifecycle-phase-history.js';
 import { emitDecisionEvent, buildPhaseTransitionEvent, buildIterationEvent, buildGateEvent } from './decision-event-emit.js';
 import { emitStatusSnapshot } from './status-emit.js';
@@ -707,6 +707,17 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
 
   // ── Iteration loop endpoints ──────────────────────────────────────────
 
+  // COMP-DOGFOOD-REVIEW-LOOP-1: contracts/iteration-loop.schema.json, owner rules
+  // review-loop.md:6 (round cap) and :8 (same class means redesign).
+  const ITER_SCHEMA_PATH = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../contracts/iteration-loop.schema.json');
+  const iterDef = (name) => {
+    const { ajv, schema } = loadSchema(ITER_SCHEMA_PATH);
+    return ajv.getSchema(`${schema.$id}#/definitions/${name}`);
+  };
+  const ROUND_CAPS = { bounded: 1, standard: 2, security: 2 };
+  const iterRefuse = (res, status, code, error) => res.status(status).json({ error, code });
+  const classKey = (c) => String(c).trim().toLowerCase();
+
   app.post('/api/vision/items/:id/lifecycle/iteration/start', guardAuth, (req, res) => {
     try {
       const item = store.items.get(req.params.id);
@@ -714,6 +725,17 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       const { loopType, maxIterations, wallClockTimeout, maxActions } = req.body;
       if (!ITERATION_TYPES.has(loopType)) {
         return res.status(400).json({ error: `Invalid loopType: ${loopType}. Must be one of: ${[...ITERATION_TYPES].join(', ')}` });
+      }
+      const startCheck = iterDef('startBody');
+      if (!startCheck(req.body)) {
+        return iterRefuse(res, 400, 'INVALID_REQUEST', `Invalid start body: ${startCheck.errors.map(e => `${e.instancePath || '/'} ${e.message}`).join('; ')}`);
+      }
+      // COMP-DOGFOOD-REVIEW-LOOP-1: a review loop has a tier and a round cap (review-loop.md:6)
+      const isReview = loopType === 'review';
+      const tier = req.body.tier ?? 'standard';
+      const cap = isReview ? ROUND_CAPS[tier] : null;
+      if (isReview && maxIterations !== undefined && maxIterations > cap) {
+        return iterRefuse(res, 400, 'ROUND_CAP_EXCEEDED', `maxIterations ${maxIterations} is above the ${tier} review cap of ${cap} (review-loop.md:6: max 2 review rounds, 1 for BOUNDED, a 3rd only for a security HIGH)`);
       }
       if (item.lifecycle.iterationState?.status === 'running') {
         return res.status(409).json({ error: 'An iteration loop is already running' });
@@ -735,7 +757,10 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
 
       const settingsMax = settingsStore?.get()?.iterations?.[loopType]?.maxIterations;
       const settingsTimeout = settingsStore?.get()?.iterations?.[loopType]?.timeout;
-      const max = maxIterations ?? settingsMax ?? 10;
+      const requested = maxIterations ?? settingsMax ?? 10;
+      const max = isReview ? Math.min(requested, cap) : requested;
+      // a settings (or default) value above the cap is lowered, and remembered
+      const cappedFrom = isReview && requested > cap ? requested : null;
       // wallClockTimeout from body takes precedence; fall back to settings timeout (minutes), then no timeout
       const timeoutMinutes = wallClockTimeout !== undefined ? wallClockTimeout : (settingsTimeout ?? null);
       const now = new Date().toISOString();
@@ -747,6 +772,12 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
         maxActions: maxActions ?? null,
         totalActions: 0,
       };
+      if (isReview) {
+        Object.assign(item.lifecycle.iterationState, {
+          tier, cap, capped_from: cappedFrom, rounds: [], needs_redesign: false,
+          security_extension: false, abort_reason: null, redesign_note: null,
+        });
+      }
       store.updateLifecycle(req.params.id, item.lifecycle);
       scheduleBroadcast();
       broadcastMessage({ type: 'iterationStarted', itemId: req.params.id, loopId: item.lifecycle.iterationState.loopId, loopType, maxIterations: max, timestamp: now, startedAt: now, wallClockTimeout: timeoutMinutes, maxActions: maxActions ?? null });
@@ -780,9 +811,41 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       if (iter.status !== 'running') return res.status(409).json({ error: `Loop is ${iter.status}, not running` });
       const { result } = req.body;
       if (!result || typeof result !== 'object') return res.status(400).json({ error: 'result object required' });
+      const isReview = iter.loopType === 'review' && Array.isArray(iter.rounds);
+      // COMP-DOGFOOD-REVIEW-LOOP-1: validate before anything is written
+      if (isReview && iter.needs_redesign) {
+        return iterRefuse(res, 409, 'NEEDS_REDESIGN', `This loop stopped on a repeated finding class (${iter.rounds.at(-1)?.classes?.join(', ')}); no further round. Write the alternatives note and abort with redesign_note (review-loop.md:8)`);
+      }
+      let roundClasses = [];
+      let roundHighClasses = [];
+      if (isReview) {
+        const reportCheck = iterDef('reportBody');
+        if (!reportCheck(req.body)) {
+          return iterRefuse(res, 400, 'INVALID_REQUEST', `Invalid result: ${reportCheck.errors.map(e => `${e.instancePath || '/'} ${e.message}`).join('; ')}`);
+        }
+        const findingCheck = iterDef('finding');
+        const findings = result.findings ?? [];
+        for (const [i, f] of findings.entries()) {
+          if (findingCheck(f)) continue;
+          if (f && ['HIGH', 'MEDIUM'].includes(f.severity) && (f.class === undefined || f.class === '')) {
+            return iterRefuse(res, 400, 'FINDING_CLASS_REQUIRED', `findings[${i}] is ${f.severity} with no class: name the kind of defect so a repeat can be detected (review-loop.md:8)`);
+          }
+          return iterRefuse(res, 400, 'FINDING_INVALID', `findings[${i}] must be {severity: HIGH|MEDIUM|LOW, class, title}: ${(findingCheck.errors ?? []).map(e => `${e.instancePath || '/'} ${e.message}`).join('; ')}`);
+        }
+        const hm = findings.filter(f => f.severity === 'HIGH' || f.severity === 'MEDIUM');
+        roundClasses = [...new Set(hm.map(f => classKey(f.class)))];
+        roundHighClasses = [...new Set(hm.filter(f => f.severity === 'HIGH').map(f => classKey(f.class)))];
+      }
       const now = new Date().toISOString();
       iter.count++;
       iter.iterations.push({ n: iter.count, startedAt: now, result });
+      let repeated = [];
+      let extensionReason = null;
+      if (isReview) {
+        const prev = iter.rounds.at(-1);
+        repeated = prev ? roundClasses.filter(c => prev.classes.includes(c)) : [];
+        iter.rounds.push({ n: iter.count, classes: roundClasses, high_classes: roundHighClasses });
+      }
 
       // COMP-BUDGET: accumulate action count
       iter.totalActions = (iter.totalActions ?? 0) + (result.actionCount ?? 0);
@@ -793,6 +856,14 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       let shouldContinue = true;
       if (exitMet) {
         iter.status = 'complete'; iter.outcome = 'clean'; iter.completedAt = now; shouldContinue = false;
+      } else if (repeated.length) {
+        // review-loop.md:8: same class again means redesign, never one more round (beats the 3rd-round allowance).
+        // The loop stays `running` so it can only close through abort with a redesign_note.
+        iter.needs_redesign = true; iter.outcome = 'same_class'; shouldContinue = false;
+      } else if (isReview && iter.tier === 'security' && !iter.security_extension && iter.count === iter.cap && iter.count >= iter.maxIterations && roundHighClasses.length) {
+        // review-loop.md:6: a 3rd round only for a security HIGH, here of a class round 1 did not carry
+        iter.security_extension = true; iter.maxIterations = iter.cap + 1;
+        extensionReason = `3rd round allowed: security tier and round ${iter.count} has a HIGH of a new class (${roundHighClasses.join(', ')}) (review-loop.md:6)`;
       } else if (iter.count >= iter.maxIterations) {
         iter.status = 'complete'; iter.outcome = 'max_reached'; iter.completedAt = now; shouldContinue = false;
       } else if (iter.maxActions != null && iter.totalActions >= iter.maxActions) {
@@ -853,7 +924,14 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
           emitStatusSnapshot(broadcastMessage, store, item.lifecycle.featureCode, now);
         }
       }
-      res.json({ continue: shouldContinue, count: iter.count, maxIterations: iter.maxIterations, outcome: iter.outcome });
+      const response = { continue: shouldContinue, count: iter.count, maxIterations: iter.maxIterations, outcome: iter.outcome };
+      if (iter.needs_redesign) {
+        response.needs_redesign = true;
+        response.class = repeated;
+        response.reason = `same finding class again (${repeated.join(', ')}): no one more round. Write a half-page alternatives note, offer REDESIGN as option (a), then abort with redesign_note (review-loop.md:8)`;
+      }
+      if (extensionReason) response.reason = extensionReason;
+      res.json(response);
     } catch (err) {
       res.status(400).json({ error: err.message });
     }
@@ -865,8 +943,23 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       if (!item?.lifecycle?.iterationState) return res.status(404).json({ error: 'No iteration loop active' });
       const iter = item.lifecycle.iterationState;
       if (iter.status !== 'running') return res.status(409).json({ error: `Loop already ${iter.status}` });
+      const abortCheck = iterDef('abortBody');
+      const abortBody = req.body ?? {};
+      if (!abortCheck(abortBody)) {
+        return iterRefuse(res, 400, 'INVALID_REQUEST', `Invalid abort body: ${abortCheck.errors.map(e => `${e.instancePath || '/'} ${e.message}`).join('; ')}`);
+      }
+      const { reason, redesign_note: redesignNote } = abortBody;
+      if (iter.needs_redesign) {
+        const abs = redesignNote ? path.resolve(projectRoot, redesignNote) : null;
+        const inside = abs && !path.isAbsolute(redesignNote) && abs.startsWith(path.resolve(projectRoot) + path.sep);
+        if (!inside || !fs.existsSync(abs) || !fs.statSync(abs).isFile()) {
+          return iterRefuse(res, 400, 'REDESIGN_NOTE_REQUIRED', 'This loop needs a redesign: abort with redesign_note, a repo-relative path to the alternatives note, which must exist (review-loop.md:8)');
+        }
+      }
       const now = new Date().toISOString();
       iter.status = 'complete'; iter.outcome = 'aborted'; iter.completedAt = now;
+      if (reason !== undefined) iter.abort_reason = reason;
+      if (redesignNote !== undefined) iter.redesign_note = redesignNote;
 
       // COMP-BUDGET: record iteration in ledger on abort
       const composeDir = path.join(projectRoot, '.compose');

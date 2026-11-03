@@ -239,7 +239,8 @@ export const TOOLS = [
       properties: {
         id: { type: 'string', description: 'Item ID or semanticId' },
         loopType: { type: 'string', enum: ['review', 'coverage'], description: 'Type of iteration loop' },
-        maxIterations: { type: 'number', description: 'Override max iterations (optional, defaults from settings)' },
+        maxIterations: { type: 'number', description: 'Override max iterations (optional, defaults from settings). A review loop above its tier cap is refused ROUND_CAP_EXCEEDED.' },
+        tier: { type: 'string', enum: ['bounded', 'standard', 'security'], description: 'Review loops only (default standard). Sets the round cap: bounded 1, standard 2, security 2 (a 3rd round only when round 2 has a HIGH of a new class). review-loop.md:6' },
       },
       required: ['id', 'loopType'],
     },
@@ -253,7 +254,7 @@ export const TOOLS = [
       type: 'object',
       properties: {
         id: { type: 'string', description: 'Item ID or semanticId' },
-        result: { type: 'object', description: 'Iteration result. Review: {clean: bool, findings: []}, Coverage: {passing: bool, failures: []}' },
+        result: { type: 'object', description: 'Iteration result. Review: {clean: bool, findings: [{severity: HIGH|MEDIUM|LOW, class, title}]} (a HIGH or MEDIUM needs a class: FINDING_CLASS_REQUIRED; the same class in two consecutive rounds stops the loop with needs_redesign, review-loop.md:8), Coverage: {passing: bool, failures: []}' },
       },
       required: ['id', 'result'],
     },
@@ -267,7 +268,8 @@ export const TOOLS = [
       type: 'object',
       properties: {
         id: { type: 'string', description: 'Item ID or semanticId' },
-        reason: { type: 'string', description: 'Why the loop was aborted' },
+        reason: { type: 'string', description: 'Why the loop was aborted (stored as abort_reason)' },
+        redesign_note: { type: 'string', description: 'Repo-relative path of the alternatives note. Required, and must exist, when the loop has needs_redesign (REDESIGN_NOTE_REQUIRED).' },
       },
       required: ['id'],
     },

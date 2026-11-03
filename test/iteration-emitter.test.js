@@ -97,7 +97,7 @@ describe('iteration/start — emits one DecisionEvent', () => {
     ctx.broadcasts.length = 0;
 
     const r = await post(ctx.port, `/api/vision/items/${itemId}/lifecycle/iteration/start`, {
-      loopType: 'review', maxIterations: 3,
+      loopType: 'review', maxIterations: 2,
     });
     assert.equal(r.status, 200, JSON.stringify(r.body));
 
@@ -120,7 +120,7 @@ describe('iteration/start — emits one DecisionEvent', () => {
   test('start event feature_code matches item lifecycle featureCode', async () => {
     const itemId = await setupItemWithLifecycle(ctx);
     await post(ctx.port, `/api/vision/items/${itemId}/lifecycle/iteration/start`, {
-      loopType: 'review', maxIterations: 3,
+      loopType: 'review', maxIterations: 2,
     });
     const de = ctx.broadcasts.find(b => b.type === 'decisionEvent' && b.event?.kind === 'iteration');
     assert.equal(de.event.feature_code, 'TEST-1');
@@ -134,7 +134,7 @@ describe('iteration/report — complete emits 1 DE; per-attempt update emits 0 D
 
   async function startLoop(ctx, itemId, loopType = 'review') {
     const r = await post(ctx.port, `/api/vision/items/${itemId}/lifecycle/iteration/start`, {
-      loopType, maxIterations: 5,
+      loopType, maxIterations: loopType === 'review' ? 2 : 5, // review cap is 2 (review-loop.md:6)
     });
     assert.equal(r.status, 200);
   }
@@ -222,7 +222,7 @@ describe('iteration/abort — emits 1 DecisionEvent with fail outcome', () => {
   test('abort emits exactly 1 iteration DecisionEvent', async () => {
     const itemId = await setupItemWithLifecycle(ctx);
     await post(ctx.port, `/api/vision/items/${itemId}/lifecycle/iteration/start`, {
-      loopType: 'review', maxIterations: 5,
+      loopType: 'review', maxIterations: 2,
     });
     ctx.broadcasts.length = 0;
 
@@ -236,7 +236,7 @@ describe('iteration/abort — emits 1 DecisionEvent with fail outcome', () => {
   test('abort DecisionEvent validates against schema', async () => {
     const itemId = await setupItemWithLifecycle(ctx);
     await post(ctx.port, `/api/vision/items/${itemId}/lifecycle/iteration/start`, {
-      loopType: 'review', maxIterations: 5,
+      loopType: 'review', maxIterations: 2,
     });
     await post(ctx.port, `/api/vision/items/${itemId}/lifecycle/iteration/abort`, {});
 
@@ -249,7 +249,7 @@ describe('iteration/abort — emits 1 DecisionEvent with fail outcome', () => {
   test('abort DecisionEvent metadata.outcome maps to fail', async () => {
     const itemId = await setupItemWithLifecycle(ctx);
     await post(ctx.port, `/api/vision/items/${itemId}/lifecycle/iteration/start`, {
-      loopType: 'review', maxIterations: 5,
+      loopType: 'review', maxIterations: 2,
     });
     await post(ctx.port, `/api/vision/items/${itemId}/lifecycle/iteration/abort`, {});
 

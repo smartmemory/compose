@@ -249,7 +249,7 @@ describe('wall-clock timeout enforcement', () => {
 
       // wallClockTimeout=0 means 0 minutes = already expired
       const startRes = await post(ctx.server, `/api/vision/items/${itemId}/lifecycle/iteration/start`, {
-        loopType: 'review', maxIterations: 10, wallClockTimeout: 0,
+        loopType: 'review', maxIterations: 2, wallClockTimeout: 0,
       });
       assert.equal(startRes.status, 200);
 
@@ -277,7 +277,7 @@ describe('wall-clock timeout enforcement', () => {
       const itemId = addItem(ctx.store);
 
       await post(ctx.server, `/api/vision/items/${itemId}/lifecycle/iteration/start`, {
-        loopType: 'review', maxIterations: 10, wallClockTimeout: 60,
+        loopType: 'review', maxIterations: 2, wallClockTimeout: 60,
       });
 
       const reportRes = await post(ctx.server, `/api/vision/items/${itemId}/lifecycle/iteration/report`, {
@@ -306,7 +306,7 @@ describe('action count ceiling', () => {
       const itemId = addItem(ctx.store);
 
       await post(ctx.server, `/api/vision/items/${itemId}/lifecycle/iteration/start`, {
-        loopType: 'review', maxIterations: 10, maxActions: 5,
+        loopType: 'review', maxIterations: 2, maxActions: 5,
       });
 
       const reportRes = await post(ctx.server, `/api/vision/items/${itemId}/lifecycle/iteration/report`, {
@@ -330,18 +330,18 @@ describe('action count ceiling', () => {
       const itemId = addItem(ctx.store);
 
       await post(ctx.server, `/api/vision/items/${itemId}/lifecycle/iteration/start`, {
-        loopType: 'review', maxIterations: 10, maxActions: 10,
+        loopType: 'coverage', maxIterations: 10, maxActions: 10, // coverage: a review loop caps at 2 rounds, and max_reached would win
       });
 
       // First report: 4 actions (under limit)
       const r1 = await post(ctx.server, `/api/vision/items/${itemId}/lifecycle/iteration/report`, {
-        result: { clean: false, findings: [], actionCount: 4 },
+        result: { passing: false, failures: [], actionCount: 4 },
       });
       assert.equal(r1.body.continue, true);
 
       // Second report: 6 more actions (total 10, hits limit)
       const r2 = await post(ctx.server, `/api/vision/items/${itemId}/lifecycle/iteration/report`, {
-        result: { clean: false, findings: [], actionCount: 6 },
+        result: { passing: false, failures: [], actionCount: 6 },
       });
       assert.equal(r2.body.outcome, 'action_limit');
       assert.equal(r2.body.continue, false);
@@ -368,7 +368,7 @@ describe('cumulative budget blocks iteration start', () => {
 
       const itemId = addItem(ctx.store);
       const startRes = await post(ctx.server, `/api/vision/items/${itemId}/lifecycle/iteration/start`, {
-        loopType: 'review', maxIterations: 4,
+        loopType: 'review', maxIterations: 2,
       });
       assert.equal(startRes.status, 429, `expected 429, got: ${startRes.status} — ${JSON.stringify(startRes.body)}`);
       assert.ok(startRes.body.error.includes('Cumulative'), `expected "Cumulative" in: ${startRes.body.error}`);
@@ -389,7 +389,7 @@ describe('cumulative budget blocks iteration start', () => {
 
       const itemId = addItem(ctx.store);
       const startRes = await post(ctx.server, `/api/vision/items/${itemId}/lifecycle/iteration/start`, {
-        loopType: 'review', maxIterations: 4,
+        loopType: 'review', maxIterations: 2,
       });
       assert.equal(startRes.status, 200);
     } finally {

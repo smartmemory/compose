@@ -877,16 +877,16 @@ export async function toolBackfillCompletion({ id, commit_sha, tests_pass, files
   return _postLifecycle(id, 'backfill', body);
 }
 
-export async function toolIterationStart({ id, loopType, maxIterations }) {
-  return _postLifecycle(id, 'iteration/start', { loopType, maxIterations });
+export async function toolIterationStart({ id, loopType, maxIterations, tier }) {
+  return _postLifecycle(id, 'iteration/start', { loopType, maxIterations, tier });
 }
 
 export async function toolIterationReport({ id, result }) {
   return _postLifecycle(id, 'iteration/report', { result });
 }
 
-export async function toolIterationAbort({ id, reason }) {
-  return _postLifecycle(id, 'iteration/abort', { reason });
+export async function toolIterationAbort({ id, reason, redesign_note }) {
+  return _postLifecycle(id, 'iteration/abort', { reason, redesign_note });
 }
 
 // ---------------------------------------------------------------------------
