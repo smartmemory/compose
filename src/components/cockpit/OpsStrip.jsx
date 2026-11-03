@@ -6,6 +6,7 @@ import { deriveEntries } from './opsStripLogic.js';
 import { formatBudgetCompact } from './stepDetailLogic.js';
 import { wsFetch } from '../../lib/wsFetch.js';
 import { useFleet } from '../../lib/fleetPoller.js';
+import SourceNote from './SourceNote.jsx';
 import { fleetPills } from './fleetLogic.js';
 import { useNotifyState } from './notify/useNotifyState.js';
 
@@ -182,8 +183,9 @@ export default function OpsStrip({ onSelectFeature, onOpenFleet, onOpenHome }) {
     }
   }, [resolveGate]);
 
-  // Hidden when there are no entries
-  if (visibleEntries.length === 0 && fleetEntries.length === 0) {
+  // Hidden when there are no entries. SOURCE-FAULTS-1: a failed fleet refresh is shown too, since the pills beside it
+  // are then the last good read, not the current one.
+  if (visibleEntries.length === 0 && fleetEntries.length === 0 && !fleet.error) {
     return null;
   }
 
@@ -206,6 +208,7 @@ export default function OpsStrip({ onSelectFeature, onOpenFleet, onOpenHome }) {
         flexShrink: 0,
       }}
     >
+      {fleet.error && <SourceNote source="Fleet" state={fleet} compact />}
       {fleetEntries.map(pill => (
         <OpsStripEntry
           key={pill.key}

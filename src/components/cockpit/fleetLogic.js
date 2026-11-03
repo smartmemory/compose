@@ -119,29 +119,33 @@ export const CATEGORY_LABELS = {
 /**
  * COMP-COCKPIT-WHAT-LINE-1: the one source for "is anything running". Compose's own agent (`agentState`, the
  * `compose:agent-status` event detail) plus the fleet's busy sessions (sm_status `sessions[].busy === true`) and live
- * jobs (`jobs[].alive === true`). `busy` and `jobs` are null when `fleetKnown` is false (sm_status down or neither panel
- * is a list), so a caller shows "unknown" instead of 0. `text` is the fleet part of the header line.
+ * jobs (`jobs[].alive === true`). `busy` and `jobs` are each null when their own panel is not a list, and `fleetKnown`
+ * needs BOTH lists (COMP-COCKPIT-SOURCE-FAULTS-1, WHAT-LINE M3): an unreadable jobs list cannot show that nothing runs, so
+ * a partial read is an unknown total, never 0. `text` is the fleet part of the header line; on a partial read it keeps
+ * the known part and names the missing one ("1 session busy · jobs unknown").
  */
 export function runningNow(fleetData, agentState) {
   const sessions = smPanel(fleetData, 'sessions');
   const jobs = smPanel(fleetData, 'jobs');
   const okS = Array.isArray(sessions?.value);
   const okJ = Array.isArray(jobs?.value);
-  const fleetKnown = okS || okJ;
+  const fleetKnown = okS && okJ;
   const composeWorking = agentState?.status === 'working';
   const composeLabel = composeWorking ? (CATEGORY_LABELS[agentState.category] || 'Working') : 'Idle';
-  if (!fleetKnown) return { composeWorking, composeLabel, busy: null, jobs: null, fleetKnown, text: '' };
-  const busy = okS ? sessions.value.filter((s) => s?.busy === true).length : 0;
-  const alive = okJ ? jobs.value.filter((j) => j?.alive === true).length : 0;
+  if (!okS && !okJ) return { composeWorking, composeLabel, busy: null, jobs: null, fleetKnown, text: '' };
+  const busy = okS ? sessions.value.filter((s) => s?.busy === true).length : null;
+  const alive = okJ ? jobs.value.filter((j) => j?.alive === true).length : null;
   const parts = [];
   if (busy > 0) parts.push(`${busy} session${busy === 1 ? '' : 's'} busy`);
   if (alive > 0) parts.push(`${alive} job${alive === 1 ? '' : 's'}`);
+  if (busy === null) parts.push('sessions unknown');
+  if (alive === null) parts.push('jobs unknown');
   return { composeWorking, composeLabel, busy, jobs: alive, fleetKnown, text: parts.join(' · ') };
 }
 
 /**
- * COMP-COCKPIT-PROCESS-DATA-1: the header pill's fleet line, now a thin wrapper over `runningNow`; null when sm_status is
- * down or neither panel is a list, so the pill never shows an error.
+ * COMP-COCKPIT-PROCESS-DATA-1: the header pill's fleet line, now a thin wrapper over `runningNow`; null unless both
+ * panels are lists (SOURCE-FAULTS-1), so a partial read is never a count.
  */
 export function fleetActivity(data) {
   const r = runningNow(data, null);

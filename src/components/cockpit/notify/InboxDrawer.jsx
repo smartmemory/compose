@@ -17,6 +17,7 @@ import { useNavigation } from '@/lib/navigation.jsx';
 import { canOpenEntity } from '../../shared/EntityLink.jsx';
 import NotifyActions, { useRowKeys } from './NotifyActions.jsx';
 import { useNotifyState } from './useNotifyState.js';
+import SourceNote from '../SourceNote.jsx';
 import { isCleared, securityAck, answeredOf, answerHolds, answeredFold, fnv1a, keyOf, hhmm } from './notifyState.js';
 
 const asOf = (fleet) => {
@@ -35,7 +36,7 @@ function entityTarget(nav, p) {
 function FullText({ text, tone }) {
   const nav = useNavigation();
   return (
-    <div data-testid="inbox-full" className="mt-1 whitespace-pre-wrap break-words" style={{ color: tone ? 'hsl(var(--destructive))' : undefined }}>
+    <div data-testid="inbox-full" data-tone={tone ? 'critical' : undefined} className="mt-1 whitespace-pre-wrap break-words" style={{ color: tone ? 'hsl(var(--destructive))' : undefined }}>
       {entityLinkParts(text).map((p, i) => {
         if (p.href) return <a key={i} href={p.href} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">{p.text}</a>;
         const kind = p.entity ? entityTarget(nav, p) : null;
@@ -82,7 +83,8 @@ function Row({ row, groupId, open, onToggle, notify, index, selected }) {
         {/* Open: the full text below is the row, so the first line is not printed twice. */}
         <span
           className="min-w-0 flex-1 truncate"
-          style={{ color: row.red && groupId === 'security' ? 'hsl(var(--destructive))' : undefined }}
+          data-tone={row.red ? 'critical' : undefined}
+          style={{ color: row.red ? 'hsl(var(--destructive))' : undefined }}
         >
           {open ? '' : row.first}
         </span>
@@ -92,7 +94,7 @@ function Row({ row, groupId, open, onToggle, notify, index, selected }) {
           </span>
         )}
       </button>
-      {open && <FullText text={row.text} tone={row.red && groupId === 'security'} />}
+      {open && <FullText text={row.text} tone={row.red} />}
       <NotifyActions row={actRow} notify={notify} />
       {groupId === 'decided' && (
         <div className="mt-1 flex items-center gap-2 text-muted-foreground">
@@ -126,7 +128,8 @@ function AnsweredFold({ rows }) {
 }
 
 export default function InboxDrawer() {
-  const { data: fleet } = useFleet();
+  const fleetSrc = useFleet();
+  const { data: fleet } = fleetSrc;
   const notify = useNotifyState();
   const listRef = React.useRef(null);
   const [open, setOpen] = React.useState(false);
@@ -184,6 +187,10 @@ export default function InboxDrawer() {
 
   const time = asOf(fleet);
   const unavailable = !panel || panel.value == null;
+  // SOURCE-FAULTS-1 (NOTIFY-INBOX M1): a failed refresh (retained rows) or a queue panel read with an error is not a
+  // complete read, so the drawer says so and never prints "Nothing open." over it.
+  const partial = !unavailable && panel.error ? { error: panel.error } : null;
+  const faulted = Boolean(fleetSrc.error || partial);
   const toggle = (setter, key) => setter((m) => ({ ...m, [key]: !m[key] }));
 
   return createPortal(
@@ -207,7 +214,13 @@ export default function InboxDrawer() {
       </header>
       <div ref={listRef} className="min-h-0 flex-1 overflow-auto p-3">
         {unavailable && <div data-testid="inbox-unavailable" className="text-muted-foreground">The owner queue is unavailable (sm_status). Nothing is shown rather than a false zero.</div>}
-        {!unavailable && groups.every((g) => g.rows.length === 0) && <div className="text-muted-foreground">Nothing open.</div>}
+        {faulted && (
+          <div data-testid="inbox-fault" className="mb-2">
+            <SourceNote source="Fleet" state={fleetSrc} />
+            <SourceNote source="Owner queue" state={partial} />
+          </div>
+        )}
+        {!unavailable && !faulted && groups.every((g) => g.rows.length === 0) && <div className="text-muted-foreground">Nothing open.</div>}
         {groups.filter((g) => g.rows.length > 0).map((g) => {
           const folded = g.folded && !unfolded[g.id];
           return (

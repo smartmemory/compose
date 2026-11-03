@@ -9,6 +9,7 @@ export const SOURCE_TEXT = {
   goal: 'from its goal',
   glossary: 'from the lane glossary',
   brief: 'from its brief',
+  unavailable: 'the unit names could not be read (unit index unavailable)',
 };
 
 /** Exact id first (preferring `lane` when several lanes share it), then a lane-qualified `lane/id`. */
@@ -24,10 +25,13 @@ function findUnit(units, id, lane) {
   return null;
 }
 
-/** → `{title, code, source}`; source is a titleSource, 'none' (known hole or unknown unit) or 'loading'. */
-export function unitLabel(id, index, lane) {
+/**
+ * → `{title, code, source}`; source is a titleSource, 'none' (known hole or unknown unit), 'loading' (no response yet) or
+ * 'unavailable' (COMP-COCKPIT-SOURCE-FAULTS-1, RULE-PLAIN M2: the index request finished and failed, `opts.error`).
+ */
+export function unitLabel(id, index, lane, { error = null } = {}) {
   const code = String(id ?? '');
-  if (!index || !Array.isArray(index.units)) return { title: null, code, source: 'loading' };
+  if (!index || !Array.isArray(index.units)) return { title: null, code, source: error ? 'unavailable' : 'loading' };
   const u = findUnit(index.units, code, lane);
   if (!u || !u.title) return { title: null, code, source: 'none' };
   return { title: u.title, code: u.id, source: u.titleSource ?? 'none' };

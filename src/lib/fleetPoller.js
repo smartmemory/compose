@@ -8,11 +8,12 @@
  */
 import { useEffect, useState } from 'react';
 import { wsFetch } from './wsFetch.js';
+import { INITIAL_SOURCE, sourceOk, sourceFail } from './sourceState.js';
 
 export const FLEET_POLL_MS = 15_000;
 
 const subscribers = new Set();
-let state = { data: null, error: null, loading: true };
+let state = INITIAL_SOURCE;
 let timer = null;
 let inflight = false;
 
@@ -27,9 +28,9 @@ async function poll() {
   try {
     const res = await wsFetch('/api/fleet');
     if (!res.ok) throw new Error(`fleet route ${res.status}`);
-    emit({ data: await res.json(), error: null, loading: false });
+    emit(sourceOk(await res.json()));
   } catch (error) {
-    emit({ data: state.data, error: String(error?.message ?? error), loading: false });
+    emit(sourceFail(state, error)); // the last good data stays, marked stale (sourceState.js)
   } finally {
     inflight = false;
   }
@@ -70,10 +71,10 @@ export function subscribeFleet(fn) {
 
 /** Test seam: forget the last result so a fresh mount starts loading again. */
 export function resetFleetPoller() {
-  state = { data: null, error: null, loading: true };
+  state = INITIAL_SOURCE;
 }
 
-/** React hook: `{data, error, loading}` from the shared loop. */
+/** React hook: the shared loop's source state, `{data, error, stale, fetchedAt, errorSince, loading}` (sourceState.js). */
 export function useFleet() {
   const [snap, setSnap] = useState(state);
   useEffect(() => subscribeFleet(setSnap), []);

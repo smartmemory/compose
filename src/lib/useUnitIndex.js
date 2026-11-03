@@ -8,11 +8,12 @@
  */
 import { useEffect, useState } from 'react';
 import { wsFetch } from './wsFetch.js';
+import { INITIAL_SOURCE, sourceOk, sourceFail } from './sourceState.js';
 
 export const UNIT_INDEX_POLL_MS = 120_000;
 
 const subscribers = new Set();
-let state = { data: null, error: null, loading: true, asOf: null };
+let state = { ...INITIAL_SOURCE, asOf: null };
 let timer = null;
 let inflight = false;
 
@@ -28,9 +29,9 @@ async function poll() {
     const res = await wsFetch('/api/units/index');
     if (!res.ok) throw new Error(`unit index route ${res.status}`);
     const data = await res.json();
-    emit({ data, error: null, loading: false, asOf: data.asOf ?? null });
+    emit({ ...sourceOk(data), asOf: data.asOf ?? null });
   } catch (error) {
-    emit({ ...state, error: String(error?.message ?? error), loading: false });
+    emit({ ...sourceFail(state, error), asOf: state.asOf }); // the last good index stays, marked stale
   } finally {
     inflight = false;
   }
@@ -72,10 +73,10 @@ export function subscribeUnitIndex(fn) {
 /** Test seam: forget the last result so a fresh mount starts loading again. */
 export function resetUnitIndex() {
   inflight = false;
-  state = { data: null, error: null, loading: true, asOf: null };
+  state = { ...INITIAL_SOURCE, asOf: null };
 }
 
-/** React hook: `{data, error, loading, asOf}` from the shared loop. */
+/** React hook: the shared loop's source state (sourceState.js) plus `asOf`, the index's own build time. */
 export function useUnitIndex() {
   const [snap, setSnap] = useState(state);
   useEffect(() => subscribeUnitIndex(setSnap), []);

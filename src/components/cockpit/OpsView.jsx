@@ -44,7 +44,7 @@ export default function OpsView() {
         {ops.status === 'error' && <div className="text-sm text-muted-foreground">The data route failed: {ops.message}. Use the Builder page link meanwhile.</div>}
         {ops.status === 'ok' && (
           <>
-            <ProgressCard data={ops.data} fetchedAt={ops.fetchedAt} />
+            <ProgressCard data={ops.data} fetchedAt={ops.fetchedAt} source={ops} />
             {nodes.length > 0 && <OpsDag nodes={nodes} lane={current} />}
             {nodes.length > 0 && <LandedList nodes={nodes} lane={current} />}
             <OpsNotices count={ops.data.notices} lane={current} />

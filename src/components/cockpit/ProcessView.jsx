@@ -1,6 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import { useProcess } from '../../lib/processPoller.js';
 import { useFleet } from '../../lib/fleetPoller.js';
+import SourceNote from './SourceNote.jsx';
 import { effectiveOrder, laneTarget, openProjectGraph, orderLanes, pickLane, setPickedLane, useFleetProjects } from '../../lib/fleetProjects.js';
 import { OwnerQueueCard, FleetSkeleton } from './FleetPanels.jsx';
 import { pageMarker } from './processLogic.js';
@@ -130,6 +131,7 @@ export default function ProcessView() {
           : <TimeSplitBars stamps={stamps} order={order} />}
         <div className="flex min-w-0 flex-col gap-2" data-testid="process-owner">
           {fleet.loading && !fleet.data ? <FleetSkeleton variant="desktop" count={1} /> : <OwnerQueueCard data={fleet.data} variant="desktop" />}
+          <SourceNote source="Fleet" state={fleet} />
         </div>
       </div>
       {bv ? (

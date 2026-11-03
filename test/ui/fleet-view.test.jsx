@@ -360,7 +360,7 @@ describe('COMP-COCKPIT-NOTIFY-CHIP-1 rows', () => {
 
   it('tags are exact words: unit ids and dash forms are untyped', () => {
     expect(['SECURITY: x', 'CREDENTIAL leaked', 'QUESTION: a', 'APPLIED: b', 'FYI c', 'UPDATED: d', 'SEC-CLEAR-ALL-1', 'SECURITY-1 landed', 'security: x', 'SECURITY, credential (owner-only)', 'FYI, no action'].map(tagOf))
-      .toEqual(['security', 'security', 'ask', 'decided', 'fyi', 'fyi', 'untyped', 'untyped', 'untyped', 'security', 'fyi']);
+      .toEqual(['security', 'security', 'ask', 'decided', 'fyi', 'decided', 'untyped', 'untyped', 'untyped', 'security', 'fyi']); // UPDATED is decided (SOURCE-FAULTS-1, NOTIFY-INBOX M2)
   });
 });
 
@@ -507,7 +507,7 @@ const INBOX_ROWS = [
   ['group order and per-group row order: security, asks (oldest first, untyped with them), decided and fyi (newest first)', async () => {
     const g = groupInbox(IQ);
     expect(g.map((x) => x.id)).toEqual(['security', 'asks', 'decided', 'fyi']);
-    expect(g.map(ids)).toEqual([['sec-1'], ['a-old', 'u-1', 'a-new'], ['d-new', 'd-undo', 'd-old'], ['f-new', 'f-old']]);
+    expect(g.map(ids)).toEqual([['sec-1'], ['a-old', 'u-1', 'a-new'], ['f-new', 'd-new', 'd-undo', 'd-old'], ['f-old']]); // f-new is UPDATED: decided for you
     expect(g.map((x) => x.folded)).toEqual([false, false, true, true]);
     expect(g[1].rows.map((r) => r.untyped)).toEqual([false, true, false]);
     expect(IQ.every((q) => groupOf(q.text) === g.find((x) => ids(x).includes(q.id)).id)).toBe(true);
@@ -515,14 +515,14 @@ const INBOX_ROWS = [
   ['reverse-line extraction: "reverse:", "to undo" and none', async () => {
     expect([reverseLine('APPLIED: x. reverse: run undo.sh --all'), reverseLine('rollback: git revert abc'), reverseLine('picked d, to undo: restore the flag'), reverseLine('APPLIED: picked c')])
       .toEqual(['run undo.sh --all', 'git revert abc', 'restore the flag', null]);
-    expect(groupInbox(IQ)[2].rows.map((r) => r.reverse)).toEqual([null, 'restore the flag', 'run undo.sh --all']);
+    expect(groupInbox(IQ)[2].rows.map((r) => r.reverse)).toEqual([null, null, 'restore the flag', 'run undo.sh --all']);
   }],
   ['opened by the event with preventDefault; counts per group and as-of time in the header', async () => {
     inboxFetch();
     const { prevented } = await openDrawer();
     expect(prevented).toBe(false);
     const drawer = await screen.findByTestId('inbox-drawer');
-    expect(screen.getByTestId('inbox-counts').textContent).toMatch(/1 security · 3 asks · 3 decided for you · 2 fyi · as of \d\d:\d\d/);
+    expect(screen.getByTestId('inbox-counts').textContent).toMatch(/1 security · 3 asks · 4 decided for you · 1 fyi · as of \d\d:\d\d/);
     expect(drawer.querySelector('[data-testid="inbox-group"]')).not.toBeNull();
     expect(screen.getAllByTestId('inbox-group').map((x) => [x.getAttribute('data-group'), x.getAttribute('data-folded')]))
       .toEqual([['security', 'false'], ['asks', 'false'], ['decided', 'true'], ['fyi', 'true']]);
@@ -543,8 +543,8 @@ const INBOX_ROWS = [
     expect(screen.queryAllByTestId('inbox-reverse')).toHaveLength(0);
     fireEvent.click(screen.getAllByTestId('inbox-group-toggle').find((b) => b.textContent.includes('decided for you')));
     expect(screen.getAllByTestId('inbox-reverse').map((x) => x.textContent))
-      .toEqual(['Reply in s1-chat with id d-new to reverse', 'restore the flag', 'run undo.sh --all']);
-    fireEvent.click(screen.getAllByTestId('inbox-copy-id')[0]);
+      .toEqual(['Reply in s1-chat with id f-new to reverse', 'Reply in s1-chat with id d-new to reverse', 'restore the flag', 'run undo.sh --all']);
+    fireEvent.click(screen.getAllByTestId('inbox-copy-id')[1]);
     expect(writeText).toHaveBeenCalledWith('d-new');
   }],
   ['Escape and the close button shut it; the drawer made no request but /api/fleet and the cadence reads, and no POST', async () => {

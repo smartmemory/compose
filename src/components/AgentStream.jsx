@@ -177,8 +177,19 @@ function setAgentStatus(status, tool, category) {
   _state.agentTool = tool;
   _state.agentCategory = category;
 
-  const payload = {
-    status, tool, category,
+  const payload = getAgentStatus();
+
+  if (_state.onAgentStatusChange) _state.onAgentStatusChange({ ...payload });
+  window.dispatchEvent(new CustomEvent('compose:agent-status', { detail: payload }));
+}
+
+/**
+ * The agent's current status, the same shape as the `compose:agent-status` event detail. COMP-COCKPIT-SOURCE-FAULTS-1
+ * (WHAT-LINE M2): a consumer mounted after the last event (`useAgentState`) reads this instead of starting idle.
+ */
+export function getAgentStatus() {
+  return {
+    status: _state.agentStatus, tool: _state.agentTool, category: _state.agentCategory,
     activityLog: _state.activityLog,
     currentActivity: _state.currentActivity,
     parallelTasks: _state.parallelTasks,
@@ -186,9 +197,6 @@ function setAgentStatus(status, tool, category) {
     // Entries are shared by reference; consumers must treat them as read-only.
     lanes: [..._state.lanes.values()],
   };
-
-  if (_state.onAgentStatusChange) _state.onAgentStatusChange({ ...payload });
-  window.dispatchEvent(new CustomEvent('compose:agent-status', { detail: payload }));
 }
 
 function mergeSourceStatus() {

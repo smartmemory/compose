@@ -10,6 +10,8 @@
  * app's own agent, from the `compose:agent-status` event) and "Fleet: <n sessions busy · n jobs | quiet | unknown>"
  * (the shared /api/fleet poll through `runningNow`). Words never drop at a breakpoint any more; sm_status down reads
  * "Fleet: unknown", muted, with no error text.
+ * COMP-COCKPIT-SOURCE-FAULTS-1 (WHAT-LINE M1): a failed /api/fleet refresh is not sm_status down. The retained last
+ * good body is not counted; the fleet part reads "Fleet unreadable since HH:MM" (SourceNote, reason in the title).
  * Both mount in the thin status row under the tab row (`App.jsx`, testid `header-status-strip`): with every word shown they need
  * ~500 px and the tab row has ~220 px left at 1440, so beside the tabs they painted over the ⌘K hint.
  */
@@ -19,6 +21,7 @@ import { compactStats } from '../vision/attentionQueueState.js';
 import { useFleet } from '../../lib/fleetPoller.js';
 import { runningNow } from './fleetLogic.js';
 import { useAgentState } from './what/useAgentState.js';
+import SourceNote from './SourceNote.jsx';
 
 function Counter({ testId, value, word, color }) {
   return (
@@ -66,12 +69,13 @@ export function HeaderCounters({ items, gates }) {
 
 export function AgentStatusPill() {
   const agentState = useAgentState();
-  const { data: fleet } = useFleet();
+  const fleetSrc = useFleet();
+  const fleet = fleetSrc.error ? null : fleetSrc.data; // retained data after a failed refresh is not a current count
   const now = React.useMemo(() => runningNow(fleet, agentState), [fleet, agentState]);
   const working = now.composeWorking;
   const fleetBusy = now.fleetKnown && now.busy + now.jobs > 0;
   const agentText = `Compose agent: ${now.composeLabel}`;
-  const fleetText = `Fleet: ${!now.fleetKnown ? 'unknown' : now.text || 'quiet'}`;
+  const fleetText = `Fleet: ${now.fleetKnown ? now.text || 'quiet' : now.text || 'unknown'}`;
   return (
     <span data-testid="header-agent-pill" className="flex items-center gap-1.5 text-[11px] font-medium shrink-0">
       <span
@@ -90,15 +94,17 @@ export function AgentStatusPill() {
       >
         {agentText}
       </span>
-      <span
-        data-testid="header-agent-fleet"
-        className={`whitespace-nowrap ${now.fleetKnown ? '' : 'opacity-60'}`}
-        style={{ color: fleetBusy ? 'hsl(var(--primary))' : 'hsl(var(--muted-foreground))' }}
-        title={fleetText}
-        aria-label={fleetText}
-      >
-        {fleetText}
-      </span>
+      {fleetSrc.error ? <SourceNote source="Fleet" state={fleetSrc} compact /> : (
+        <span
+          data-testid="header-agent-fleet"
+          className={`whitespace-nowrap ${now.fleetKnown ? '' : 'opacity-60'}`}
+          style={{ color: fleetBusy ? 'hsl(var(--primary))' : 'hsl(var(--muted-foreground))' }}
+          title={fleetText}
+          aria-label={fleetText}
+        >
+          {fleetText}
+        </span>
+      )}
     </span>
   );
 }

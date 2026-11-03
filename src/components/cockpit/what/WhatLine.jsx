@@ -8,6 +8,8 @@
  * "?" (C6, COMP-DAYVIEW-DESIGN-FIX-1): it shows the last value this page read with its age, muted, or words saying why. The owner
  * count leads the line (C3): a filled chip in the one loud hue naming the first ask, or "Nothing needs you" at zero. While the fleet
  * or the unit index is still loading it draws a skeleton. Each count links to the place that lists those things.
+ * COMP-COCKPIT-SOURCE-FAULTS-1 (WHAT-LINE M1): a source whose last refresh failed counts as unknown (its retained body
+ * is not current), so its counts take the C6 words, and the shared SourceNote under the line names the source and why.
  */
 import React from 'react';
 import { useFleet } from '../../../lib/fleetPoller.js';
@@ -16,7 +18,9 @@ import { useAgentState } from './useAgentState.js';
 import { WHAT_RULES, LAST_VISIT_KEY, whatRule, whatCounts, readLastVisit } from './whatRules.js';
 import { useNotifyState } from '../notify/useNotifyState.js';
 import { ownerAsks, stripTag } from '../notify/notifyLogic.js';
-import { smPanel } from '../fleetLogic.js';
+import { smPanel, runningNow } from '../fleetLogic.js';
+import SourceNote from '../SourceNote.jsx';
+import { sourceNoteText } from '../../../lib/sourceState.js';
 
 const hhmm = (ms) => new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
 
@@ -24,6 +28,13 @@ const hhmm = (ms) => new Date(ms).toLocaleTimeString([], { hour: '2-digit', minu
 function freshness(fleetData, index) {
   const times = [Date.parse(fleetData?.generated ?? ''), Date.parse(index?.asOf ?? '')].filter(Number.isFinite);
   return times.length ? `as of ${hhmm(Math.min(...times))}` : null;
+}
+
+/** WHAT-LINE M3: one fleet list read and the other not: name the unreadable list, so the unknown total says why. */
+function partialWhy(fleet) {
+  const r = runningNow(fleet, null);
+  if (r.fleetKnown || (r.busy === null && r.jobs === null)) return null;
+  return r.busy === null ? 'the sessions list is unreadable' : 'the jobs list is unreadable';
 }
 
 /** Last known value of each count, kept for the page's life so Home and Day share it: `{id: {n, at}}`. */
@@ -94,8 +105,14 @@ function NeedsYou({ n, rows, why, onClick }) {
 }
 
 export default function WhatLine({ onOpenFleet, onNavigate, onCountOpen }) {
-  const { data: fleet, loading: fleetLoading } = useFleet();
-  const { data: index, loading: indexLoading } = useUnitIndex();
+  const fleetSrc = useFleet();
+  const indexSrc = useUnitIndex();
+  const { loading: fleetLoading } = fleetSrc;
+  const { loading: indexLoading } = indexSrc;
+  const fleet = fleetSrc.error ? null : fleetSrc.data;
+  const index = indexSrc.error ? null : indexSrc.data;
+  const fleetWhy = fleetSrc.error ? sourceNoteText('fleet', fleetSrc, { short: true }) : null;
+  const indexWhy = indexSrc.error ? sourceNoteText('unit index', indexSrc, { short: true }) : null;
   const agent = useAgentState();
   const [lastVisitAt] = React.useState(() => readLastVisit());
   const { state: notifyState } = useNotifyState(); // NOTIFY-ACTIONS-1: the chip's state, so the owner counts agree
@@ -133,7 +150,7 @@ export default function WhatLine({ onOpenFleet, onNavigate, onCountOpen }) {
 
   return (
     <div data-testid="what-line" className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm">
-      <NeedsYou n={counts.waitingYou} rows={ownerRows} why="owner queue not reachable, retrying" onClick={openInbox} />
+      <NeedsYou n={counts.waitingYou} rows={ownerRows} why={fleetWhy ?? 'owner queue not reachable, retrying'} onClick={openInbox} />
       <span className="group relative">
         <button
           type="button"
@@ -160,18 +177,24 @@ export default function WhatLine({ onOpenFleet, onNavigate, onCountOpen }) {
         </span>
         <span>:</span>
       </span>
-      <Count id="working" n={counts.working} label="working" why="fleet not reachable, retrying" onClick={() => (onCountOpen ? onCountOpen('working') : onOpenFleet?.())} />
+      <Count id="working" n={counts.working} label="working" why={fleetWhy ?? partialWhy(fleet) ?? 'fleet not reachable, retrying'} onClick={() => (onCountOpen ? onCountOpen('working') : onOpenFleet?.())} />
       <span aria-hidden="true">·</span>
-      <Count id="review" n={counts.waitingReview} label="waiting on review" why="unit index not loaded, retrying" onClick={() => (onCountOpen ? onCountOpen('waiting') : onNavigate?.('process'))} />
+      <Count id="review" n={counts.waitingReview} label="waiting on review" why={indexWhy ?? 'unit index not loaded, retrying'} onClick={() => (onCountOpen ? onCountOpen('waiting') : onNavigate?.('process'))} />
       <span aria-hidden="true">·</span>
       <Count
         id="landed"
         n={counts.landedSinceVisit}
         label="landed since your last visit"
-        why={lastVisitAt === null && index?.units ? 'no earlier visit recorded' : 'unit index not loaded, retrying'}
+        why={indexWhy ?? (lastVisitAt === null && index?.units ? 'no earlier visit recorded' : 'unit index not loaded, retrying')}
         onClick={() => (onCountOpen ? onCountOpen('landed') : onNavigate?.('process'))}
       />
       {asOf && <span data-testid="what-asof" className="text-[11px] text-muted-foreground">{asOf}</span>}
+      {(fleetSrc.error || indexSrc.error) && (
+        <span className="basis-full">
+          <SourceNote source="Fleet" state={fleetSrc} />
+          <SourceNote source="Unit index" state={indexSrc} />
+        </span>
+      )}
     </div>
   );
 }

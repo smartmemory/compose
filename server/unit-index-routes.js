@@ -38,11 +38,12 @@ export function attachUnitIndexRoutes(app, {
     try {
       const entry = await cache.get();
       if (!entry.value) return res.status(500).json({ error: entry.error ?? 'unit index unavailable' });
-      const { units, coverage, glossary, asOf } = entry.value;
+      // SOURCE-FAULTS-1: `error` (queue dir unlistable) and `warnings` reach the client; a partial index is never a clean one.
+      const { units, coverage, glossary, asOf, error = null, warnings = [] } = entry.value;
       res.set('cache-control', 'no-store');
       res.json({
         units: lane === undefined ? units : units.filter((u) => u.lane === lane),
-        coverage, glossary, asOf,
+        coverage, glossary, asOf, error, warnings,
         ageS: freshness({ mtimeMs: Date.parse(asOf), now: now() }).ageS,
       });
     } catch (error) {

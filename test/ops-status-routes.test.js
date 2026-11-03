@@ -93,6 +93,9 @@ const STAMP_ROWS = [
 // every page sees the same two stamp rows, plus a decoy in a lane no page is named after
 const STAMP_UNITS = [...['forge', '2.0', 'hub', 'trader', 'maya', 'wiki'].flatMap((lane) => STAMP_ROWS.map((r) => ({ ...r, lane }))),
   { id: 'Z', lane: 'other', title: 'not this lane', titleSource: 'stamp', landedAt: '2026-10-30T11:00:00Z' }];
+// The real buildUnitIndex always carries a coverage row per lane it read (SOURCE-FAULTS-1: a lane without one is unreadable).
+// `custom` is a readable stamp file with no units yet (the no-profile case below).
+const STAMP_COVERAGE = Object.fromEntries([...new Set([...STAMP_UNITS.map((u) => u.lane), 'custom'])].map((l) => [l, { n: 1, pct: {} }]));
 
 describe('ops-status data route', () => {
   let dtmp, dsrv, dbase, rsrv, rbase, bsrv, bbase;
@@ -122,7 +125,7 @@ describe('ops-status data route', () => {
     writeFileSync(join(out, 'broken', 'data.json'), '{"as_of": ');
     const app = express();
     const eta = createEtaReader({ script: '/x/estimate.py', run, warn: () => {} });
-    attachOpsStatusRoutes(app, { dir: out, deps: { eta, loadUnitIndex: async () => ({ units: STAMP_UNITS }) } });
+    attachOpsStatusRoutes(app, { dir: out, deps: { eta, loadUnitIndex: async () => ({ units: STAMP_UNITS, coverage: STAMP_COVERAGE }) } });
     [dsrv, dbase] = await listen(app);
     // the real unit index over a tmp stamps dir: forge has three rows, one landed
     const queues = join(dtmp, 'queues');

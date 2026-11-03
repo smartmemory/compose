@@ -59,6 +59,13 @@ export function parseEstimate(stdout) {
   throw new Error('estimate.py printed no ESTIMATE or NO DATA line');
 }
 
+/** estimate.py's stderr `WARNING ...` lines (its fallbacks), home path scrubbed, at most 5 of 200 chars each. */
+export function estimateWarnings(stderr) {
+  const home = homedir();
+  return String(stderr ?? '').split('\n').map((l) => l.trim()).filter((l) => /^WARNING\b/.test(l))
+    .map((l) => (home && home !== '/' ? l.split(home).join('~') : l).slice(0, 200)).slice(0, 5);
+}
+
 /** The remaining (not landed) nodes as estimate.py's `[{id, deps}]`; a dep on a landed node is dropped. */
 export function remainingForEstimate(nodes) {
   const left = nodes.filter((n) => !n.landedAt);
@@ -79,8 +86,12 @@ export function createEtaReader({ python = 'python3', script, env = process.env,
         try {
           const file = join(dirPath, 'units.json');
           await writeFile(file, JSON.stringify(slot.input));
-          const { stdout } = await run([python, script, 'plan', file, '--like', name, '--name', name], { timeoutMs: ETA_TIMEOUT_MS, env });
-          return parseEstimate(stdout);
+          const { stdout, stderr } = await run([python, script, 'plan', file, '--like', name, '--name', name], { timeoutMs: ETA_TIMEOUT_MS, env });
+          const parsed = parseEstimate(stdout);
+          // INIT-DATA M2: a successful estimate can still rest on a fallback; its WARNING lines travel with it.
+          const warnings = estimateWarnings(stderr);
+          for (const w of warnings) warn(`[ops-status] estimate ${name} WARNING ${w}`);
+          return warnings.length ? { ...parsed, warnings } : parsed;
         } finally {
           await rm(dirPath, { recursive: true, force: true });
         }
@@ -92,6 +103,19 @@ export function createEtaReader({ python = 'python3', script, env = process.env,
     const entry = await slot.cache.get();
     return entry.value ?? { error: entry.error ?? 'estimate unavailable' };
   };
+}
+
+/**
+ * Why this lane's stamps cannot be counted from a built index, or null when they can (COMP-COCKPIT-SOURCE-FAULTS-1,
+ * INIT-DATA M1): the lane's coverage carries an error (file missing, not JSON, no units list), the queue directory
+ * could not be listed, or the lane has no stamp file at all. Each would otherwise read as zero landed.
+ */
+export function laneFault(index, name) {
+  const c = index?.coverage?.[name];
+  if (c?.error) return `stamps unreadable: ${c.error}`;
+  if (c) return null;
+  if (index?.error) return `stamps unreadable: ${index.error}`;
+  return `stamps unreadable: no stamp file for lane ${name}`;
 }
 
 /** Returns true when mounted, false when skipped (dir absent). `deps` are for tests: eta, loadUnitIndex, now. */
@@ -130,12 +154,15 @@ export function attachOpsStatusRoutes(app, { dir = resolveOpsStatusDir(), remote
     }
     const out = { name, asOf: doc.as_of ?? null, ageS: freshness({ mtimeMs, now: now() }).ageS, notices: noticeCount(doc) };
     const index = await unitIndexCache.get();
-    if (index.value) {
+    const fault = index.value ? laneFault(index.value, name) : `unit index unavailable: ${index.error ?? 'unknown'}`;
+    if (!fault) {
       out.progress = initProgress(doc, index.value.units.filter((u) => u.lane === name));
       out.eta = await eta(name, remainingForEstimate(out.progress.nodes));
+      const w = index.value.coverage?.[name]?.warnings;
+      if (Array.isArray(w) && w.length) out.progressWarnings = w;
     } else {
       out.progress = null; // never a count of zero landed: the stamps could not be read
-      out.progressError = `unit index unavailable: ${index.error ?? 'unknown'}`;
+      out.progressError = fault;
       out.eta = null;
     }
     res.set('cache-control', 'no-store');

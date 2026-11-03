@@ -7,12 +7,13 @@
  */
 import { useEffect, useState } from 'react';
 import { wsFetch } from './wsFetch.js';
+import { INITIAL_SOURCE, sourceOk, sourceFail } from './sourceState.js';
 import { resetFleetProjects } from './fleetProjects.js';
 
 export const PROCESS_POLL_MS = 60_000;
 
 const subscribers = new Set();
-let state = { data: null, error: null, loading: true };
+let state = INITIAL_SOURCE;
 let timer = null;
 let inflight = false;
 
@@ -27,9 +28,9 @@ async function poll() {
   try {
     const res = await wsFetch('/api/process');
     if (!res.ok) throw new Error(`process route ${res.status}`);
-    emit({ data: await res.json(), error: null, loading: false });
+    emit(sourceOk(await res.json()));
   } catch (error) {
-    emit({ data: state.data, error: String(error?.message ?? error), loading: false });
+    emit(sourceFail(state, error)); // the last good data stays, marked stale (sourceState.js)
   } finally {
     inflight = false;
   }
@@ -70,11 +71,11 @@ export function subscribeProcess(fn) {
 
 /** Test seam: forget the last result so a fresh mount starts loading again (and the shared lane selection). */
 export function resetProcessPoller() {
-  state = { data: null, error: null, loading: true };
+  state = INITIAL_SOURCE;
   resetFleetProjects();
 }
 
-/** React hook: `{data, error, loading}` from the shared loop. */
+/** React hook: the shared loop's source state, `{data, error, stale, fetchedAt, errorSince, loading}` (sourceState.js). */
 export function useProcess() {
   const [snap, setSnap] = useState(state);
   useEffect(() => subscribeProcess(setSnap), []);

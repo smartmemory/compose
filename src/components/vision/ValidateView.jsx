@@ -98,6 +98,12 @@ export default function ValidateView({ featureCode }) {
         {data?.unavailable && !error && (
           <div className="px-3 py-2 text-muted-foreground text-xs">Validation unavailable{data.error ? `: ${data.error}` : ''}</div>
         )}
+        {/* SOURCE-FAULTS-1 (RULE-FRESH M2): a rerun over earlier findings still says it is validating, and marks them stale. */}
+        {!error && !data?.unavailable && findings.length > 0 && loading && (
+          <div className="px-3 py-2 text-xs text-muted-foreground" data-testid="validate-loading" role="status">
+            Validating… the findings below are from the previous run.
+          </div>
+        )}
         {!error && !data?.unavailable && findings.length === 0 && loading && (
           <div className="flex flex-col gap-2 px-3 py-4" data-testid="validate-loading">
             <Skeleton className="h-4 w-1/2" />
@@ -113,6 +119,7 @@ export default function ValidateView({ featureCode }) {
             className="py-8"
           />
         )}
+        <div data-testid="validate-findings" data-stale={loading && findings.length > 0 ? 'true' : 'false'} className={loading && findings.length > 0 ? 'opacity-60' : undefined}>
         {grouped.map(([sev, rows]) => rows.length > 0 && (
           <div key={sev} data-testid={`validate-group-${sev}`}>
             <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground sticky top-0 bg-background">
@@ -138,6 +145,7 @@ export default function ValidateView({ featureCode }) {
             ))}
           </div>
         ))}
+        </div>
       </div>
     </div>
   );

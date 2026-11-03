@@ -88,7 +88,8 @@ const PILL_ROWS = [
   { name: 'one of each: singular words', fleet: sm({ sessions: SESSIONS(1), jobs: JOBS(1) }), want: ['Compose agent: Idle', 'Fleet: 1 session busy · 1 job'] },
   { name: 'jobs only', fleet: sm({ sessions: SESSIONS(0), jobs: JOBS(7) }), want: ['Compose agent: Idle', 'Fleet: 7 jobs'] },
   { name: 'nothing running: Fleet: quiet', fleet: sm({ sessions: SESSIONS(0), jobs: JOBS(0) }), want: ['Compose agent: Idle', 'Fleet: quiet'] },
-  { name: 'a panel errored: the other still counts', fleet: sm({ sessions: { value: null, error: 'exit 2' }, jobs: JOBS(2) }), want: ['Compose agent: Idle', 'Fleet: 2 jobs'] },
+  // SOURCE-FAULTS-1 (WHAT-LINE M3): the known part stays, the unread list is named, and the total is not a known count.
+  { name: 'a panel errored: the other still shows, the missing one is named', fleet: sm({ sessions: { value: null, error: 'exit 2' }, jobs: JOBS(2) }), want: ['Compose agent: Idle', 'Fleet: 2 jobs · sessions unknown'] },
   { name: 'sm_status down: Fleet: unknown, no error text', fleet: SM_DOWN, want: ['Compose agent: Idle', 'Fleet: unknown'] },
   { name: 'local agent working: its category leads, the fleet line follows', fleet: sm({ sessions: SESSIONS(2), jobs: JOBS(0) }), want: ['Compose agent: Writing', 'Fleet: 2 sessions busy'],
     after: () => window.dispatchEvent(new CustomEvent('compose:agent-status', { detail: { status: 'working', category: 'writing' } })) },
