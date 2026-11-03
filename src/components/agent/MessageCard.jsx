@@ -240,7 +240,7 @@ export default function MessageCard({ msg }) {
     return (
       <div className="text-[10px] uppercase tracking-wider py-1"
         style={{ color: 'hsl(var(--accent))', opacity: 0.8 }}>
-        {label} -- {msg.featureCode && <EntityLink kind="feature" id={msg.featureCode} className="text-[inherit]" />}
+        {label} -- {msg.featureCode && <EntityLink kind="feature" id={msg.featureCode} className="text-[length:inherit]" />}
       </div>
     );
   }
@@ -290,7 +290,7 @@ export default function MessageCard({ msg }) {
     return (
       <div className="text-[10px] uppercase tracking-wider py-1"
         style={{ color }}>
-        build {msg.status} -- {msg.featureCode && <EntityLink kind="feature" id={msg.featureCode} className="text-[inherit]" />}
+        build {msg.status} -- {msg.featureCode && <EntityLink kind="feature" id={msg.featureCode} className="text-[length:inherit]" />}
       </div>
     );
   }

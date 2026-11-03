@@ -40,7 +40,7 @@ function FullText({ text, tone }) {
         if (p.href) return <a key={i} href={p.href} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">{p.text}</a>;
         const kind = p.entity ? entityTarget(nav, p) : null;
         return kind
-          ? <EntityLink key={i} kind={kind} id={p.text} className="text-[inherit]" />
+          ? <EntityLink key={i} kind={kind} id={p.text} className="text-[length:inherit]" />
           : <React.Fragment key={i}>{p.text}</React.Fragment>;
       })}
     </div>

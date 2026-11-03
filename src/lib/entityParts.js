@@ -27,13 +27,21 @@ export function entityParts(text) {
 const PROTECTED = /(```[\s\S]*?```|`[^`\n]*`|\[[^\]\n]*\]\([^)\n]*\)|<[^>\n]+>|https?:\/\/\S+)/g;
 export const ENTITY_HREF = '#entity:';
 
+// A whole inline-code span that is exactly one entity (`docs/a.md`, `COMP-X-1`) links, code styling kept: journals put most paths there.
+function linkCodeSpan(seg, ok) {
+  const inner = /^`([^`\n]+)`$/.exec(seg)?.[1];
+  const parts = inner ? entityParts(inner) : [];
+  return parts.length === 1 && parts[0].kind !== 'text' && ok(parts[0].kind, parts[0].value)
+    ? `[${seg}](${ENTITY_HREF}${parts[0].kind}:${parts[0].value})` : seg;
+}
+
 /**
- * Markdown with each resolvable entity token turned into a `[token](#entity:<kind>:<token>)` link. Code fences, inline code,
+ * Markdown with each resolvable entity token turned into a `[token](#entity:<kind>:<token>)` link. Code fences, inline code that holds more than one token,
  * existing links, HTML and URLs are left alone. `ok(kind, value)` says whether a token has a target; one that does not stays text.
  */
 export function linkEntitiesInMarkdown(md, ok) {
   if (typeof md !== 'string' || !md) return md ?? '';
-  return md.split(PROTECTED).map((seg, i) => (i % 2 === 1 ? seg : entityParts(seg)
+  return md.split(PROTECTED).map((seg, i) => (i % 2 === 1 ? linkCodeSpan(seg, ok) : entityParts(seg)
     .map((p) => (p.kind !== 'text' && ok(p.kind, p.value) ? `[${p.value}](${ENTITY_HREF}${p.kind}:${p.value})` : p.value)).join(''))).join('');
 }
 

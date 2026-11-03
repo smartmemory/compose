@@ -138,12 +138,21 @@ describe('Ideas', () => {
 describe('Journal, Context panel, Agent stream', () => {
   it('a feature code and a repo path inside markdown open through the navigation context; code spans do not', () => {
     const nav = makeNav();
-    withNav(<LinkedMarkdown content={'Shipped COMP-UI-LINKS-2, see docs/features/X-1/design.md and `COMP-NOT-LINK`.'} />, nav);
+    withNav(<LinkedMarkdown content={'Shipped COMP-UI-LINKS-2, see docs/features/X-1/design.md and `run COMP-NOT-LINK`.'} />, nav);
     fireEvent.click(screen.getByRole('link', { name: 'COMP-UI-LINKS-2' }));
     expect(nav.openFeature).toHaveBeenCalledWith('COMP-UI-LINKS-2');
     fireEvent.click(screen.getByRole('link', { name: 'docs/features/X-1/design.md' }));
     expect(nav.openFile).toHaveBeenCalledWith('docs/features/X-1/design.md');
-    expect(screen.queryByRole('link', { name: 'COMP-NOT-LINK' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'COMP-NOT-LINK' })).toBeNull(); // not on its own: code with other text around it is code
+  });
+  it('an inline-code span that is exactly one path links, and stays code', () => {
+    const nav = makeNav();
+    const { container } = withNav(<LinkedMarkdown content={'built `lib/gate-jev.js` and `npm run build COMP-X-1`'} />, nav);
+    const link = screen.getByRole('link', { name: 'lib/gate-jev.js' });
+    expect(link.querySelector('code')).not.toBeNull();
+    fireEvent.click(link);
+    expect(nav.openFile).toHaveBeenCalledWith('lib/gate-jev.js');
+    expect(container.querySelectorAll('a')).toHaveLength(1);
   });
   it('degrade: tokens the cockpit cannot open stay plain text', () => {
     const { container } = withNav(<LinkedText text="see COMP-GONE-1 now" />, makeNav({ canNavigate: () => false }));

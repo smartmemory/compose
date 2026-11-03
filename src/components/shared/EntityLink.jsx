@@ -104,7 +104,7 @@ export function LinkedText({ text, className }) {
   return (
     <>
       {parts.map((p, i) => (p.kind !== 'text' && ok(p.kind, p.value)
-        ? <EntityLink key={i} kind={p.kind} id={p.value} className={cn('text-[inherit]', className)} />
+        ? <EntityLink key={i} kind={p.kind} id={p.value} className={cn('text-[length:inherit]', className)} />
         : <React.Fragment key={i}>{p.value}</React.Fragment>))}
     </>
   );
