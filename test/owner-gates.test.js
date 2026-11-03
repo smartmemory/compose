@@ -32,7 +32,7 @@ const ENV = {
   COMPOSE_EVIDENCE_STORE: join(SCRATCH, 'evidence.jsonl'),
   COMPOSE_OWNER_QUEUE_FILE: QUEUE,
   COMPOSE_FLEET_OWNER_QUEUE: OWNER_QUEUE_PY,
-  COMPOSE_SESSION_NAME: 'owner-gates-test',
+  COMPOSE_SESSION_NAME: 's1-chat', // the default allow list of an owner gate answer (COMP-DOGFOOD-OWNER-GATE-SESSION-1)
   HOME,
   NOTIFY_SPOOL: join(SCRATCH, 'notify-spool.jsonl'),
   NOTIFY_CLIENT_LOG: join(SCRATCH, 'notify-client.log'),
@@ -43,6 +43,7 @@ const ENV = {
 for (const [k, v] of Object.entries(ENV)) { SAVED[k] = process.env[k]; process.env[k] = v; }
 for (const k of ['SM_OWNER_QUEUE', 'COMPOSE_RIBBON_OWNER_QUEUE', 'COMPOSE_GATE_TIMEOUT']) { SAVED[k] = process.env[k]; delete process.env[k]; }
 
+const { withProjectContext } = await import(`${REPO_ROOT}/server/project-root.js`);
 const og = await import(`${REPO_ROOT}/lib/owner-gates.js`);
 const tools = await import(`${REPO_ROOT}/server/compose-mcp-tools.js`);
 const { attachFleetRoutes, resolveFleetReaders } = await import(`${REPO_ROOT}/server/fleet-routes.js`);
@@ -200,5 +201,81 @@ describe('owner gates: one list on every surface', () => {
     const bad = spawnSync(process.execPath, [join(REPO_ROOT, 'lib', 'owner-gates-cli.js'), 'list', '--file', join(SCRATCH, 'nope.jsonl')], { encoding: 'utf8' });
     assert.equal(bad.status, 2);
     assert.equal(JSON.parse(bad.stdout).unreadable, true);
+  });
+});
+
+// COMP-DOGFOOD-OWNER-GATE-SESSION-1: only an allow-listed session (default s1-chat) answers an owner question through MCP.
+describe('owner gate answers: who may speak for the owner', () => {
+  const GATE = 'owner:STUDIO-PIN-FALLBACK';
+  const evidenceText = () => (existsSync(process.env.COMPOSE_EVIDENCE_STORE) ? readFileSync(process.env.COMPOSE_EVIDENCE_STORE, 'utf8') : '');
+  const asSession = async (name, fn) => {
+    const saved = process.env.COMPOSE_SESSION_NAME;
+    if (name === null) delete process.env.COMPOSE_SESSION_NAME; else process.env.COMPOSE_SESSION_NAME = name;
+    try { return await fn(); } finally { process.env.COMPOSE_SESSION_NAME = saved; }
+  };
+  const gateVersion = () => og.readOwnerGates({ file: QUEUE, warn: () => {} }).gates.find((g) => g.id === GATE).version;
+  const withConfig = (extra, fn) => withProjectContext(
+    { targetRoot: TARGET, dataDir: join(TARGET, '.compose', 'data'), config: { version: 2, capabilities: { lifecycle: true }, ...extra } }, fn);
+
+  it('a lane lead session (forge-main) is refused: OWNER_GATE_SESSION, the queue row untouched, no receipt', async () => {
+    seedQueue();
+    const queueBefore = readFileSync(QUEUE, 'utf8');
+    const evBefore = evidenceText();
+    await asSession('forge-main', () => assert.rejects(
+      tools.toolApproveGate({ gateId: GATE, option: 'a', version: gateVersion() }),
+      (e) => e.code === 'OWNER_GATE_SESSION' && /"forge-main"/.test(e.message) && /\bs1-chat\b/.test(e.message)));
+    assert.equal(readFileSync(QUEUE, 'utf8'), queueBefore, 'the queue file is byte-identical');
+    assert.equal(evidenceText(), evBefore, 'no receipt was minted');
+  });
+
+  it('an unnamed session is refused and the message says unnamed', async () => {
+    seedQueue();
+    const queueBefore = readFileSync(QUEUE, 'utf8');
+    await asSession(null, () => assert.rejects(
+      tools.toolApproveGate({ gateId: GATE, option: 'a', version: gateVersion() }),
+      (e) => e.code === 'OWNER_GATE_SESSION' && /unnamed/.test(e.message)));
+    assert.equal(readFileSync(QUEUE, 'utf8'), queueBefore);
+  });
+
+  it('s1-chat (the default allow list) closes the row and the result names the relaying session', async () => {
+    seedQueue();
+    const r = await asSession('s1-chat', () => tools.toolApproveGate({ gateId: GATE, option: 'a', version: gateVersion() }));
+    assert.equal(r.closed, true);
+    assert.equal(r.relayed_by, 's1-chat');
+    assert.equal(records().filter((x) => x.id === 'STUDIO-PIN-FALLBACK' && x.status === 'closed').length, 1);
+    assert.equal(readEvidence(r.evidence_id).evidence.by, 's1-chat', 'the receipt names the session');
+    seedQueue();
+  });
+
+  it('ownerGateSessions in .compose/compose.json replaces the default list', async () => {
+    seedQueue();
+    await withConfig({ ownerGateSessions: ['forge-main'] }, async () => {
+      await asSession('s1-chat', () => assert.rejects(
+        tools.toolApproveGate({ gateId: GATE, option: 'a', version: gateVersion() }), (e) => e.code === 'OWNER_GATE_SESSION'));
+      const r = await asSession('forge-main', () => tools.toolApproveGate({ gateId: GATE, option: 'a', version: gateVersion() }));
+      assert.equal(r.closed, true);
+      assert.equal(r.relayed_by, 'forge-main');
+    });
+    seedQueue();
+  });
+
+  it('a malformed ownerGateSessions falls back to the default with a WARNING, never to "anyone"', () => {
+    const warns = [];
+    assert.deepEqual(og.ownerGateSessions({}), ['s1-chat']);
+    assert.deepEqual(og.ownerGateSessions(null), ['s1-chat']);
+    assert.deepEqual(og.ownerGateSessions({ ownerGateSessions: 'forge-main' }, (m) => warns.push(m)), ['s1-chat']);
+    assert.deepEqual(og.ownerGateSessions({ ownerGateSessions: ['a', 3, ''] }, (m) => warns.push(m)), ['a']);
+    assert.equal(warns.length, 2);
+    assert.match(warns.join('\n'), /WARNING ownerGateSessions/);
+    assert.deepEqual(og.ownerGateSessions({ ownerGateSessions: [] }), [], 'an explicit empty list means nobody');
+  });
+
+  it('a Compose gate is not subject to the session check', async () => {
+    await asSession('forge-main', async () => {
+      try { await tools.toolApproveGate({ gateId: 'compose-new', outcome: 'revised' }); } catch (e) {
+        assert.notEqual(e.code, 'OWNER_GATE_SESSION');
+        assert.doesNotMatch(String(e.message), /OWNER_GATE_SESSION/);
+      }
+    });
   });
 });

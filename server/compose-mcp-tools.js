@@ -206,7 +206,7 @@ import { discoverWorkspaces, deriveId } from '../lib/discover-workspaces.js';
 import { addOrder, supersedeOrder, configureLiveState, buildLiveState, formatLiveStateSection } from '../lib/live-state.js';
 import { resolvePort } from '../lib/resolve-port.js';
 import { resolveGateTimeoutMs } from '../lib/gate-timeout.js';
-import { OWNER_GATE_PREFIX, closeOwnerGate, isComposeGateExpired, readOwnerGates } from '../lib/owner-gates.js';
+import { OWNER_GATE_PREFIX, assertOwnerGateSession, closeOwnerGate, isComposeGateExpired, readOwnerGates } from '../lib/owner-gates.js';
 
 export function getVisionFile() { return path.join(getDataDir(), 'vision-state.json'); }
 export function getSessionsFile() { return path.join(getDataDir(), 'sessions.json'); }
@@ -983,19 +983,21 @@ export async function toolApproveGate(args = {}) {
  * receipt that cannot be minted is a WARNING beside a close that stands (`evidence_id: null`, `evidence_warning`).
  */
 async function _answerOwnerGate(args) {
+  // COMP-DOGFOOD-OWNER-GATE-SESSION-1: who may speak for the owner is checked before anything is read or written.
+  let sessionConfig = null;
+  try { sessionConfig = loadProjectConfig(); } catch { sessionConfig = null; }
+  const relayedBy = assertOwnerGateSession(process.env.COMPOSE_SESSION_NAME, sessionConfig);
   const closed = closeOwnerGate({ gateId: args.gateId, option: args.option, version: args.version });
-  const result = { gateId: closed.gateId, qid: closed.qid, option: closed.option, answer: closed.answer, closed: true };
+  const result = { gateId: closed.gateId, qid: closed.qid, option: closed.option, answer: closed.answer, closed: true, relayed_by: relayedBy };
   const { evidenceRequired, checkEvidence, recordEvidence } = await import('../lib/evidence.js');
-  let config = null;
-  try { config = loadProjectConfig(); } catch { config = null; }
-  if (!evidenceRequired(config, getTargetRoot())) return result;
+  if (!evidenceRequired(sessionConfig, getTargetRoot())) return result;
   const subject = { tool: 'approve_gate', gate: closed.gateId, outcome: closed.option };
   try {
     if (!closed.line) throw new Error(`the closed record for ${closed.qid} was not found in ${closed.file} after the close`);
     const at = closed.line.lastIndexOf('"answer": ');
     const ev = {
       kind: 'log', path: closed.file, line: closed.line.slice(at >= 0 ? at : 0).slice(0, 2000),
-      at: new Date().toISOString(), by: (process.env.COMPOSE_SESSION_NAME || 'mcp').slice(0, 128),
+      at: new Date().toISOString(), by: relayedBy.slice(0, 128),
     };
     const accepted = checkEvidence(ev, 'approve_gate', { subject });
     const record = recordEvidence(accepted.evidence, { checks: accepted.checks, subject });

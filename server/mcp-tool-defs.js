@@ -331,7 +331,7 @@ export const TOOLS = [
     name: 'approve_gate',
     effect: 'mutating',
     writes: [],
-    description: 'Resolve a pending gate. A policy gate takes an outcome: approved (proceed), revised (stay in phase), killed (abandon feature). An owner gate (id owner:<qid>, from get_pending_gates) is the owner\'s open question: it takes `option` (one of its options[].key) and is closed in the owner queue with owner_queue.py close --channel mcp --if-version (first answer wins: OWNER_GATE_STALE when it was answered or re-asked since, OWNER_GATE_OPTION for a key it does not have); the tool then mints a log receipt on the closed line and returns its evidence_id.',
+    description: 'Resolve a pending gate. A policy gate takes an outcome: approved (proceed), revised (stay in phase), killed (abandon feature). An owner gate (id owner:<qid>, from get_pending_gates) is the owner\'s open question: it takes `option` (one of its options[].key) and is closed in the owner queue with owner_queue.py close --channel mcp --if-version (first answer wins: OWNER_GATE_STALE when it was answered or re-asked since, OWNER_GATE_OPTION for a key it does not have); the tool then mints a log receipt on the closed line and returns its evidence_id. Only a session on the allow list (default s1-chat; `ownerGateSessions` in .compose/compose.json; named by COMPOSE_SESSION_NAME) may answer an owner gate: any other session is refused with OWNER_GATE_SESSION and nothing is written.',
     inputSchema: {
       type: 'object',
       properties: {
