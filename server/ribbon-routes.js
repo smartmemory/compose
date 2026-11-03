@@ -232,7 +232,18 @@ export function attachRibbonRoutes(app, { remote = false, env = process.env, dep
       if (oq.error) body.owner = { open: null };
       else {
         const ow = ownerWaits({ queue: oq.value ?? [], units: unitList, lanes: body.lanes.map((l) => l.lane), from: a.ms, to: b.ms, now: t0 });
-        for (const { lane, span } of ow.spans) {
+        // FU-1: a `laneGuess` ask (no lane named, parked on ops) is drawn on its stamp's unit lane when a stamp names its id.
+        // `laneRule: 'stamp-lane'` says so on the span. A named ask stays where it was named: its stamp's lane mirrors it
+        // (`reconcileOwnerSpans`, `laneRule: 'asked-elsewhere'`), one marker and one count, never a false "working".
+        const stampLane = new Map();
+        for (const l of body.lanes) for (const s of l.spans) if (s.kind === 'wait' && s.cause === 'owner' && !s.queueId && s.qid && !stampLane.has(s.qid)) stampLane.set(s.qid, l.lane);
+        const placed = ow.spans.map(({ lane, span }) => {
+          const to2 = span.laneGuess ? stampLane.get(span.queueId) : null;
+          return to2 && to2 !== lane ? { lane: to2, span: { ...span, laneGuess: false, laneRule: 'stamp-lane', why: `waiting on your answer (owner queue ${span.queueId}, shown on ${to2}, the lane of its unit)` } } : { lane, span };
+        });
+        const moved = new Map(placed.map((p) => [p.span.queueId, p.lane]));
+        ow.open = ow.open.map((o) => (moved.has(o.id) ? { ...o, lane: moved.get(o.id) } : o));
+        for (const { lane, span } of placed) {
           const row = body.lanes.find((l) => l.lane === lane);
           row.spans.push(span);
           row.spans.sort((x, y) => Date.parse(x.start) - Date.parse(y.start) || Date.parse(x.end) - Date.parse(y.end));
@@ -241,9 +252,10 @@ export function attachRibbonRoutes(app, { remote = false, env = process.env, dep
         // U3-DATA: a stamp is matched to its queue ask by identity, the queue draws the time it covers, an open stamp with no
         // ask is clipped at this read (`reconcileOwnerSpans`). The queue was read, so `asOf` is this request's clock.
         // COMP-DAYVIEW-OWNER-IDENTITY-1: every lane's queue spans are passed, so a stamp finds its ask (`qid`) on any lane.
-        const asks = ow.spans.map(({ span }) => span);
+        const asks = placed.map(({ span }) => span);
+        const askLanes = new Map(placed.map(({ lane, span }) => [span.queueId, lane]));
         for (const row of body.lanes) {
-          row.spans = reconcileOwnerSpans(row.spans, { asOf: t0, asks })
+          row.spans = reconcileOwnerSpans(row.spans, { asOf: t0, asks, lane: row.lane, askLanes })
             .sort((x, y) => Date.parse(x.start) - Date.parse(y.start) || Date.parse(x.end) - Date.parse(y.end));
           row.idle = !row.current && row.spans.length === 0 && (row.marks || []).length === 0;
         }

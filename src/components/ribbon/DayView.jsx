@@ -269,7 +269,7 @@ export default function DayView({ onOpenFleet, onNavigate, active = true }) {
             />
           </div>
         )}
-        <RibbonLaneLayer data={feed.data} from={win.window.from} to={win.window.to} now={win.now} />
+        <RibbonLaneLayer data={ribbonData} from={win.window.from} to={win.window.to} now={win.now} />
         <DayMissingSources sources={sources} />
       </div>
       {/* The shared meter's full form is ~470 px tall and would squeeze the ribbon to a thumbnail at 1440x900, so it sits in a

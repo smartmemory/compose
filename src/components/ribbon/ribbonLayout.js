@@ -468,6 +468,11 @@ const spansAtNow = (lane, n, ref = n) => (lane?.spans || []).filter((s) => s.kin
  */
 export const ownerAtNow = (s) => Boolean(s && s.kind === 'wait' && s.cause === 'owner' && (s.queueId || s.open === true));
 const isOwnerSpan = (s) => s?.kind === 'wait' && s.cause === 'owner';
+/**
+ * FU-1: the stamp lane's mirror of an ask drawn on ANOTHER lane (`laneRule: 'asked-elsewhere'`, `lib/owner-spans.js`). It makes
+ * that lane read "waiting on you (asked on <lane>)" and is never an ask: no Needs-you marker, no count (`ownerAtNow` is false).
+ */
+export const isMirrorSpan = (s) => Boolean(isOwnerSpan(s) && !s.queueId && s.askQid && s.askedOn);
 
 /** A span's real start: `since` (the producer's unclipped start) when the window cut it, else `start`. */
 const realStart = (s) => toMs(s.since ?? s.start);
@@ -499,7 +504,7 @@ export function laneState(lane, now, asOf = null) {
   const n = toMs(now);
   // OWNER-IDENTITY-1 (review F1): an owner span that does not count at now leaves the set BEFORE `latest` is chosen, so a
   // stamp the queue does not back can never answer "waiting on you" through either path.
-  const at = spansAtNow(lane, n, refOf(n, asOf)).filter((s) => !isOwnerSpan(s) || ownerAtNow(s));
+  const at = spansAtNow(lane, n, refOf(n, asOf)).filter((s) => !isOwnerSpan(s) || ownerAtNow(s) || isMirrorSpan(s));
   const owner = at.find((s) => isOwnerSpan(s) && s.queueId) || at.find(isOwnerSpan); // the queue's span names the wait
   const latest = [...at].sort((a, b) => realStart(b) - realStart(a) || toMs(b.end) - toMs(a.end) || (a.kind === 'wait' ? -1 : 1))[0];
   const wait = owner || (latest?.kind === 'wait' ? latest : null);
@@ -507,7 +512,8 @@ export function laneState(lane, now, asOf = null) {
   if (wait) {
     const since = realStart(wait);
     const cause = wait.cause || 'unknown';
-    return { kind: 'wait', cause, since, phrase: `${causePhrase(cause)} ${fmtDur(n - since)}`, span: wait };
+    const mirror = isMirrorSpan(wait);
+    return { kind: 'wait', cause, since, phrase: `${causePhrase(cause)} ${fmtDur(n - since)}${mirror ? ` (asked on ${wait.askedOn})` : ''}`, span: wait, ...(mirror ? { askedOn: wait.askedOn } : {}) };
   }
   if (!cur) return null;
   const since = toMs(cur.since);
@@ -529,8 +535,9 @@ export function withOwnerOpen(feed, openIds, now) {
   if (!feed || !Array.isArray(feed.lanes) || !Array.isArray(openIds)) return feed;
   const keep = new Set(openIds);
   const ref = refOf(toMs(now), feed.now);
-  const live = (s) => ownerAtNow(s) && toMs(s.end) >= ref - AT_NOW_SLACK_MS;
-  return { ...feed, lanes: feed.lanes.map((l) => ({ ...l, spans: (l.spans || []).filter((s) => !live(s) || (s.queueId && keep.has(s.queueId))) })) };
+  const live = (s) => (ownerAtNow(s) || isMirrorSpan(s)) && toMs(s.end) >= ref - AT_NOW_SLACK_MS;
+  const backed = (s) => keep.has(s.queueId ?? s.askQid); // a mirror is backed by the ask it mirrors
+  return { ...feed, lanes: feed.lanes.map((l) => ({ ...l, spans: (l.spans || []).filter((s) => !live(s) || ((s.queueId || s.askQid) && backed(s))) })) };
 }
 
 /**

@@ -404,7 +404,7 @@ export default function DayRibbon({
           <text key={`a${i}`} className={`tk alert${a.cleared ? ' cleared' : ''}`} data-testid="alert-mark" x={f1(X(a.since))} y={ry + 9} textAnchor="middle"
             data-tip={alertTip(a, now)}>{a.cleared ? '✓⚠' : '⚠'}</text>
         ))}
-        {waiting?.cause === 'owner' && (
+        {waiting?.cause === 'owner' && !waiting.askedOn && ( // FU-1: a lane that only mirrors an ask drawn elsewhere has no marker of its own
           // C3: the marker at NOW on the lane that needs the owner; it opens the inbox, like the WHAT line's chip.
           <g className="own-now" data-testid="owner-now" data-queue={waiting.span.queueId ?? ''} tabIndex={0} role="button"
             aria-label={`Needs you: ${waiting.span.title || lane.lane}`} data-tip={`Needs you · ${waiting.span.title || lane.lane}\nclick to open the question`}

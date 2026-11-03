@@ -8,7 +8,7 @@ import React from 'react';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, cleanup } from '@testing-library/react';
+import { render, screen, waitFor, cleanup, fireEvent, act } from '@testing-library/react';
 
 vi.mock('../../src/lib/wsFetch.js', async (orig) => ({ ...(await orig()), wsFetch: vi.fn() }));
 import { wsFetch } from '../../src/lib/wsFetch.js';
@@ -124,4 +124,46 @@ describe('OWNER-IDENTITY-1: drawn owner waits at now equal the headline, on the 
       expect(phoneOwner, 'the phone says what the ribbon says').toEqual(ownerLanes);
     }, 30000);
   }
+});
+
+/**
+ * FU-1: ops holds the NAMED ask A; the stamp is web's. Web mirrors it (the route's own `reconcileOwnerSpans`, given each ask's
+ * lane). The ribbon, the headline and both lane drawers must agree at now: one marker (ops), web reading "on you", and
+ * "on answer" in the drawer of every lane the ribbon says is waiting on the owner.
+ */
+describe('OWNER-IDENTITY-FU-1: the lane drawer and the ribbon agree at now', () => {
+  function namedAskElsewhere() {
+    const d = clone(RIBBON);
+    const ops = d.lanes.find((l) => l.lane === 'ops');
+    const web = d.lanes.find((l) => l.lane === 'web');
+    const own = ops.spans.find(isOwner);
+    ops.spans = [...ops.spans.filter((s) => s !== own), { ...own, open: undefined, unit: null, queueId: 'A', laneGuess: false }];
+    web.spans = [...web.spans, { ...own, unit: 'W-2', qid: 'A', open: true }];
+    const asks = d.lanes.flatMap((l) => l.spans.filter((s) => isOwner(s) && s.queueId));
+    const askLanes = new Map(d.lanes.flatMap((l) => l.spans.filter((s) => isOwner(s) && s.queueId).map((s) => [s.queueId, l.lane])));
+    for (const l of d.lanes) l.spans = reconcileOwnerSpans(l.spans, { asOf: Date.parse(d.now), asks, lane: l.lane, askLanes });
+    d.owner = { open: [ASK] };
+    return d;
+  }
+  it('one marker on ops, web reads "on you" with no marker, and both drawers say "on answer"', async () => {
+    const body = namedAskElsewhere();
+    stub(body, [{ ...ASK, red: false }]);
+    render(<DayView onNavigate={() => {}} />);
+    await screen.findByTestId('day-ribbon');
+    await waitFor(() => expect(screen.getByTestId('what-count-you').getAttribute('data-known')).toBe('true'));
+    await screen.findByTestId('lane-ops');
+    expect(headline()).toBe(1);
+    const marks = screen.queryAllByTestId('owner-now');
+    expect(marks.map((m) => m.closest('[data-testid^="lane-"]')?.getAttribute('data-testid'))).toEqual(['lane-ops']);
+    const says = (n) => /on you/.test(screen.getByTestId(`lane-${n}`).querySelector('text.cur')?.textContent ?? '');
+    expect([says('ops'), says('web')]).toEqual([true, true]);
+    for (const name of ['web', 'ops']) {
+      act(() => { window.dispatchEvent(new CustomEvent('compose:ribbon-open-lane', { detail: { lane: name }, cancelable: true })); });
+      const drawer = await screen.findByTestId('lane-drawer');
+      expect(drawer.getAttribute('aria-label')).toBe(`${name} lane`);
+      expect(screen.getByTestId('drawer-landing').textContent, `${name}'s drawer`).toMatch(/on answer/);
+      fireEvent.click(screen.getByTestId('lane-drawer-close'));
+      await waitFor(() => expect(screen.queryByTestId('lane-drawer')).toBeNull());
+    }
+  }, 30000);
 });

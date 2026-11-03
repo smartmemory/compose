@@ -5,7 +5,7 @@
  * current, next, eta. Nothing here fetches. Every function returns words or numbers a view can print, never an empty cell.
  */
 import { smPanel } from '../../cockpit/fleetLogic.js';
-import { clock, etaLabel, etaWord, fmtDur, HAS_ZONE, ownerAtNow, toMs, when } from '../ribbonLayout.js';
+import { clock, etaLabel, etaWord, fmtDur, HAS_ZONE, laneState, toMs, when } from '../ribbonLayout.js';
 
 const MIN = 60_000;
 
@@ -110,13 +110,6 @@ export function lastLanded(lane, n = 3) {
     });
 }
 
-/** The wait the lane sits in right now (last span, a wait, still open at `now`), else null. */
-export function currentWait(lane, now) {
-  const spans = [...(lane?.spans || [])].sort((a, b) => toMs(b.end) - toMs(a.end));
-  const last = spans[0];
-  return last && last.kind === 'wait' && toMs(last.end) >= toMs(now) - 5 * MIN ? last : null;
-}
-
 /** "as of 20:14" for a stamp the estimator wrote without a zone (its own local clock), "as of today 16:40" for one with a zone. */
 export function asOfWord(asOf, now) {
   if (!asOf) return null;
@@ -124,9 +117,9 @@ export function asOfWord(asOf, now) {
 }
 
 /** EXPECTED LANDING as one line: the estimate with its `as of`, "on answer", or the no-data words. */
-export function expectedLanding(lane, now) {
-  const wait = currentWait(lane, now);
-  if (ownerAtNow(wait)) return { text: 'on answer', sub: 'waiting on you' }; // OWNER-IDENTITY-1: the one at-now owner rule
+export function expectedLanding(lane, now, asOf = now) {
+  // FU-1: the ribbon's own at-now answer (`laneState`), not a second selection rule; cause owner means "on answer".
+  if (laneState(lane, now, asOf)?.cause === 'owner') return { text: 'on answer', sub: 'waiting on you' };
   const eta = lane?.eta;
   if (!eta) return { text: 'no estimate', sub: null };
   if (eta.noData) return { text: 'no estimate (n<10)', sub: eta.raw || null };

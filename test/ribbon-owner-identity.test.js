@@ -130,12 +130,14 @@ describe('the route: one ask is one wait at now, by its id', () => {
       loadOwnerQueue: async () => [{ id: 'A', status: 'open', lane: 'web', by: 'web-main', ts: D('09:00') / 1000, text: 'ASK: ship it?' }],
     });
     assert.equal(status, 200);
-    assert.deepEqual(lane(body, 'forge').spans.filter(owner), [], 'the stamp\'s time is all the ask\'s');
+    // FU-1: the ask's time is still the queue's (no queue span, no open stamp on forge), but forge keeps ONE mirror of it, so it
+    // reads "waiting on you (asked on web)" instead of "working"; the mirror is no ask and no marker.
+    assert.deepEqual(lane(body, 'forge').spans.filter(owner).map((s) => [s.queueId ?? null, s.askedOn, s.askQid, s.laneRule]), [[null, 'web', 'A', 'asked-elsewhere']], 'the stamp\'s time is all the ask\'s');
     assert.deepEqual(lane(body, 'web').spans.filter(owner).map((s) => s.queueId), ['A']);
     const drawn = ownerWaitsAtNow(body.lanes, body.now, body.now);
     assert.deepEqual(drawn, [{ lane: 'web', queueId: 'A' }]);
     assert.deepEqual(drawn.map((d) => d.queueId), ownerAsks(body.owner.open, null, NOW).rows.map((q) => q.id));
-    assert.equal(body.lanes.filter((l) => laneState(l, body.now, body.now)?.cause === 'owner').map((l) => l.lane).join(), 'web');
+    assert.equal(body.lanes.filter((l) => laneState(l, body.now, body.now)?.cause === 'owner' && !laneState(l, body.now, body.now).askedOn).map((l) => l.lane).join(), 'web', 'one marker lane');
   });
   it('review F1 at the route: the ask answered at 11:00, the stamp still open: forge reads "working", nothing at now', async () => {
     const { body } = await route({
