@@ -77,7 +77,7 @@ export const RIBBON_CSS = `
 .day-ribbon .resets-toggle{display:inline-flex;align-items:center;gap:4px;color:var(--rb-muted);margin-left:auto;cursor:pointer}
 .day-ribbon .legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:var(--rb-label);color:var(--rb-muted)}
 .day-ribbon .legend span{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
-.day-ribbon .legend svg{width:22px;height:9px}
+.day-ribbon .legend svg.sw{width:22px;height:9px}
 .day-ribbon .rb-flash .row-bg{animation:rb-flash ${FLASH_MS}ms ease-in-out 1}
 @keyframes rb-flash{0%,100%{fill:transparent}35%{fill:var(--rb-hl)}}
 @media (prefers-reduced-motion: reduce){.day-ribbon .rb-flash .row-bg{animation:none;stroke:var(--rb-accent);stroke-width:2}}

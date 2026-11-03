@@ -1,4 +1,5 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { MarkIcon, MARK_SHAPES } from './MarkShape.jsx';
 
 const W = 300;
 const GAP = 8;
@@ -54,12 +55,14 @@ export default function MarkPopover({ card, rect, note, onClose, onAction }) {
     };
   }, [onClose]);
 
-  const head = `${card.icon ? `${card.icon} ` : ''}${card.title}`;
+  // U3 (AD#16): a mark kind drawn as a shape on the ribbon heads its card with the same shape, not a font glyph.
+  const shaped = MARK_SHAPES.has(card.kind);
+  const head = `${card.icon && !shaped ? `${card.icon} ` : ''}${card.title}`;
   return (
     <div ref={ref} role="dialog" aria-label={head} tabIndex={-1} data-testid="mark-popover" data-kind={card.kind}
       className="fixed z-50 rounded-lg border border-border bg-card p-3 text-[12px] shadow-lg outline-none"
       style={{ left: pos.left, top: pos.top, width: pos.width, maxHeight: `calc(100vh - ${2 * GAP}px)`, overflowY: 'auto' }}>
-      <div className={`font-bold ${card.tone === 'bad' ? 'text-destructive' : TONE.plain}`} data-testid="mark-popover-title">{head}</div>
+      <div className={`font-bold ${card.tone === 'bad' ? 'text-destructive' : TONE.plain}`} data-testid="mark-popover-title">{shaped && <span className="mr-1"><MarkIcon kind={card.kind} /></span>}{head}</div>
       {card.name && <div className="mt-0.5 font-semibold text-foreground" data-testid="mark-popover-name">{card.name}</div>}
       {card.sub && <div className="text-muted-foreground" data-testid="mark-popover-sub">{card.sub}</div>}
       {card.body && <p className="m-0 mt-2 text-foreground break-words" data-testid="mark-popover-body">{all && card.full ? card.full : card.body}</p>}
@@ -72,7 +75,7 @@ export default function MarkPopover({ card, rect, note, onClose, onAction }) {
           {card.list.map((it, i) => (
             <li key={i}>
               <button type="button" className="w-full text-left text-[12px] text-foreground hover:underline focus-visible:underline outline-none" onClick={() => onAction(it.action)}>
-                {it.glyph} {it.text} <span className="text-muted-foreground">{it.at}</span>
+                {MARK_SHAPES.has(it.action?.item?.kind) ? <MarkIcon kind={it.action.item.kind} /> : it.glyph} {it.text} <span className="text-muted-foreground">{it.at}</span>
               </button>
             </li>
           ))}

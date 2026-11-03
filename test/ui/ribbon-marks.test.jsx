@@ -56,10 +56,10 @@ afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.useRealTimers(); });
 describe('marks open a card (COMP-COCKPIT-RIBBON-MARKS-1)', () => {
   it('one card per kind, opened by its own event (one row table)', () => {
     const rows = [
-      { name: 'land tick', data: spread(), pick: (c) => lane(c, 'web').querySelector('[data-testid="mark-land"]'), want: '✓ Landed', has: 'unit page ▸' },
-      { name: 'deploy tick', data: spread(), pick: (c) => lane(c, 'web').querySelector('[data-testid="mark-deploy"]'), want: '▲ Deployed', has: 'Pricing grid live on smartmemory.ai' },
-      { name: 'failed deploy tick, in red', pick: (c) => c.querySelector('[data-testid="mark-deployFail"]'), want: '▲ Deploy failed', red: true },
-      { name: 'decided-for-you tick', pick: (c) => lane(c, 'ops').querySelector('[data-testid="mark-decide"]'), want: '⚖︎ Decided for you', has: 'Reverse: Remove the bypass flag.' },
+      { name: 'land tick', data: spread(), pick: (c) => lane(c, 'web').querySelector('[data-testid="mark-land"]'), want: 'Landed', icon: 'land', has: 'unit page ▸' },
+      { name: 'deploy tick', data: spread(), pick: (c) => lane(c, 'web').querySelector('[data-testid="mark-deploy"]'), want: 'Deployed', icon: 'deploy', has: 'Pricing grid live on smartmemory.ai' },
+      { name: 'failed deploy tick, in red', pick: (c) => c.querySelector('[data-testid="mark-deployFail"]'), want: 'Deploy failed', icon: 'deployFail', red: true },
+      { name: 'decided-for-you tick', pick: (c) => lane(c, 'ops').querySelector('[data-testid="mark-decide"]'), want: 'Decided for you', icon: 'decide', has: 'Reverse: Remove the bypass flag.' },
       { name: 'seat reset pin', pick: (c) => c.querySelector('[data-testid="pin-seatReset"]'), want: '↻ seat2 resets 18:10', has: 'It is at 96% now with ops work queued.' },
       { name: 'hold band', data: withBands(), pick: (c) => c.querySelector('[data-testid="band-hold"] [data-tip]'), want: 'Hold: Batch hold, 2h' },
       { name: 'outage band', data: withBands(), pick: (c) => c.querySelector('[data-testid="band-outage"] [data-tip]'), want: 'Outage since 15:00', red: true },
@@ -71,6 +71,8 @@ describe('marks open a card (COMP-COCKPIT-RIBBON-MARKS-1)', () => {
       expect(el, r.name).toBeTruthy();
       fireEvent.click(el);
       expect(title(), r.name).toBe(r.want);
+      // U3 (AD#16): a mark kind drawn as a shape heads its card with that shape, not a font glyph.
+      if (r.icon) expect(screen.getByTestId('mark-popover-title').querySelector(`[data-testid="mark-icon-${r.icon}"]`), r.name).toBeTruthy();
       if (r.has) expect(screen.getByTestId('mark-popover').textContent, r.name).toContain(r.has);
       if (r.red) expect(screen.getByTestId('mark-popover-title').className, r.name).toContain('text-destructive');
     }
@@ -97,7 +99,7 @@ describe('marks open a card (COMP-COCKPIT-RIBBON-MARKS-1)', () => {
     const items = screen.getByTestId('mark-popover-list').querySelectorAll('button');
     expect([title(), items.length]).toEqual([`${n} events`, n]);
     fireEvent.click(items[items.length - 1]);
-    expect(['✓ Landed', '▲ Deployed', '▲ Deploy failed']).toContain(title());
+    expect(['Landed', 'Deployed', 'Deploy failed']).toContain(title());
   });
 
   it('close and focus return (one row table)', async () => {

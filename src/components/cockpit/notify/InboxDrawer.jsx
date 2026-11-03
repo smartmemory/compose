@@ -145,10 +145,14 @@ export default function InboxDrawer() {
       setOpen(true);
       const id = e.detail?.focus;
       if (id != null && id !== '') { setFocusId(String(id)); setExpanded((m) => ({ ...m, [String(id)]: true })); }
+      else setFocusId(null); // a plain open starts at the top, whatever an earlier open asked for
     };
     window.addEventListener('compose:open-inbox', onOpen);
     return () => window.removeEventListener('compose:open-inbox', onOpen);
   }, []);
+  // U3 (review U2 follow-up): a focus asked for while the queue was still loading never ran; closing drops it, so the next
+  // plain open does not select that old row.
+  React.useEffect(() => { if (!open) setFocusId(null); }, [open]);
   React.useEffect(() => {
     if (!open) return undefined;
     const onKey = (e) => { if (e.key === 'Escape') { e.preventDefault(); setOpen(false); } };

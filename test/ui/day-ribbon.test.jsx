@@ -57,7 +57,8 @@ const ROWS = [
       expect(root.querySelector('[data-testid="lane-2.0"] [data-testid="next"]').textContent).toMatch(/^→ Workspace/);
       expect(count(root, 'eta')).toBeGreaterThan(0);
       expect(root.querySelector('[data-testid="ribbon-title"]').textContent).toBe('Lanes · yesterday 18:00 to tomorrow 06:00');
-      expect(root.querySelector('[data-testid="ribbon-fresh"]').textContent).toBe('as of 16:40 · start stamps on 59% of landings');
+      // U3 (DV#17): the WHAT line carries the page's as-of; a body this fresh adds none of its own.
+      expect(root.querySelector('[data-testid="ribbon-fresh"]').textContent).toBe('start stamps on 59% of landings');
       expect(c).toBeTruthy();
     },
   },

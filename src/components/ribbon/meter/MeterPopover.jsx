@@ -9,6 +9,35 @@ const GAP = 8;
  * the layer puts it back on the trigger on close, no animation (so reduced motion needs no case). It renders a meterCards
  * card (`rows`, `bars`, `link`); `onLink()` runs the link.
  */
+/**
+ * U3 (DV#19): the closed hours today as bars with 2 px gaps, the peak bar labelled with its dollars, and the hour still open
+ * marked "now" as an empty dashed slot after the last bar (it has no closed total yet). Each bar keeps its hover tooltip.
+ */
+export function HourBars({ bars }) {
+  const peak = bars.hours.reduce((best, b, i) => (best < 0 || b.usd > bars.hours[best].usd ? i : best), -1);
+  const first = bars.hours[0]?.label;
+  return (
+    <div className="mt-2" role="img" aria-label={`Spend by closed hour today${peak >= 0 ? `, peak $${Math.round(bars.hours[peak].usd)} at ${bars.hours[peak].label}:00` : ''}`} data-testid="meter-popover-bars">
+      <div className="mt-4 flex h-10 items-end gap-0.5">
+        {bars.hours.map((b, i) => (
+          <div key={i} className="relative flex h-full flex-1 items-end">
+            {i === peak && (
+              <span className="absolute -top-4 left-1/2 -translate-x-1/2 whitespace-nowrap text-[11px] font-semibold tabular-nums text-foreground" data-testid="meter-bar-peak">
+                ${Math.round(b.usd)}
+              </span>
+            )}
+            <div title={`${b.label}:00 $${Math.round(b.usd)}`} data-testid="meter-bar" className="w-full rounded-sm bg-primary" style={{ height: `${bars.max > 0 ? Math.max(4, (b.usd / bars.max) * 100) : 4}%` }} />
+          </div>
+        ))}
+        <div className="h-full flex-1 rounded-sm border border-dashed" style={{ borderColor: 'var(--rb-accent)' }} title="this hour, still open" data-testid="meter-bar-now" />
+      </div>
+      <div className="mt-0.5 flex justify-between text-[11px] tabular-nums text-muted-foreground" aria-hidden="true">
+        <span>{first !== undefined ? `${first}:00` : ''}</span><span style={{ color: 'var(--rb-accent)' }}>now</span>
+      </div>
+    </div>
+  );
+}
+
 export default function MeterPopover({ card, rect, onClose, onLink }) {
   const ref = useRef(null);
   const [pos, setPos] = useState({ left: 0, top: 0 });
@@ -57,13 +86,7 @@ export default function MeterPopover({ card, rect, onClose, onLink }) {
           </React.Fragment>
         ))}
       </dl>
-      {card.bars && (
-        <div className="mt-2 flex h-10 items-end gap-px" role="img" aria-label="Spend by closed hour today" data-testid="meter-popover-bars">
-          {card.bars.hours.map((b, i) => (
-            <div key={i} title={`${b.label}:00 $${Math.round(b.usd)}`} className="flex-1 rounded-sm bg-primary" style={{ height: `${card.bars.max > 0 ? Math.max(4, (b.usd / card.bars.max) * 100) : 4}%` }} />
-          ))}
-        </div>
-      )}
+      {card.bars && <HourBars bars={card.bars} />}
       <div className="mt-2">
         <button type="button" data-testid="meter-popover-link" className="text-[12px] text-muted-foreground hover:text-foreground hover:underline focus-visible:underline outline-none" onClick={onLink}>
           {card.link.label}

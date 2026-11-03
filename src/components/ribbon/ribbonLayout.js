@@ -544,9 +544,10 @@ const localClock = (ms) => new Date(ms).toLocaleTimeString([], { hour: '2-digit'
  * ("Seat resets and quota waits: not read since 14:02, retrying"); the raw reason (a Python error, a path-free message) is
  * only the `title`, so no stack word or millisecond count is on screen. Keys are deduped on their top-level name
  * ("quota.seat3" is "quota"). `good` is `{key: epoch ms}` of the last clean read (`useRibbonFeed().sourceGood`); `ref` an ISO
- * string whose offset the time is read in (the page's now), else the browser's clock.
+ * string whose offset the time is read in (the page's now), else the browser's clock. U3 (review U2 F4): `retrying: false`
+ * (a past window, which `useRibbonFeed` never polls) says "not read again" instead of claiming a retry that never comes.
  */
-export function sourceErrorLines(sourceErrors, good = {}, ref = null) {
+export function sourceErrorLines(sourceErrors, good = {}, ref = null, { retrying = true } = {}) {
   const byKey = new Map();
   for (const [k, v] of Object.entries(sourceErrors || {})) {
     const key = String(k).split('.')[0];
@@ -555,6 +556,6 @@ export function sourceErrorLines(sourceErrors, good = {}, ref = null) {
   return [...byKey].map(([key, why]) => {
     const at = good?.[key];
     const when2 = Number.isFinite(at) ? `not read since ${typeof ref === 'string' ? clock(at, ref) : localClock(at)}` : 'not read yet';
-    return { key, text: `${SOURCE_WORDS[key] || key}: ${when2}, retrying`, title: why };
+    return { key, text: `${SOURCE_WORDS[key] || key}: ${when2}, ${retrying ? 'retrying' : 'not read again for a past window'}`, title: why };
   });
 }

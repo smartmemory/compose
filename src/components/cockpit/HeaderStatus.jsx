@@ -14,6 +14,9 @@
  * good body is not counted; the fleet part reads "Fleet unreadable since HH:MM" (SourceNote, reason in the title).
  * Both mount in the thin status row under the tab row (`App.jsx`, testid `header-status-strip`): with every word shown they need
  * ~500 px and the tab row has ~220 px left at 1440, so beside the tabs they painted over the ⌘K hint.
+ * COMP-DAYVIEW-DESIGN-FIX-1 U3 (M14): the strip is `justify-end`, so at 400 px children that would not shrink spilled off its
+ * LEFT edge ("d Compose agent: Idle"). The counters and the pill now shrink (counters first) and end in an ellipsis, with
+ * every word in the title; the notification chip beside them keeps its width. Nothing is hidden past the left edge.
  */
 
 import React from 'react';
@@ -27,7 +30,7 @@ function Counter({ testId, value, word, color }) {
   return (
     <span
       data-testid={testId}
-      className="tabular-nums whitespace-nowrap"
+      className="tabular-nums"
       style={color ? { color } : undefined}
       title={`${value} ${word}`}
       aria-label={`${value} ${word}`}
@@ -48,11 +51,11 @@ export function HeaderCounters({ items, gates }) {
   ].filter(Boolean);
   return (
     <div
-      className="flex items-center gap-1.5 text-[11px] shrink-0"
+      className="min-w-0 shrink-[3] truncate text-[11px]"
       data-testid="header-counters"
       title={[`Compose: ${stats.total} items`, ...breakdown].join(' · ')}
     >
-      <span className="text-muted-foreground whitespace-nowrap">Compose:</span>{' '}
+      <span className="text-muted-foreground">Compose:</span>{' '}
       <Counter testId="header-count-total" value={stats.total} word="items" color="hsl(var(--muted-foreground))" />
       {stats.inProgress > 0 && (
         <>{' '}<Counter testId="header-count-active" value={stats.inProgress} word="active" color="hsl(var(--primary))" /></>
@@ -77,7 +80,7 @@ export function AgentStatusPill() {
   const agentText = `Compose agent: ${now.composeLabel}`;
   const fleetText = `Fleet: ${now.fleetKnown ? now.text || 'quiet' : now.text || 'unknown'}`;
   return (
-    <span data-testid="header-agent-pill" className="flex items-center gap-1.5 text-[11px] font-medium shrink-0">
+    <span data-testid="header-agent-pill" className="flex min-w-0 shrink items-center gap-1.5 text-[11px] font-medium">
       <span
         className="w-1.5 h-1.5 rounded-full shrink-0"
         style={{
@@ -87,7 +90,7 @@ export function AgentStatusPill() {
       />
       <span
         data-testid="header-agent-status"
-        className="whitespace-nowrap"
+        className="min-w-0 truncate"
         style={{ color: working ? 'var(--color-category-writing)' : 'hsl(var(--muted-foreground))' }}
         title={agentText}
         aria-label={agentText}
@@ -97,7 +100,7 @@ export function AgentStatusPill() {
       {fleetSrc.error ? <SourceNote source="Fleet" state={fleetSrc} compact /> : (
         <span
           data-testid="header-agent-fleet"
-          className={`whitespace-nowrap ${now.fleetKnown ? '' : 'opacity-60'}`}
+          className={`min-w-0 truncate ${now.fleetKnown ? '' : 'opacity-60'}`}
           style={{ color: fleetBusy ? 'hsl(var(--primary))' : 'hsl(var(--muted-foreground))' }}
           title={fleetText}
           aria-label={fleetText}

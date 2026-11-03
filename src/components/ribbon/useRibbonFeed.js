@@ -10,6 +10,10 @@
  * `errorSince`, `stale` beside `data` and `error`), so a failed refresh over kept data reads "unreadable since HH:MM" (TOP M1).
  * `last` is the newest body from ANY window, for the loading skeleton's lane names (M15). `sourceGood` is, per
  * `sourceErrors` key, the last time a body read that source cleanly (M4: "not read since HH:MM"), or null when never.
+ *
+ * U3: a cached window keeps the time its body was fetched, so a failed refresh over it still says "last good read from
+ * HH:MM". `retrying` is the poll rule above as a flag (the window holds now): a failed past window is never read again, and
+ * the page must not say it is (review U2 F4).
  */
 import { useEffect, useRef, useState } from 'react';
 import { wsFetch } from '../../lib/wsFetch.js';
@@ -20,6 +24,7 @@ export const RIBBON_CACHE_WINDOWS = 5;
 const keyOf = (w) => `${w.from}|${w.to}`;
 const usable = (w) => w && Date.parse(w.from) < Date.parse(w.to);
 const hidden = () => typeof document !== 'undefined' && document.visibilityState === 'hidden';
+const holdsNow = (from, to, n = Date.now()) => Date.parse(from) <= n && n <= Date.parse(to);
 
 export function useRibbonFeed(win, { enabled = true } = {}) {
   const cache = useRef(new Map());
@@ -35,9 +40,9 @@ export function useRibbonFeed(win, { enabled = true } = {}) {
     const ctl = { current: null };
     let dead = false;
 
-    const remember = (data) => {
+    const remember = (data, at) => {
       cache.current.delete(key);
-      cache.current.set(key, data);
+      cache.current.set(key, { data, at });
       while (cache.current.size > RIBBON_CACHE_WINDOWS) cache.current.delete(cache.current.keys().next().value);
     };
     const load = async () => {
@@ -49,8 +54,8 @@ export function useRibbonFeed(win, { enabled = true } = {}) {
         if (!res.ok) throw new Error(`ribbon route ${res.status}`);
         const data = await res.json();
         if (dead || ac.signal.aborted) return;
-        remember(data);
         const at = Date.now();
+        remember(data, at);
         const errs = data?.sourceErrors || {};
         const known = ['stamps', 'quota', 'ownerQueue', 'holds', 'ledger', 'outage', 'seats', 'eta', ...Object.keys(errs)];
         known.forEach((k) => { if (!errs[k]) good.current[k] = at; });
@@ -67,14 +72,15 @@ export function useRibbonFeed(win, { enabled = true } = {}) {
       }
     };
 
-    if (cache.current.has(key)) setSnap({ key, data: cache.current.get(key), error: null, fetchedAt: null, errorSince: null });
+    const hit = cache.current.get(key);
+    if (hit) setSnap({ key, data: hit.data, error: null, fetchedAt: hit.at, errorSince: null });
     else setSnap({ key, data: null, error: null, fetchedAt: null, errorSince: null });
-    const cachedPast = cache.current.has(key) && !(Date.parse(from) <= Date.now() && Date.now() <= Date.parse(to));
+    const cachedPast = !!hit && !holdsNow(from, to);
     if (!cachedPast) load();
 
     const timer = setInterval(() => {
       const n = Date.now();
-      if (hidden() || !(Date.parse(from) <= n && n <= Date.parse(to))) return;
+      if (hidden() || !holdsNow(from, to, n)) return;
       load();
     }, RIBBON_POLL_MS);
     return () => { dead = true; clearInterval(timer); ctl.current?.abort(); };
@@ -92,5 +98,6 @@ export function useRibbonFeed(win, { enabled = true } = {}) {
     errorSince: mine ? snap.errorSince : null,
     last,
     sourceGood,
+    retrying: !!key && holdsNow(win.from, win.to),
   };
 }

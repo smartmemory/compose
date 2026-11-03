@@ -161,3 +161,30 @@ export function phoneLines(feed, index, now = Date.now()) {
   }
   return out;
 }
+
+/** U3 (DV#15): how many hours the phone's per-lane strip covers, ending at now. */
+export const STRIP_HOURS = 12;
+const STRIP_CAUSES = new Set(['owner', 'review', 'gate', 'quota']);
+
+/**
+ * U3 (DV#15): the phone's 12 h state strip for one feed lane, `[{x, w, tone}]` in a `px`-wide box. `tone` is the ribbon's
+ * state words (`working`, `owner`, `review`, `gate`, `quota`, `unknown`; `norec` for a not-recorded span), so DayPhone reads
+ * the same `--rb-*` palette as the ribbon and its dot. Spans are clipped to the last `hours` before `now` (the feed's own
+ * clock when it has one) and keep a 1 px gap, as the ribbon keeps its 2 px one at its larger size. `[]` for no lane.
+ */
+export function stripSegs(lane, now, { hours = STRIP_HOURS, px = 72 } = {}) {
+  const end = typeof now === 'string' ? Date.parse(now) : now;
+  if (!lane || !Number.isFinite(end)) return [];
+  const start = end - hours * 3_600_000;
+  const x = (t) => ((t - start) / (end - start)) * px;
+  const out = [];
+  for (const s of lane.spans || []) {
+    const a = Math.max(start, ms(s.start) ?? NaN);
+    const b = Math.min(end, ms(s.end) ?? end);
+    if (!Number.isFinite(a) || !(b > a)) continue;
+    const tone = s.kind === 'work' ? 'working' : s.kind === 'wait' ? (STRIP_CAUSES.has(s.cause) ? s.cause : 'unknown') : 'norec';
+    const x0 = x(a);
+    out.push({ x: Math.round(x0 * 10) / 10, w: Math.round(Math.max(1, x(b) - x0 - 1) * 10) / 10, tone });
+  }
+  return out;
+}

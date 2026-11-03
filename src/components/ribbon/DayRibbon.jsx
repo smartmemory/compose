@@ -1,11 +1,12 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
-  alertTip, axisTicks, clientToSvgX, clock, etaAt, etaWord, fmtDur, gapWord, isLive, laneState, layoutLanes, nextResetsLine, RESET_CHAR_PX, resetTicks, seatShort,
+  alertTip, axisTicks, clientToSvgX, clock, etaAt, etaWord, fmtDur, gapWord, isLive, laneState, layoutLanes, nextResetsLine, resetTicks, seatShort,
   tipText, toMs, when, windowTitle, xOf,
 } from './ribbonLayout.js';
 import { clusterMarks, MIN_DRAG_MS } from './rangeLogic.js';
 import { fitText, textWidth } from './textFit.js';
 import { FLASH_MS, RIBBON_CSS } from './dayRibbonCss.js';
+import { MarkIcon, MarkShape, MARK_SHAPES } from './marks/MarkShape.jsx';
 
 /**
  * DayRibbon — one row per lane over any window it is given (COMP-COCKPIT-RIBBON-ROWS-1). A pure drawing: it takes the
@@ -26,7 +27,24 @@ const f1 = (n) => Math.round(n * 10) / 10;
 const SPAN_CLASS = { review: 's-review', owner: 's-owner', quota: 's-quota', gate: 's-gate', unknown: 's-unknown' };
 /** The span class of a lane state (laneState's kind, or its wait cause): the swatch before the NOW text and the legend key. */
 const STATE_CLASS = { working: 's-work', stale: 's-stale', ...SPAN_CLASS };
-const GLYPH = { land: '✓', deploy: '▲', deployFail: '▲', decide: '⚖︎' };
+/** U3 (DV#18, IMP#18): every mark, pin and estimate gets a 24 px hit area, cut at the midpoint to a neighbour on a dense row. */
+const HIT_PX = 24;
+/** U3 (DV#18): the surface gap between two spans on a row. */
+const SPAN_GAP = 2;
+/** U3 (DV#17): the WHAT line carries the page's one as-of; the ribbon names its own only when its body lags by more. */
+export const ASOF_LAG_MS = 5 * 60_000;
+
+/** `[{x, lo, hi}]` hit bounds for points at `xs` (sorted or not): HIT_PX wide, never past the midpoint to a neighbour. */
+export function hitBounds(xs) {
+  const order = xs.map((x, i) => [x, i]).sort((a, b) => a[0] - b[0]);
+  const out = new Array(xs.length);
+  order.forEach(([x, i], k) => {
+    const prev = k > 0 ? order[k - 1][0] : -Infinity;
+    const next = k < order.length - 1 ? order[k + 1][0] : Infinity;
+    out[i] = { x, lo: Math.max(x - HIT_PX / 2, (prev + x) / 2), hi: Math.min(x + HIT_PX / 2, (x + next) / 2) };
+  });
+  return out;
+}
 /** Space kept between the NOW text, the next unit and the right-edge text (M2). */
 const GAP = 16;
 /** The next unit is drawn only with at least this much room after the NOW text (M2). */
@@ -52,7 +70,7 @@ function Patterns() {
 }
 
 const Swatch = ({ cls }) => (
-  <svg viewBox="0 0 22 9" aria-hidden="true"><rect x="0.5" y="0.5" width="21" height="8" rx="2" className={cls} /></svg>
+  <svg className="sw" viewBox="0 0 22 9" aria-hidden="true"><rect x="0.5" y="0.5" width="21" height="8" rx="2" className={cls} /></svg>
 );
 
 const activate = (fn) => (e) => {
@@ -70,7 +88,7 @@ const LEGEND = [
   ['review', 's-review', 'waiting on review'], ['gate', 's-gate', 'waiting on gate'], ['quota', 's-quota', 'waiting on quota'],
   ['unknown', 's-unknown', 'waiting, cause not recorded'], ['norec', 's-norec', 'not recorded'],
   ['hold', 'band-hold', 'launch hold'], ['outage', 'band-outage', 'outage'],
-  ['land', '✓', 'landed'], ['deploy', '▲', 'deployed'], ['deployFail', '▲', 'deploy failed'], ['decide', '⚖︎', 'decided for you'],
+  ['land', 'shape', 'landed'], ['deploy', 'shape', 'deployed'], ['deployFail', 'shape', 'deploy failed'], ['decide', 'shape', 'decided for you'],
   ['cluster', '#', 'events grouped (count)'], ['alert', '⚠', 'alert'], ['eta', '◆', 'expected landing'], ['reset', '│', 'seat reset (AHEAD)'],
   ['now', '│', 'now'],
 ];
@@ -112,7 +130,9 @@ export default function DayRibbon({
   useLayoutEffect(() => {
     const el = boxRef.current;
     if (!el) return undefined;
-    const read = () => { const w = Math.round(el.getBoundingClientRect().width); if (w > 0) setW((old) => (old === w ? old : w)); };
+    // U2 review F6: the content box (`clientWidth`), never the scroller's border box, which includes a classic vertical
+    // scrollbar and made the svg overflow by its width. jsdom reports 0 for both unless a test mocks one.
+    const read = () => { const w = Math.round(el.clientWidth || el.getBoundingClientRect().width); if (w > 0) setW((old) => (old === w ? old : w)); };
     read();
     if (typeof ResizeObserver === 'undefined') return undefined;
     const ro = new ResizeObserver(read);
@@ -331,7 +351,7 @@ export default function DayRibbon({
           const cls = s.kind === 'work' ? (staleWork ? 's-stale' : 's-work') : s.kind === 'wait' ? (SPAN_CLASS[s.cause] || 's-unknown') : 's-norec';
           const key = s.kind === 'work' ? (staleWork ? 'stale' : 'work') : s.kind === 'wait' ? (SPAN_CLASS[s.cause] ? s.cause : 'unknown') : 'norec';
           drawn.add(key);
-          const w = Math.max(1.5, x1 - x0 - 0.8);
+          const w = Math.max(1.5, x1 - x0 - SPAN_GAP);
           if (key === 'owner') {
             // C1: the one loud state, full row height with a "?" at its start.
             return (
@@ -352,7 +372,10 @@ export default function DayRibbon({
           </text>
         )}
         {/* M5: marks closer than a glyph's width merge into one count at every window width. */}
-        {clusterMarks(lane.marks || [], { from, to }, TRACK).filter((m) => inWindow(m.at)).map((m, i) => {
+        {(() => {
+          const shown = clusterMarks(lane.marks || [], { from, to }, TRACK).filter((m) => inWindow(m.at));
+          const hits = hitBounds(shown.map((m) => X(m.at)));
+          return shown.map((m, i) => {
           const x = f1(X(m.at));
           drawn.add(m.kind);
           const tip2 = tipText({ ...m, now });
@@ -360,7 +383,7 @@ export default function DayRibbon({
             <g key={`m${i}`} className="mark" data-testid={`mark-${m.kind}`} data-tip={tip2} tabIndex={0} role="button" aria-label={tip2.replace('\n', ' ')}
               onClick={(e) => { e.stopPropagation(); onMarkOpen && onMarkOpen(m, rectOf(e)); }}
               onKeyDown={activateInRow((e) => onMarkOpen && onMarkOpen(m, rectOf(e)))}>
-              <rect className="hit" x={x - 7} y={ry} width="14" height={R.RH} />
+              <rect className="hit" data-testid="mark-hit" x={f1(hits[i].lo)} y={ry} width={f1(hits[i].hi - hits[i].lo)} height={R.RH} />
               {m.kind === 'cluster' ? (
                 <>
                   <rect className="cl-bg" x={x - 9} y={ry + 1} width="18" height="13" rx="6.5" />
@@ -369,12 +392,14 @@ export default function DayRibbon({
               ) : (
                 <>
                   <line className="tk-gap" x1={x} x2={x} y1={ry + 10} y2={ry + 22} />
-                  <text className={`tk ${m.kind}`} x={x} y={ry + 9} textAnchor="middle">{GLYPH[m.kind]}</text>
+                  {/* AD#16: a drawn shape, the same at every size and in every font. */}
+                  <MarkShape kind={m.kind} cx={x} cy={ry + 5} r={4.5} />
                 </>
               )}
             </g>
           );
-        })}
+          });
+        })()}
         {laneAlerts.map((a, i) => (
           <text key={`a${i}`} className={`tk alert${a.cleared ? ' cleared' : ''}`} data-testid="alert-mark" x={f1(X(a.since))} y={ry + 9} textAnchor="middle"
             data-tip={alertTip(a, now)}>{a.cleared ? '✓⚠' : '⚠'}</text>
@@ -417,7 +442,7 @@ export default function DayRibbon({
           <g className="eta-pin prev" data-testid="eta-prev" role="button" tabIndex={0} aria-label={`Earlier estimate, ${lane.lane} lane`}
             data-tip={tipText({ kind: 'prev', p50: eta.prev.p50, asOf: eta.prev.asOf, now })}
             onClick={(e) => { e.stopPropagation(); openEta(e); }} onKeyDown={activateInRow(openEta)}>
-            <rect className="hit" x={f1(X(prevMs) - 7)} y={ry} width="14" height="13" />
+            <rect className="hit" x={f1(X(prevMs) - HIT_PX / 2)} y={ry} width={HIT_PX} height="13" />
             <path d={diamond(X(prevMs), ry + 6, 4)} />
           </g>
         )}
@@ -426,7 +451,7 @@ export default function DayRibbon({
           <g className="eta-pin" data-testid="eta" data-where="axis" role="button" tabIndex={0} aria-label={`Expected landing, ${lane.lane} lane: ${etaWord(eta.p50, now)}`}
             data-tip={tipText({ kind: 'eta', p50: eta.p50, asOf: eta.asOf, now })}
             onClick={(e) => { e.stopPropagation(); openEta(e); }} onKeyDown={activateInRow(openEta)}>
-            <rect className="hit" x={f1(X(etaMs) - 7)} y={ry} width="14" height="13" />
+            <rect className="hit" x={f1(X(etaMs) - HIT_PX / 2)} y={ry} width={HIT_PX} height="13" />
             <path d={diamond(X(etaMs), ry + 6, 4.5)} />
           </g>
         )}
@@ -475,6 +500,7 @@ export default function DayRibbon({
       {LEGEND.filter(([k]) => drawn.has(k)).map(([k, mark, words]) => (
         <span key={k} data-key={k}>
           {mark.startsWith('s-') || mark.startsWith('band-') ? <Swatch cls={mark} />
+            : mark === 'shape' && MARK_SHAPES.has(k) ? <MarkIcon kind={k} />
             : <span style={{ color: k === 'now' || k === 'eta' || k === 'decide' || k === 'cluster' || k === 'reset' ? 'var(--rb-accent)' : k === 'deployFail' || k === 'alert' ? 'var(--rb-alert)' : undefined }}>{mark}</span>}
           {words}
         </span>
@@ -482,6 +508,7 @@ export default function DayRibbon({
     </div>
   );
   const title = windowTitle(from, to, now);
+  const lagging = Number.isFinite(toMs(data?.asOf)) && toMs(now) - toMs(data.asOf) > ASOF_LAG_MS;
 
   return (
     <div className="day-ribbon flex h-full min-h-0 flex-col rounded-xl border border-border bg-card" data-testid="day-ribbon"
@@ -495,7 +522,7 @@ export default function DayRibbon({
             : title}
         </h3>
         <span className="text-[length:var(--type-label)] text-muted-foreground" data-testid="ribbon-fresh" aria-live="polite">
-          {updating ? 'updating…' : <>as of {clock(data?.asOf || now, now)}{data?.coverage?.label ? ` · ${data.coverage.label}` : ''}</>}
+          {updating ? 'updating…' : [lagging ? `lanes as of ${clock(data.asOf, now)}` : null, data?.coverage?.label || null].filter(Boolean).join(' · ')}
         </span>
       </div>
       <div ref={boxRef} className="min-h-0 flex-1 overflow-y-auto" data-testid="ribbon-box">
@@ -547,7 +574,8 @@ export default function DayRibbon({
                 const ly = aheadY + 14;
                 const x = R.X0 + t.x;
                 const single = t.count === 1 ? t.items[0] : null;
-                const w = t.label.length * RESET_CHAR_PX + 14;
+                // U2 review follow-up: measured like every other label (M2), never a character count.
+                const w = textWidth(`${single && single.kind === 'expiry' ? '◇ ' : ''}${t.label}`, PX.label) + 9;
                 const pin = t.count > 1 ? { kind: 'cluster', at: t.items[0].at, count: t.count, items: t.items } : single;
                 return (
                   <g key={`p${i}`} className={`pin rt rt-${t.tone}${t.count > 1 ? ' rt-merged' : ''}`} data-testid={`pin-${single ? single.kind : 'seatReset'}`} data-tone={t.tone} data-count={t.count} data-tip={t.tip} tabIndex={0} role="button" aria-label={t.tip.replace(/\n/g, ' ')}

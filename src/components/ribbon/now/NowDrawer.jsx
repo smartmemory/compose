@@ -10,6 +10,7 @@ import { smPanel } from '../../cockpit/fleetLogic.js';
 import { ownerAsks } from '../../cockpit/notify/notifyLogic.js';
 import { useNotifyState } from '../../cockpit/notify/useNotifyState.js';
 import EntityLink from '../../shared/EntityLink.jsx';
+import { DayMissingSources, DaySourceNotes } from '../DaySourceNotes.jsx';
 
 const UNAVAILABLE = 'source unavailable';
 const sec = 'text-[11px] font-semibold uppercase tracking-wide text-muted-foreground m-0 mb-1';
@@ -107,8 +108,12 @@ function Landed({ data, now, sinceMs, loading }) {
   );
 }
 
-/** `feed` is DayView's Now feed (`nowData`), the same one the ribbon's NOW words and the phone list read (U2 F1). */
-export default function NowDrawer({ kind, onClose, fleet, index, feed, feedLoading = false, agent, lastVisitAt = null, now = Date.now() }) {
+/**
+ * `feed` is DayView's Now feed (`nowData`), the same one the ribbon's NOW words and the phone list read (U2 F1). `sources` is
+ * DayView's one source state (`daySources.js`), drawn here whole, as on the desktop and the phone (U3): a kept body or a
+ * partial unit index is named above the list it qualifies.
+ */
+export default function NowDrawer({ kind, onClose, fleet, index, feed, feedLoading = false, agent, lastVisitAt = null, now = Date.now(), sources = null }) {
   const closeRef = useRef(null);
   useEffect(() => {
     closeRef.current?.focus();
@@ -156,8 +161,10 @@ export default function NowDrawer({ kind, onClose, fleet, index, feed, feedLoadi
           <button ref={closeRef} type="button" className="text-[14px] text-muted-foreground hover:text-foreground px-1" aria-label="Close" data-testid="now-close" onClick={onClose}>✕</button>
         </header>
         <div className="flex-1 min-h-0 overflow-y-auto p-3">
+          <DaySourceNotes sources={sources} className="mb-2" />
           <h3 className={sec} data-testid="now-section">{kind === 'working' ? 'Working now' : kind === 'waiting' ? 'Waiting now' : ''}</h3>
           {body}
+          <DayMissingSources sources={sources} className="mt-2" testId="now-source-errors" />
         </div>
       </aside>
     </div>

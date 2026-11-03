@@ -6,8 +6,8 @@
 import React, { useMemo } from 'react';
 import WhatLine from '../../cockpit/what/WhatLine.jsx';
 import RibbonMeterLayer from '../meter/RibbonMeterLayer.jsx';
-import { phoneLines, landedSince, agoWords, sinceWords } from './nowLists.js';
-import { sourceErrorLines } from '../ribbonLayout.js';
+import { phoneLines, landedSince, agoWords, sinceWords, stripSegs, STRIP_HOURS } from './nowLists.js';
+import { DayMissingSources, DaySourceNotes } from '../DaySourceNotes.jsx';
 
 const sub = 'text-[12px] text-muted-foreground';
 
@@ -23,15 +23,38 @@ const DOT = {
 };
 const NO_DOT = { background: 'hsl(var(--muted-foreground) / .45)' };
 
+/** U3 (DV#15): the strip's fills, the same `--rb-*` tokens as the dot and the ribbon's spans. */
+const STRIP_FILL = {
+  working: 'var(--rb-work)', owner: 'hsl(var(--needs-you))', review: 'var(--rb-wait)', gate: 'var(--rb-gate)',
+  quota: 'var(--rb-quota-bg)', unknown: 'hsl(var(--muted-foreground) / .45)',
+};
+const STRIP_W = 72;
+const STRIP_H = 12;
+
+/** U3 (DV#15): the last 12 h of one lane, so the phone keeps the shape of the day the ribbon draws. */
+function LaneStrip({ lane, now }) {
+  const segs = stripSegs(lane, now, { px: STRIP_W });
+  return (
+    <svg width={STRIP_W} height={STRIP_H} viewBox={`0 0 ${STRIP_W} ${STRIP_H}`} className="block shrink-0" role="img"
+      aria-label={`${lane?.lane ?? 'lane'}, last ${STRIP_HOURS} hours`} data-testid="day-phone-strip">
+      <line x1="0" x2={STRIP_W} y1={STRIP_H / 2} y2={STRIP_H / 2} style={{ stroke: 'hsl(var(--border))' }} />
+      {segs.map((g, i) => (g.tone === 'norec'
+        ? <rect key={i} data-tone="norec" x={g.x} y="2.5" width={g.w} height={STRIP_H - 5} rx="1.5" style={{ fill: 'none', stroke: 'hsl(var(--muted-foreground))', strokeDasharray: '2 1.5', strokeWidth: 0.8 }} />
+        : <rect key={i} data-tone={g.tone} x={g.x} y={g.tone === 'owner' ? 0 : 2} width={g.w} height={g.tone === 'owner' ? STRIP_H : STRIP_H - 4} rx="1.5" style={{ fill: STRIP_FILL[g.tone] }} />))}
+    </svg>
+  );
+}
+
 /**
  * `feed` is the Now feed (DayView's `nowData`: the window that holds now, through the same owner-ask filter as the ribbon),
- * so this list and the ribbon's NOW words agree (U2 F1). `sourceGood` is `useRibbonFeed().sourceGood` for the missing-source
- * lines, the same lines the desktop page shows (U2 NOW M1).
+ * so this list and the ribbon's NOW words agree (U2 F1). `sources` is DayView's one source state (`daySources.js`): the
+ * failed and stale lines and the missing-source lines, the same the desktop page and the Now drawer show (U3, review U2 F2).
  */
-export default function DayPhone({ feed, index, meter, lastVisitAt, onOpenFleet, onNavigate, onCountOpen, now = Date.now(), sourceGood = {} }) {
+export default function DayPhone({ feed, index, meter, lastVisitAt, onOpenFleet, onNavigate, onCountOpen, now = Date.now(), sources = null }) {
   const lines = useMemo(() => phoneLines(feed, index, now), [feed, index, now]);
   const landed = useMemo(() => landedSince(index, lastVisitAt, null), [index, lastVisitAt]);
-  const missing = sourceErrorLines(feed?.sourceErrors, sourceGood, typeof feed?.now === 'string' ? feed.now : null);
+  const laneOf = useMemo(() => new Map((Array.isArray(feed?.lanes) ? feed.lanes : []).map((l) => [l.lane, l])), [feed]);
+  const stripNow = typeof feed?.now === 'string' ? feed.now : now;
   // U2 NOW M2: with the unit index down, no lane can read "waiting on review"; say so instead of implying nothing waits.
   const indexDown = !Array.isArray(index?.units);
   return (
@@ -46,6 +69,7 @@ export default function DayPhone({ feed, index, meter, lastVisitAt, onOpenFleet,
       </div>
       <section data-testid="day-phone-now" className="shrink-0 min-w-0">
         <h2 className="m-0 mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Now</h2>
+        <DaySourceNotes sources={sources} className="mb-1" />
         {lines === null ? <p className={`m-0 ${sub}`} data-testid="now-unavailable">source unavailable</p>
           : lines.length === 0 ? <p className={`m-0 ${sub}`} data-testid="now-empty">{indexDown ? 'Nothing current or queued.' : 'Nothing current, waiting or queued.'}</p>
             : (
@@ -59,17 +83,16 @@ export default function DayPhone({ feed, index, meter, lastVisitAt, onOpenFleet,
                       <span className="min-w-0 flex-1 truncate"><b>{l.lane}</b> <span className="text-muted-foreground">{l.state}</span></span>
                       {l.eta !== null && <span className="shrink-0 tabular-nums text-muted-foreground" data-testid="day-phone-eta">{l.eta === 'on answer' ? '◆ on answer' : `ETA ${l.eta}`}</span>}
                     </div>
-                    <div className={`${sub} pl-4 break-words`} data-testid="day-phone-title">{l.title}</div>
+                    <div className="flex items-center gap-2 pl-4 min-w-0">
+                      <div className={`${sub} min-w-0 flex-1 break-words`} data-testid="day-phone-title">{l.title}</div>
+                      <LaneStrip lane={laneOf.get(l.lane)} now={stripNow} />
+                    </div>
                   </li>
                 ))}
               </ul>
             )}
         {lines !== null && indexDown && <p className={`m-0 mt-1 ${sub}`} data-testid="now-waits-unknown">waits unknown (unit index unavailable)</p>}
-        {missing.length > 0 && (
-          <ul className={`m-0 mt-1 pl-4 ${sub}`} data-testid="day-source-errors">
-            {missing.map((m) => <li key={m.key} title={m.title}>{m.text}</li>)}
-          </ul>
-        )}
+        <DayMissingSources sources={sources} className="mt-1" />
       </section>
       <section data-testid="day-phone-landed" className="shrink-0 min-w-0">
         <h2 className="m-0 mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">

@@ -7,7 +7,8 @@ import { useCostMeterProps } from '../vision/HomeFleetGlance.jsx';
 import DayRibbon from './DayRibbon.jsx';
 import { alertTip, isLive, orphanAlerts, sourceErrorLines, withOwnerOpen } from './ribbonLayout.js';
 import { PRESETS } from './rangeLogic.js';
-import SourceNote from '../cockpit/SourceNote.jsx';
+import { daySources } from './daySources.js';
+import { DayMissingSources, DaySourceNotes } from './DaySourceNotes.jsx';
 import { ownerAsks } from '../cockpit/notify/notifyLogic.js';
 import RangeBar from './RangeBar.jsx';
 import { useRibbonWindow } from './useRibbonWindow.js';
@@ -138,7 +139,8 @@ export default function DayView({ onOpenFleet, onNavigate, active = true }) {
   // RIBBON-NOW-1: the WHAT counts open "now" lists here; the phone layout drops the ribbon.
   const phone = usePhoneLayout();
   const fleet = useFleet().data;
-  const unitIndex = useUnitIndex().data;
+  const unitSrc = useUnitIndex();
+  const unitIndex = unitSrc.data;
   const agent = useAgentState();
   const [lastVisitAt] = useState(readLastVisit);
   const [nowKind, setNowKind] = useState(null);
@@ -196,16 +198,23 @@ export default function DayView({ onOpenFleet, onNavigate, active = true }) {
   const openPin = useCallback((pin, rect) => { dispatchRibbon(EVT.openPin, { pin, rect }); }, []);
   const openBand = useCallback((band) => { dispatchRibbon(EVT.openBand, { band }); }, []);
 
-  const missing = sourceErrorLines(feed.data?.sourceErrors, feed.sourceGood, typeof feed.data?.now === 'string' ? feed.data.now : null);
+  // U3 (review U2 F2 + SOURCE-ENVELOPE-1): the source state of every feed this page renders, computed once; the desktop,
+  // the phone and the Now drawer each draw all of it.
+  const sources = useMemo(
+    () => daySources({ feed, nowFeed, live, index: unitSrc }),
+    [feed, nowFeed, live, unitSrc],
+  );
   const [pickersOpen, setPickersOpen] = useState(false);
   phoneRef.current = phone;
   const link = 'text-[12px] text-muted-foreground hover:text-foreground hover:underline focus-visible:underline outline-none';
+  // U3 (AD#18): the two questions down read as links: the accent ink at the body size, underlined on hover and focus.
+  const footLink = 'text-[length:var(--type-body)] text-[color:var(--rb-accent)] hover:underline focus-visible:underline underline-offset-2 outline-none';
 
-  const drawer = nowKind && <NowDrawer kind={nowKind} onClose={closeNow} fleet={fleet} index={unitIndex} feed={nowData} feedLoading={nowSrc.loading} agent={agent} lastVisitAt={lastVisitAt} />;
+  const drawer = nowKind && <NowDrawer kind={nowKind} onClose={closeNow} fleet={fleet} index={unitIndex} feed={nowData} feedLoading={nowSrc.loading} agent={agent} lastVisitAt={lastVisitAt} sources={sources} />;
   if (phone) {
     return (
       <div className="h-full min-h-0 overflow-hidden" data-testid="day-view">
-        <DayPhone feed={nowData} sourceGood={nowSrc.sourceGood} index={unitIndex} meter={meter} lastVisitAt={lastVisitAt} onOpenFleet={onOpenFleet} onNavigate={onNavigate} onCountOpen={setNowKind} />
+        <DayPhone feed={nowData} sources={sources} index={unitIndex} meter={meter} lastVisitAt={lastVisitAt} onOpenFleet={onOpenFleet} onNavigate={onNavigate} onCountOpen={setNowKind} />
         {drawer}
       </div>
     );
@@ -229,11 +238,9 @@ export default function DayView({ onOpenFleet, onNavigate, active = true }) {
         onAlertChip={openAlertTray}
       />
       <div className="flex-1 min-h-0 flex flex-col gap-1 relative">
-        {feed.error && !feed.data && (
-          <p className="m-0 text-[12px] text-destructive" role="status" data-testid="day-feed-error" title={feed.error}>The ribbon could not be read; retrying every 2 minutes.</p>
-        )}
-        {/* TOP M1: a failed refresh over kept data says so; the ribbon stays, marked old. */}
-        {feed.stale && <SourceNote source="The ribbon" state={feed} />}
+        {/* TOP M1 + U3: a failed read says whether it is read again; a failed refresh over kept data says so (the ribbon
+            stays, marked old); the Now feed and the unit index say the same here as on the phone and in the drawer. */}
+        <DaySourceNotes sources={sources} />
         {(feed.data || feed.loading) && (
           // M15: while a window loads, the axis and the lane names stay on screen with "updating…", never a blank panel.
           <div className="flex-1 min-h-0" data-testid={feed.loading ? 'day-skeleton' : undefined} aria-busy={feed.loading || undefined}>
@@ -263,11 +270,7 @@ export default function DayView({ onOpenFleet, onNavigate, active = true }) {
           </div>
         )}
         <RibbonLaneLayer data={feed.data} from={win.window.from} to={win.window.to} now={win.now} />
-        {missing.length > 0 && (
-          <ul className="m-0 pl-4 text-[12px] text-muted-foreground" data-testid="day-source-errors">
-            {missing.map((m) => <li key={m.key} title={m.title}>{m.text}</li>)}
-          </ul>
-        )}
+        <DayMissingSources sources={sources} />
       </div>
       {/* The shared meter's full form is ~470 px tall and would squeeze the ribbon to a thumbnail at 1440x900, so it sits in a
           capped, scrollable box that opens fully on request. Nothing is dropped; the ribbon keeps the height. */}
@@ -281,8 +284,8 @@ export default function DayView({ onOpenFleet, onNavigate, active = true }) {
       </div>
       <RibbonMarksLayer lanes={feed.data?.lanes} seats={seats} now={win.now} onNavigate={onNavigate} />
       <div className="flex items-center gap-4 shrink-0" data-testid="day-footer">
-        <button type="button" className={link} data-testid="day-link-process" onClick={() => onNavigate?.('process')}>Is the process improving? ▸</button>
-        <button type="button" className={link} data-testid="day-link-ops" onClick={() => onNavigate?.('ops')}>How far is 2.0 from flipping? ▸</button>
+        <button type="button" className={footLink} data-testid="day-link-process" onClick={() => onNavigate?.('process')}>Is the process improving? ▸</button>
+        <button type="button" className={footLink} data-testid="day-link-ops" onClick={() => onNavigate?.('ops')}>How far is 2.0 from flipping? ▸</button>
       </div>
       {drawer}
     </div>
