@@ -21,6 +21,10 @@ const GraphHost = lazy(() => graphEntry().then((m) => ({ default: m.GraphHost })
 
 // COMP-ROADMAP-DOC-LINKS-1: a repo doc path (`docs/features/<CODE>/design.md`) opens as the wiki note for that file.
 // The wiki addresses notes by doc id, so the path is matched against the feature hub's doc list (every DocItem carries both).
+// COMP-UI-LINKS-4: the one sentence for a doc that cannot open because the Wiki is unavailable. WikiView's pane and the App's
+// notice (a refused double-click, a request abandoned when the Wiki settles to `no`) both say it.
+export const wikiUnavailableMessage = (docPath) => (docPath ? `The Wiki is not available here, so ${docPath} cannot be opened.` : 'The Wiki is not available here.');
+
 export const featureOfDocPath = (docPath) => /^docs\/features\/([^/]+)\//.exec(docPath ?? '')?.[1] ?? null;
 const samePath = (wikiPathValue, docPath) => wikiPathValue === docPath || wikiPathValue?.endsWith(`/${docPath}`) || docPath.endsWith(`/${wikiPathValue}`);
 /** @returns {Promise<{kind:'note', workspace:string, docId:string}|null>} null when the feature's hub lists no such file. */
@@ -279,7 +283,7 @@ export default function WikiView({ featureCode: fallbackCode, host, workspace, f
         />
         {docWaiting && (
           <p className="px-3 py-2 text-xs text-muted-foreground border-b border-border" data-testid="wiki-doc-unavailable">
-            The Wiki is not available here, so {docWaiting} cannot be opened.
+            {wikiUnavailableMessage(docWaiting)}
             {availability === 'yes' ? ' The Wiki answered without a workspace.' : ' Its package is not built in, or the project has no wiki configured.'}
           </p>
         )}

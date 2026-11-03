@@ -11,7 +11,7 @@ import { parseUrl, buildUrl, sameUrlState } from '../lib/url-state.js';
 import { itemFeatureCode, featureCodeResolves, resolveFeatureContext, filterFeatureCode, focusReducer, parseStoredFocus, FOCUS_STORAGE_KEY } from './components/cockpit/focusedFeature.js';
 import StratumView from './components/cockpit/StratumView.jsx';
 import CadenceView from './components/cockpit/CadenceView.jsx';
-import WikiView from './components/cockpit/WikiView.jsx';
+import WikiView, { wikiUnavailableMessage } from './components/cockpit/WikiView.jsx';
 import OpsView from './components/cockpit/OpsView.jsx';
 import UsageView from './components/usage/UsageView.jsx';
 import ProcessView from './components/cockpit/ProcessView.jsx';
@@ -981,7 +981,7 @@ function AppInner() {
 
   // COMP-COCKPIT-12: a Fleet pill opens the Sessions tab on its Fleet pane.
   // COMP-COCKPIT-URL-SYNC-1: a `?pane=` on a sessions link opens that pane.
-  const [sessionsPane, setSessionsPane] = useState(() => parseUrl(window.location.search, '', null).pane ?? 'fleet'); // COMP-COCKPIT-RULE-DEFAULT-1: open on the populated pane
+  const [sessionsPane, setSessionsPane] = useState(() => { const u = parseUrl(window.location.search, '', null); return u.view === 'sessions' ? (u.pane ?? 'fleet') : 'fleet'; }); // COMP-COCKPIT-RULE-DEFAULT-1: open on the populated pane
   const handleOpenFleet = useCallback(() => {
     setSessionsPane('fleet');
     handleViewChange('sessions');
@@ -1263,11 +1263,20 @@ function AppInner() {
   // COMP-UI-LINKS-3: every caller (roadmap file buttons, gate artifacts, row and node double-clicks) goes through `canNavigate('file')`:
   // with no Wiki tab the click does nothing here (the controls render as text with the reason) rather than switching to a room that bounces to Day.
   const navigateToWiki = useCallback((path) => {
-    if (!canNavigate('file', typeof path === 'string' && path ? path : 'wiki')) return;
+    if (!canNavigate('file', typeof path === 'string' && path ? path : 'wiki')) {
+      notify(wikiUnavailableMessage(typeof path === 'string' ? path : null), 'warn'); // COMP-UI-LINKS-4: a refused doc request always says why
+      return;
+    }
     setWikiDoc(typeof path === 'string' && path ? { path } : null);
     handleViewChange('wiki');
   }, [handleViewChange, canNavigate]);
-  useEffect(() => { if (activeView !== 'wiki') setWikiDoc(null); }, [activeView]);
+  // COMP-UI-LINKS-4: a doc asked for while the Wiki was still being checked, abandoned because the check came back `no` (the view
+  // fell back to Day), says so once before it is dropped. Leaving the Wiki any other way drops it silently.
+  useEffect(() => {
+    if (activeView === 'wiki') return;
+    if (wikiDoc?.path && wikiTab.availability === 'no') notify(wikiUnavailableMessage(wikiDoc.path), 'warn');
+    if (wikiDoc) setWikiDoc(null);
+  }, [activeView, wikiDoc, wikiTab.availability]);
 
   // COMP-UI-LINKS-1: a cross-room jump (Fleet → a Cadence unit, a room → a Fleet session, a Stratum run → its step). The focus is
   // filed in roomFocus.js and read by the room when it mounts; 'fleet' is the Sessions tab's Fleet pane.
