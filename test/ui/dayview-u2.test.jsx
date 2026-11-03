@@ -9,7 +9,7 @@
 import React from 'react';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, afterAll } from 'vitest';
 import { render, screen, fireEvent, waitFor, cleanup, act } from '@testing-library/react';
 
 vi.mock('../../src/lib/wsFetch.js', async (orig) => ({ ...(await orig()), wsFetch: vi.fn() }));
@@ -22,10 +22,17 @@ import { cardFor } from '../../src/components/ribbon/marks/markCards.js';
 import InboxDrawer from '../../src/components/cockpit/notify/InboxDrawer.jsx';
 import { reconcileOwnerSpans } from '../../lib/owner-spans.js';
 import { ownerWaitsAtNow } from '../../src/components/ribbon/ribbonLayout.js';
-import { formatHash } from '../../src/components/ribbon/rangeLogic.js';
+import { formatHash, PRESETS } from '../../src/components/ribbon/rangeLogic.js';
 import { resetFleetPoller } from '../../src/lib/fleetPoller.js';
 import { resetUnitIndex } from '../../src/lib/useUnitIndex.js';
 
+// CLOCK-TESTS-1: DayView draws its window from the browser clock (PRESETS.day of `Date.now()`, 18:00 yesterday to 06:00
+// tomorrow), so an unpinned run moved NOW across the track with the time of day: near midnight NOW sits near the right edge,
+// and every owner row here failed from 22:25 to 23:59 on the old fitting. Pinned to 22:25 LOCAL (the Date constructor, so the
+// NOW position is the same in any zone a run uses): the first minute the old fitting cut "waiting on you", and the band
+// ("waiting on you…" fits, the bare words do) where a width check without the ellipsis still cut it. Date only, not timers.
+vi.setSystemTime(new Date(2026, 10, 2, 22, 25));
+afterAll(() => { vi.useRealTimers(); });
 const RIBBON = JSON.parse(readFileSync(resolve(process.cwd(), 'test/fixtures/ribbon/day.json'), 'utf8'));
 const ok = (body) => ({ ok: true, status: 200, json: async () => body, text: async () => '' });
 const down = { ok: false, status: 500, json: async () => ({}), text: async () => 'down' };
@@ -88,6 +95,30 @@ describe('U2 F1: the ribbon and the phone read one owner state', () => {
         expect(row.getAttribute('data-tone') === 'owner', `phone: ${row.getAttribute('aria-label')}`).toBe(owner);
       });
     }, 30000);
+  }
+});
+
+describe('CLOCK-TESTS-1: late in the day the owner wait still says "waiting on you"', () => {
+  // [now, the right-edge "◆ on answer" is drawn]. The fixture's own zone and Day window, so NOW lands at the same x in any
+  // run, and ops' open owner wait ends at the read, as the route sends it. At 15:00 everything fits; from 22:25 the NOW words win and the right-edge words go (the lane drawer still says it).
+  const ROWS = [
+    ['2026-10-31T15:00:00-07:00', true],
+    ['2026-10-31T22:25:00-07:00', false],
+    ['2026-10-31T23:59:00-07:00', false],
+  ];
+  for (const [now, onAnswer] of ROWS) {
+    it(`at ${now.slice(11, 16)}: ops reads "waiting on you"${onAnswer ? ' and "◆ on answer"' : ''}`, () => {
+      const d = clone(RIBBON);
+      const { from, to } = PRESETS.day(now);
+      d.now = now; d.asOf = now;
+      const ops = d.lanes.find((l) => l.lane === 'ops');
+      ops.spans = ops.spans.map((s) => (s.kind === 'wait' && s.cause === 'owner' ? { ...s, end: now } : s));
+      render(<DayRibbon data={d} from={from} to={to} now={now} />);
+      const cur = screen.getByTestId('lane-ops').querySelector('text.cur')?.textContent ?? '';
+      expect(cur, `NOW words at ${now}`).toMatch(/^waiting on you/);
+      expect(screen.getByTestId('lane-ops').querySelector('[data-testid="eta-answer"]') != null).toBe(onAnswer);
+      expect(screen.getAllByTestId('owner-now').map((m) => m.closest('[data-testid^="lane-"]')?.getAttribute('data-testid'))).toEqual(['lane-ops']);
+    });
   }
 });
 

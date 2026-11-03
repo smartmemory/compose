@@ -7,7 +7,7 @@
 import React from 'react';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, afterAll } from 'vitest';
 import { render, screen, waitFor, cleanup, fireEvent, act } from '@testing-library/react';
 
 vi.mock('../../src/lib/wsFetch.js', async (orig) => ({ ...(await orig()), wsFetch: vi.fn() }));
@@ -17,6 +17,13 @@ import { reconcileOwnerSpans } from '../../lib/owner-spans.js';
 import { resetFleetPoller } from '../../src/lib/fleetPoller.js';
 import { resetUnitIndex } from '../../src/lib/useUnitIndex.js';
 
+// CLOCK-TESTS-1: DayView draws its window from the browser clock (PRESETS.day of `Date.now()`, 18:00 yesterday to 06:00
+// tomorrow), so an unpinned run moved NOW across the track with the time of day: near midnight NOW sits near the right edge,
+// and every owner row here failed from 22:25 to 23:59 on the old fitting. Pinned to 22:25 LOCAL (the Date constructor, so the
+// NOW position is the same in any zone a run uses): the first minute the old fitting cut "waiting on you", and the band
+// ("waiting on you…" fits, the bare words do) where a width check without the ellipsis still cut it. Date only, not timers.
+vi.setSystemTime(new Date(2026, 10, 2, 22, 25));
+afterAll(() => { vi.useRealTimers(); });
 const RIBBON = JSON.parse(readFileSync(resolve(process.cwd(), 'test/fixtures/ribbon/day.json'), 'utf8'));
 const ok = (body) => ({ ok: true, status: 200, json: async () => body, text: async () => '' });
 const setWidth = (w) => Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: w });

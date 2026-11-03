@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
-  alertTip, axisTicks, clientToSvgX, clock, dayLaneState, etaAt, etaWord, fmtDur, gapWord, isLive, isPaused, layoutLanes, nextResetsLine, resetTicks, seatShort,
+  alertTip, axisTicks, causePhrase, clientToSvgX, clock, dayLaneState, etaAt, etaWord, fmtDur, gapWord, isLive, isPaused, layoutLanes, nextResetsLine, resetTicks, seatShort,
   tipText, toMs, when, windowTitle, xOf,
 } from './ribbonLayout.js';
 import { clusterMarks, MIN_DRAG_MS } from './rangeLogic.js';
@@ -310,9 +310,14 @@ export default function DayRibbon({
       right = { id: 'eta', text: `◆ ETA ${word}${etaMs != null ? ' ▸' : ''}`, tip: tipText({ kind: 'eta', p50: eta.p50, asOf: eta.asOf, now }), open: true };
     }
     if (right) right.w = textWidth(right.text, PX.body);
+    const textX = nx + 24;
+    // CLOCK-TESTS-1: a wait's own words ("waiting on you") outrank the right-edge words. The Day window ends 06:00 tomorrow, so
+    // late in the evening NOW sits near the right edge: at 1200 px, from 22:25 to midnight, keeping "◆ on answer" cut the
+    // state to "waiting o…" every night. When the fitted words before the right-edge words lose the cause, the right-edge words go
+    // (the test is the fitted text itself, ellipsis included: "waiting on you…" is wider than "waiting on you").
+    if (right && st?.kind === 'wait' && live && !fitText(st.phrase, R.X1 - right.w - GAP - textX, PX.body, 550).startsWith(causePhrase(st.cause))) right = null;
     if (right && (right.id === 'eta' || right.id === 'eta-answer')) drawn.add('eta');
     if (etaIn) drawn.add('eta');
-    const textX = nx + 24;
     const rightLimit = right ? R.X1 - right.w - GAP : R.X1;
     let curText = null;
     let curEnd = textX;
