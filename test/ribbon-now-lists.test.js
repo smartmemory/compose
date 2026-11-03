@@ -113,6 +113,8 @@ describe('phoneLines', () => {
     ]);
     const waited = index([unit('X', { lane: 'c', waiting: 'owner', ownerWaitSince: iso(3) })]);
     assert.equal(phoneLines({ ...lanes, now: '2026-10-31T12:00:00-07:00' }, waited, NOW).find((l) => l.lane === 'c').text, 'T-X · waiting on you 3 h 0 m · ETA unknown', 'the owner wait is named');
+    const asked = feed([lane('o', { current: { id: 'U3', title: 'Build', since: iso(2) }, eta: { p50: '4h' }, spans: [{ kind: 'wait', cause: 'owner', start: iso(3), end: iso(0), since: iso(3), title: 'Ship it?', queueId: 'A' }] })]);
+    assert.equal(phoneLines({ ...asked, now: new Date(NOW).toISOString() }, idx).find((l) => l.lane === 'o').text, 'Ship it? · waiting on you 3h · ETA on answer', 'an owner wait has no estimate until it is answered, as on the ribbon');
     assert.equal(phoneLines(null, idx), null, 'feed down');
     assert.deepEqual(phoneLines(feed([lane('a', { current: { id: 'U1' } })]), null).map((l) => l.text), ['U1 · working · ETA unknown'], 'index down still lists working');
   });

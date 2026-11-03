@@ -143,8 +143,8 @@ export function phoneLines(feed, index, now = Date.now()) {
     }
     else if (l.next?.length) { title = l.next[0].title || l.next[0].id; state = 'next up'; }
     else continue;
-    // S2: a stale unit has no live estimate, so it shows none.
-    const eta = tone === 'stale' ? 'none (stale)' : l.eta?.noData ? 'no data' : l.eta ? etaWord(l.eta.p50, nowIso) : 'unknown';
+    // S2: a stale unit has no live estimate, so it shows none. S1: an owner wait reads "on answer", as the ribbon's ETA does.
+    const eta = tone === 'stale' ? 'none (stale)' : l.eta && tone === 'owner' ? 'on answer' : l.eta?.noData ? 'no data' : l.eta ? etaWord(l.eta.p50, nowIso) : 'unknown';
     out.push({ lane: l.lane, tone, text: `${clip(String(title))} · ${state} · ETA ${eta}` });
   }
   return out;
