@@ -27,8 +27,8 @@
  *   milliseconds between the fresh read and the close; OPS-NOTIFY-SPOOL-1's refusal closes that later.
  * COMP-DOGFOOD-OWNER-QUEUE-1: the owner's open questions are ONE list (lib/owner-gates.js `readOwnerGates`, read fresh per
  *   request). `GET /api/fleet/owner-gates` returns it (contracts/owner-gate.schema.json), and the `queue` panel of
- *   `GET /api/fleet` is built from it (`panelOf`, sm_status's row shape), so `ownerAsks` counts what MCP `get_pending_gates`
- *   and the day ribbon count. The queue file resolves from `env` (`resolveOwnerQueueFile`); an env that names none (no HOME)
+ *   `GET /api/fleet` is built from the same file (`readOpenQueuePanel`: every open row in sm_status's row shape, so the inbox's Decided and
+ *   FYI groups fill), and `ownerAsks` filters it to what MCP `get_pending_gates` and the day ribbon count. The queue file resolves from `env` (`resolveOwnerQueueFile`); an env that names none (no HOME)
  *   keeps sm_status's panel, which reads the same file.
  * When a notify store is wired (server/notify-state-routes.js), every GET /api/fleet body also carries `notify`
  * (Compose's own ack/snooze/dismiss/answered list, read fresh per request) so the cockpit needs no second poll.
@@ -44,7 +44,7 @@ import { basename, join } from 'node:path';
 import { resolveStratumBin } from '../lib/stratum-engine.js';
 import { groupOf, stripTag } from '../lib/owner-queue-class.js';
 import { optionsOf, choiceText } from '../lib/ask-options.js';
-import { panelOf, readOwnerGates, resolveOwnerQueueFile } from '../lib/owner-gates.js';
+import { readOpenQueuePanel, readOwnerGates, resolveOwnerQueueFile } from '../lib/owner-gates.js';
 import { requireSensitiveOrPaired } from './security.js';
 
 export const FLEET_ROUTE = '/api/fleet';
@@ -428,7 +428,7 @@ export function attachFleetRoutes(app, {
         smStatus.value = { ...smStatus.value, jobs: { ...smStatus.value.jobs, value: mergeJobs(smStatus.value.jobs.value, stratum.value) } };
       }
       // The cached sm_status entry is never mutated: the owner-gates panel goes on a copy, read fresh per request.
-      const sm = ownerQueueFile && smStatus.value ? { ...smStatus, value: { ...smStatus.value, queue: panelOf(ownerGates(), now()) } } : smStatus;
+      const sm = ownerQueueFile && smStatus.value ? { ...smStatus, value: { ...smStatus.value, queue: readOpenQueuePanel({ file: ownerQueueFile, env, now: now(), warn }) } } : smStatus;
       res.set('cache-control', 'no-store');
       const body = { generated: new Date(now()).toISOString(), sources: { stratum, sm_status: sm, cadence } };
       if (notifyStore) {
