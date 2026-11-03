@@ -2,12 +2,8 @@ import { Component, useCallback, useEffect, useRef, useState } from 'react';
 import { FlowBuilder, buildExport, emptySpec, parseImport } from '@smartmemory/stratum-ui/builder';
 
 const NAME = /^[a-z0-9][a-z0-9-]{0,63}$/;
-// FlowBuilder hands its document out through `onChange` 400 ms after an edit (VALIDATE_DEBOUNCE_MS in the package) and has no flush
-// handle, so Save waits for the export an interaction may have pending, capped at that window after the last interaction.
-const EXPORT_DEBOUNCE_MS = 400;
-const SETTLE_MS = EXPORT_DEBOUNCE_MS + 100;
-// `focusout` is how a draft field (a step ID) commits: blur is the edit, and it exports 400 ms later like any other.
-const INTERACTIONS = ['pointerdown', 'pointerup', 'click', 'keydown', 'input', 'change', 'focusout'];
+// Save reads the builder's document through FlowBuilder's ref handle (`getDocument()`, COMP-STRAT-BUILDER-HANDLE-1) at click time.
+// A builder without the handle (an older @smartmemory/stratum-ui build) only has `onChange`, which lands 400 ms after an edit.
 
 // COMP-UI-LINKS-1: FlowBuilder throws while rendering a document it cannot import, and the cockpit's main view has no panel boundary
 // (only App's safe mode), so a run spec the builder cannot read would take the whole page down. This shows the error instead and
@@ -24,8 +20,10 @@ class BuilderBoundary extends Component {
 
 /**
  * Stratum tab "New pipeline" pane (COMP-SUBAPP-STRAT-AUTHOR-1): `FlowBuilder` from
- * `@smartmemory/stratum-ui/builder` plus Save / Open, which this pane owns (FlowBuilder only hands
- * the spec out through `onChange`). Save needs the client's optional `saveSpec`, Open its `listSpecs`
+ * `@smartmemory/stratum-ui/builder` plus Save / Open, which this pane owns. Save asks the builder for its document
+ * at click time (`getDocument()` flushes a field being typed in, then returns the current export), so there is no
+ * wait and no timer. A builder without that handle falls back to the last `onChange` export and warns once that an
+ * edit made in the last 400 ms may be missing from what was saved. Save needs the client's optional `saveSpec`, Open its `listSpecs`
  * and `readSpec`; a client without them shows neither. A server refusal (bad name, not a builder
  * file, invalid spec) is shown as the server wrote it. Rendered inside StratumView's DataClientProvider,
  * so FlowBuilder's Validate and Plan reach the same client.
@@ -39,16 +37,9 @@ export default function StratumBuilderPane({ client, openRun = null }) {
   const [name, setName] = useState('');
   const [saved, setSaved] = useState([]);
   const [status, setStatus] = useState(null); // { tone: 'ok'|'error', text, errors? }
-  const specRef = useRef(null); // always the latest document, for Save to read after the export lands
-  const lastTouch = useRef(0); // when the user last interacted with the builder
-  const pending = useRef({ exporting: false, waiters: [] }); // an interaction may have changed the document and its export has not landed
-  const builderRef = useRef(null);
-  // The latest document FlowBuilder exported, or the one opened. An export means nothing is pending any more.
-  const onBuilderChange = useCallback((doc) => {
-    specRef.current = doc;
-    pending.current.exporting = false;
-    pending.current.waiters.splice(0).forEach((wake) => wake());
-  }, []);
+  const specRef = useRef(null); // the last document FlowBuilder exported through onChange, or the one opened: the fallback when the builder has no handle
+  const builderRef = useRef(null); // FlowBuilder's handle: { getDocument, flush }
+  const onBuilderChange = useCallback((doc) => { specRef.current = doc; }, []);
   const setDocument = (doc) => { specRef.current = doc; };
 
   const refresh = useCallback(async () => {
@@ -80,31 +71,20 @@ export default function StratumBuilderPane({ client, openRun = null }) {
 
   const save = async () => {
     try {
-      // A draft field commits on blur: blur first so its edit is made (and marked pending) before the wait starts.
-      const active = document.activeElement;
-      if (active instanceof HTMLElement && builderRef.current?.contains(active)) active.blur();
-      await exportSettled();
-      // A pane the user never edited exports what a fresh FlowBuilder starts from.
-      const doc = specRef.current ?? buildExport(parseImport(emptySpec()));
+      const handle = builderRef.current;
+      let doc;
+      if (typeof handle?.getDocument === 'function') {
+        doc = handle.getDocument();
+      } else {
+        console.warn('StratumBuilderPane: this @smartmemory/stratum-ui build has no FlowBuilder getDocument(); Save sends the last onChange export, so an edit made in the last 400 ms before Save may be missing');
+        // A pane the user never edited exports what a fresh FlowBuilder starts from.
+        doc = specRef.current ?? buildExport(parseImport(emptySpec()));
+      }
       await finishSave(await client.saveSpec(name, doc));
     } catch (error) {
       setStatus({ tone: 'error', text: `save failed: ${error.message}` });
     }
   };
-
-  // Resolves when the pending export lands, or SETTLE_MS after the last interaction at the latest (an interaction that changed nothing never exports).
-  const exportSettled = () => new Promise((resolve) => {
-    const state = pending.current;
-    const wait = lastTouch.current + SETTLE_MS - Date.now();
-    if (!state.exporting || wait <= 0) { state.exporting = false; resolve(); return; }
-    const wake = () => { clearTimeout(timer); resolve(); };
-    const timer = setTimeout(() => {
-      state.waiters = state.waiters.filter((w) => w !== wake);
-      state.exporting = false;
-      resolve();
-    }, wait);
-    state.waiters.push(wake);
-  });
 
   const finishSave = async (result) => {
     if (result.ok) {
@@ -129,14 +109,6 @@ export default function StratumBuilderPane({ client, openRun = null }) {
   };
 
   const nameOk = NAME.test(name);
-  // Native capture listeners: React has no `focusout` prop, and a capture listener sees every event before the builder's own handlers.
-  useEffect(() => {
-    const el = builderRef.current;
-    if (!el) return undefined;
-    const touch = () => { lastTouch.current = Date.now(); pending.current.exporting = true; };
-    INTERACTIONS.forEach((type) => el.addEventListener(type, touch, true));
-    return () => INTERACTIONS.forEach((type) => el.removeEventListener(type, touch, true));
-  }, []);
   return (
     <div className="dark h-full flex flex-col min-h-0 bg-background text-foreground" data-testid="stratum-builder-pane">
       {(canSave || canOpen) && (
@@ -190,9 +162,9 @@ export default function StratumBuilderPane({ client, openRun = null }) {
           )}
         </div>
       )}
-      <div className="flex-1 min-h-0 flex" ref={builderRef}>
+      <div className="flex-1 min-h-0 flex">
         <BuilderBoundary doc={opened}>
-          <FlowBuilder key={runOpened.key} initialSpec={opened} initialStepId={runOpened.stepId ?? undefined} onChange={onBuilderChange} />
+          <FlowBuilder ref={builderRef} key={runOpened.key} initialSpec={opened} initialStepId={runOpened.stepId ?? undefined} onChange={onBuilderChange} />
         </BuilderBoundary>
       </div>
     </div>
