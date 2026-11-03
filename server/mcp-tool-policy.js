@@ -100,6 +100,22 @@ export function resolveProfile(envProfile, bindHint) {
 }
 
 /**
+ * COMP-DOGFOOD-LIVE-STATE-FU-2: the owner-order writer rule, shared by the three
+ * MCP writers (live_order_add, live_order_supersede, live_state_configure) and
+ * the CLI's add/supersede/configure. It does NOT depend on phaseScopedTools: an
+ * order is re-injected into every session after a compaction, so the spawned
+ * implementer and reviewer profiles may never write one, in any workspace.
+ * Returns the refusal message, or null when `profile` may write.
+ */
+const OWNER_ORDER_DENIED_PROFILES = new Set(['implementer', 'reviewer']);
+export function ownerOrderWriterDenial(tool, profile) {
+  const prof = _norm(profile);
+  if (!OWNER_ORDER_DENIED_PROFILES.has(prof)) return null;
+  return `${tool} is not available to profile '${prof}': owner orders are written only by an orchestrator ` +
+    `session (COMPOSE_SESSION_PROFILE unset); the read stays open`;
+}
+
+/**
  * Resolve the value to inject as COMPOSE_SESSION_PROFILE when spawning a
  * subagent. Accepts an explicit MCP `profile` or an agent-template `template`
  * (mapped via TEMPLATE_PROFILE_MAP). Returns the restrictive profile string to

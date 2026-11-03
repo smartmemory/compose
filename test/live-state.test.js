@@ -21,6 +21,10 @@ import {
 import { run as cliRun } from '../lib/live-state-cli.js';
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+// These tests write orders as the orchestrator. A detached author job runs with
+// COMPOSE_SESSION_PROFILE=implementer (FU-2), which the writers now refuse; the
+// refusal itself is pinned in test/live-state-writer-gate.test.js.
+delete process.env.COMPOSE_SESSION_PROFILE;
 const Ajv = (await import('ajv')).default;
 const addFormats = (await import('ajv-formats')).default;
 

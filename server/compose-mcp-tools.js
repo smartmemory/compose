@@ -12,7 +12,7 @@ import { ArtifactManager, artifactKeysForMode } from './artifact-manager.js';
 import { readFeature, updateFeature } from '../lib/feature-json.js';
 import { loadFeaturesDir } from '../lib/project-paths.js';
 import { getTargetRoot, getDataDir, resolveProjectPath, switchProject, setCurrentWorkspaceId, getCurrentWorkspaceId, loadProjectConfig, isLifecycleEnabled } from './project-root.js';
-import { resolveProfile, isToolAllowed } from './mcp-tool-policy.js';
+import { resolveProfile, isToolAllowed, ownerOrderWriterDenial } from './mcp-tool-policy.js';
 import { getRoadmap } from '../lib/get-roadmap.js';
 
 /**
@@ -1132,11 +1132,25 @@ function sessionContext() {
 export function _getSessionProfile() { return sessionContext().profile; }
 
 // ---------------------------------------------------------------------------
-// Live state — COMP-DOGFOOD-LIVE-STATE-1 (lib/live-state.js). Owner orders are
-// written only by tools the implementer and reviewer profiles may not call
-// (IMPLEMENTER_DENY, REVIEWER_ALLOW in mcp-tool-policy.js): an order is injected into every session after a compaction, so a
-// forged one would steer the fleet.
+// Live state — COMP-DOGFOOD-LIVE-STATE-1 (lib/live-state.js). An order is
+// injected into every session after a compaction, so a forged one would steer
+// the fleet. The three writers call assertOwnerOrderWriter first: it refuses
+// the implementer and reviewer profiles in EVERY workspace (FU-2). The phase
+// gate's IMPLEMENTER_DENY / REVIEWER_ALLOW entries apply only where
+// phaseScopedTools is on, which the fleet workspace does not set.
 // ---------------------------------------------------------------------------
+
+/** Throws OWNER_ORDER_WRITER_DENIED for a profile that may not write an owner order. */
+export function assertOwnerOrderWriter(tool, _testCtx) {
+  const profile = _testCtx?.profile ?? sessionContext().profile;
+  const why = ownerOrderWriterDenial(tool, profile);
+  if (!why) return;
+  const e = new Error(why);
+  e.code = 'OWNER_ORDER_WRITER_DENIED';
+  e.profile = profile;
+  e.tool = tool;
+  throw e;
+}
 
 function _liveStateRoot() {
   const root = getTargetRoot();
@@ -1174,14 +1188,17 @@ export function toolLiveStateGet({ format } = {}) {
 }
 
 export function toolLiveOrderAdd({ text, source, by, at, expires, supersedes } = {}) {
+  assertOwnerOrderWriter('live_order_add');
   return addOrder(_liveStateDataDir(), { text, source, by, at, expires, supersedes });
 }
 
 export function toolLiveOrderSupersede({ id, superseded_by, reason } = {}) {
+  assertOwnerOrderWriter('live_order_supersede');
   return supersedeOrder(_liveStateDataDir(), { id, superseded_by, reason });
 }
 
 export function toolLiveStateConfigure({ rules_dir } = {}) {
+  assertOwnerOrderWriter('live_state_configure');
   return configureLiveState(_liveStateDataDir(), { root: _liveStateRoot(), rules_dir });
 }
 /**
