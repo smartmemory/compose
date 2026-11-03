@@ -52,7 +52,7 @@
       "maxLength": 2000
     },
     "sha": {
-      "description": "A commit is on the repo's default branch. Re-check: `git rev-parse --verify --quiet <sha>^{commit}` in `repo` (server/lifecycle-guard.js gitCommitExists), then `git merge-base --is-ancestor <sha> <branch>` for the default branch (origin/HEAD, else main, else master; local or origin/). An optional `branch` names a declared land branch instead (`land_branches` in contracts/evidence-words.json, starting at 2.0): the same ancestor check against that branch; any other name is refused.",
+      "description": "A commit is on the repo's default branch. Re-check: `git rev-parse --verify --quiet <sha>^{commit}` in `repo` (server/lifecycle-guard.js gitCommitExists), then `git merge-base --is-ancestor <sha> <branch>` for the default branch (origin/HEAD, else main, else master; local or origin/). An optional `branch` names a declared land branch instead (`land_branches` in contracts/evidence-words.json, starting at 2.0): the same ancestor check against that branch; any other name is refused; naming the default branch is the same as naming none.",
       "type": "object",
       "required": ["kind", "repo", "sha", "at", "by"],
       "additionalProperties": false,

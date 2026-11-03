@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- **COMP-DOGFOOD-EVIDENCE-DEFAULT-BRANCH-1: a `sha` receipt that names the repo's own default branch passes like one that names no branch** (an honest `{"branch":"main"}` receipt on a repo whose default is main was refused as an undeclared land branch, so shadow `claim_check` marked it WOULD-REFUSE). When `branch` equals the branch `gitOnDefaultBranch` resolves (origin/HEAD, else main, else master), the default-branch check and success text apply; any other name still needs `land_branches`. No second resolver. Tests: `test/evidence-branch.test.js` (5 rows).
+
 - **COMP-DOGFOOD-EVIDENCE-GATE-1 writer tests: the completion and feature writer end-to-end tests cite a `command` receipt, a kind COMPLETE accepts, so the pre-push gate is green again** (test fixtures only, no product code; they cited `log`, which fix r1 refuses for COMPLETE with `EVIDENCE_WRONG_KIND`)
 
 - **COMP-DOGFOOD-OWNER-QUEUE-FU-1: the cockpit inbox shows every open owner-queue row again (Decided for you, FYI), and an MCP close of a non-live queue can never announce into the live owner channels** (post-land review F1, F2 MEDIUM of COMP-DOGFOOD-OWNER-QUEUE-1). The `GET /api/fleet` `queue` panel is now `readOpenQueuePanel` (every open record, sm_status's row shape) instead of the asks+security list. `closeOwnerGate` passes `SM_OWNER_QUEUE=<path>` beside `--file` and refuses a non-live queue with `OWNER_GATE_SCRATCH_UNGUARDED` when neither `NOTIFY_SPOOL` nor `OWNER_QUEUE_OUTBOX` is set. Tests: `test/owner-queue-fu1.test.js`.

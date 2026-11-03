@@ -105,6 +105,40 @@ describe('sha receipt with a declared land branch', () => {
   });
 });
 
+describe('a sha receipt naming the default branch is the same as naming none (COMP-DOGFOOD-EVIDENCE-DEFAULT-BRANCH-1)', () => {
+  const { cwd, a, b, c } = makeRepo();
+
+  test('branch main on a repo whose default is main passes, with the default-branch success line', () => {
+    const r = ev.verifyEvidence(rec(cwd, a, 'main'));
+    assert.equal(r.ok, true, JSON.stringify(r));
+    assert.deepEqual(r.checks, ev.verifyEvidence(rec(cwd, a)).checks);
+    assert.match(r.checks.join('\n'), /is on main in /);
+  });
+  test('branch main with an unmerged commit is refused with the default-branch text', () => {
+    const r = ev.verifyEvidence(rec(cwd, c, 'main'));
+    assert.equal(r.ok, false);
+    assert.match(r.reasons[0], /not on the default branch \(main\)/);
+  });
+  test('a non-default, non-land branch is still refused as undeclared', () => {
+    const r = ev.verifyEvidence(rec(cwd, a, 'feature-x'));
+    assert.equal(r.ok, false);
+    assert.match(r.reasons[0], /feature-x is not a declared land branch/);
+  });
+  test('a default named by origin/HEAD counts, and main is then just another undeclared name', () => {
+    const r2 = makeRepo();
+    const g = (...x) => spawnSync('git', x, { cwd: r2.cwd, encoding: 'utf8' });
+    g('update-ref', 'refs/remotes/origin/trunk', r2.a);
+    g('symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/trunk');
+    assert.equal(ev.verifyEvidence(rec(r2.cwd, r2.a, 'trunk')).ok, true);
+    assert.match(ev.verifyEvidence(rec(r2.cwd, r2.a, 'main')).reasons[0], /main is not a declared land branch/);
+  });
+  test('branch 2.0 and no branch are unchanged beside it', () => {
+    assert.match(ev.verifyEvidence(rec(cwd, b, '2.0')).checks.join('\n'), /is on 2\.0 in /);
+    assert.match(ev.verifyEvidence(rec(cwd, c, '2.0')).reasons[0], /not on the land branch \(2\.0\)/);
+    assert.equal(ev.verifyEvidence(rec(cwd, a)).ok, true);
+  });
+});
+
 describe('the stale-file refusal carries a hint', () => {
   test('older than the claimed at: the reason says to record a fresh grep -H command receipt', () => {
     const old = join(SCRATCH, 'old.log');
