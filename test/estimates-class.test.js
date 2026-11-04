@@ -105,6 +105,15 @@ describe('completions-cli', () => {
     assert.equal(readFileSync(join(cwd, '.compose', 'data', 'feature-events.jsonl'), 'utf8'), before);
   });
 
+  test('--launch-of gives class and first launch for a unit with no completion, null for an unknown unit', async () => {
+    const cwd = workspace();
+    await addRoadmapEntry(cwd, { code: 'EC-13', description: 'd', phase: 'P', class: 'fix' });
+    writeEvents(cwd, [launchRow('EC-13', '2026-11-02T03:00:00.000Z'), launchRow('EC-13', '2026-11-01T03:00:00.000Z')]);
+    const run = (u) => JSON.parse(spawnSync(process.execPath, [CLI, '--root', cwd, '--launch-of', u], { encoding: 'utf8' }).stdout);
+    assert.deepEqual(run('EC-13'), { unit: 'EC-13', class: 'fix', launched_at: '2026-11-01T03:00:00.000Z' });
+    assert.deepEqual(run('NOPE-1'), { unit: 'NOPE-1', class: null, launched_at: null });
+  });
+
   test('no --root exits non-zero with a message', () => {
     const r = spawnSync(process.execPath, [CLI], { encoding: 'utf8' });
     assert.notEqual(r.status, 0);
