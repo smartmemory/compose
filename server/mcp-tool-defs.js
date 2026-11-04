@@ -383,6 +383,7 @@ export const TOOLS = [
         triageTimestamp: { type: 'string', description: 'Triage cache stamp (ISO 8601). Set AFTER design.md is written so build treats triage as a cached no-op.' },
         plannedBy: { type: 'string', description: 'Originating plan session code (e.g. "PLAN-WIDGET"). Marks a plan-authored, build-ready feature.' },
         impact: { type: 'string', enum: ['low', 'medium', 'high'], description: 'Estimated impact, carried from the plan/ideabox estimation step.' },
+        class: { type: 'string', enum: ['code', 'plan/doc', 'fix', 'review', 'merge'], description: 'Work class estimate.py groups completions by. Omit it and estimate.py derives one from the code and title.' },
         force: { type: 'boolean', description: 'Bypass the pre-commit roundtrip guard (commit even if ROADMAP.md would not be a generation fixed point).' },
         idempotency_key: { type: 'string', description: 'Optional caller-provided key. Same key replays return the cached result without re-mutating.' },
       },

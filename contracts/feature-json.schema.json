@@ -55,6 +55,11 @@
       "enum": ["control"],
       "description": "COMP-DOGFOOD-CONTROL-INCIDENT-1: `control` marks a new guard, daemon, gate, watcher or kill switch. validate_feature requires an `incident` artifact on it (CONTROL_NO_INCIDENT). Absent on every ordinary feature."
     },
+    "class": {
+      "type": "string",
+      "enum": ["code", "plan/doc", "fix", "review", "merge"],
+      "description": "COMP-DOGFOOD-ESTIMATES-1: the work class estimate.py groups completions by (the ops estimate.py CLASSES). Absent: estimate.py derives it from the code and title and counts it as derived."
+    },
     "position": { "type": ["integer", "string"] },
     "parent": { "type": "string" },
     "depends_on": {
