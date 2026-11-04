@@ -9,13 +9,13 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
-  LiveStateError, activeOrders, addOrder, buildLiveState, configureLiveState, formatLiveStateSection,
+  LiveStateError, DECISION_RE, activeOrders, addOrder, backfillKeys, buildLiveState, configureLiveState, formatLiveStateSection,
   readHardRules, readStore, ruleBullets, storePath, supersedeOrder,
 } from '../lib/live-state.js';
 import { run as cliRun } from '../lib/live-state-cli.js';
@@ -423,6 +423,113 @@ test('key: eight processes sharing only the decision key create one order', () =
   assert.ok(replies.every(([code]) => code === 0), r.stdout);
   assert.equal(replies.filter(([, b]) => JSON.parse(b).created).length, 1);
   assert.equal(readStore(dataDir).live_orders.length, 1);
+});
+
+// ── KEY-1 fix r1: aliases accumulate, and keyless / single-key orders get their decision key ─
+
+test('key fix r1: a handled add records its other keys on the order it matched (Design 1)', () => {
+  const { dataDir } = workspace();
+  addOrder(dataDir, { text: 'a', source: 's#a', key: 'owner-ledger:aa' }, { now: NOW });
+  const r = addOrder(dataDir, { text: 'a2', source: 's#a2', key: 'owner-ledger:aa', keys: ['owner-ledger:bb', 'owner-ledger:D-0099'] }, { now: NOW });
+  assert.equal(r.handled, true);
+  assert.deepEqual(r.order.keys, ['owner-ledger:bb', 'owner-ledger:D-0099']);
+  assert.deepEqual(readStore(dataDir).live_orders[0].keys, ['owner-ledger:bb', 'owner-ledger:D-0099']);
+  assert.equal(readStore(dataDir).live_orders[0].text, 'a'); // nothing else on the record changes
+  // a later add that shares only the decision key is handled, also after a retire
+  supersedeOrder(dataDir, { id: 'LO-1', superseded_by: 'manual' }, { now: NOW });
+  assert.equal(addOrder(dataDir, { text: 'c', source: 's#c', key: 'owner-ledger:cc', keys: ['owner-ledger:D-0099'] }, { now: NOW }).handled, true);
+  assert.equal(readStore(dataDir).live_orders.length, 1);
+  assert.ok(readStore(dataDir).live_orders[0].keys.includes('owner-ledger:cc'));
+});
+
+test('key fix r1: aliases past the eight-key cap are not stored and come back as dropped_keys', () => {
+  const { dataDir } = workspace();
+  addOrder(dataDir, { text: 'a', source: 's#a', key: 'k0' }, { now: NOW });
+  const ks = Array.from({ length: 8 }, (_, i) => `x${i}`);
+  assert.equal(addOrder(dataDir, { text: 'b', source: 's#b', key: 'k0', keys: ks }, { now: NOW }).dropped_keys, undefined);
+  const r = addOrder(dataDir, { text: 'c', source: 's#c', key: 'k0', keys: ['over'] }, { now: NOW });
+  assert.deepEqual(r.dropped_keys, ['over']);
+  assert.equal(readStore(dataDir).live_orders[0].keys.length, 8);
+});
+
+test('backfillKeys: a keyless order and a single-key order gain the decision key, a keyed one is untouched', () => {
+  const { dataDir } = workspace();
+  addOrder(dataDir, { text: "D-0068 OWNER 'x': keyless, the live format", source: 'ledger.md#h1' }, { now: NOW });
+  addOrder(dataDir, { text: "D-0099 OWNER 'y': one key", source: 'ledger.md#h2', key: 'owner-ledger:h2' }, { now: NOW });
+  addOrder(dataDir, { text: "D-0070 OWNER 'z': two keys", source: 'ledger.md#h3', key: 'owner-ledger:h3', keys: ['owner-ledger:D-0070'] }, { now: NOW });
+  addOrder(dataDir, { text: "OWNER 'w': no decision id", source: 'ledger.md#h4' }, { now: NOW });
+  addOrder(dataDir, { text: 'no id in the text', source: 'ledger.md#D-0055', key: 'k5' }, { now: NOW });
+  addOrder(dataDir, { text: 'D-0071 D-0072: first id wins', source: 'ledger.md#h6', key: 'owner-ledger:h6', keys: ['other'] }, { now: NOW });
+  const r = backfillKeys(dataDir, { prefix: 'owner-ledger:' });
+  assert.deepEqual(r.changed, ['LO-1', 'LO-2', 'LO-5']);
+  const o = readStore(dataDir).live_orders;
+  assert.equal(o[0].key, 'owner-ledger:D-0068'); assert.equal('keys' in o[0], false);
+  assert.deepEqual([o[1].key, o[1].keys], ['owner-ledger:h2', ['owner-ledger:D-0099']]);
+  assert.deepEqual([o[2].key, o[2].keys], ['owner-ledger:h3', ['owner-ledger:D-0070']]);
+  assert.equal('key' in o[3], false);
+  assert.deepEqual([o[4].key, o[4].keys], ['k5', ['owner-ledger:D-0055']]); // the source carries the id when the text has none
+  assert.deepEqual(o[5].keys, ['other']);
+});
+
+test('backfillKeys: idempotent, the second run changes nothing and writes nothing', () => {
+  const { dataDir } = workspace();
+  addOrder(dataDir, { text: 'D-0068 keyless', source: 'ledger.md#h1' }, { now: NOW });
+  assert.deepEqual(backfillKeys(dataDir, { prefix: 'owner-ledger:' }).changed, ['LO-1']);
+  const bytes = readFileSync(storePath(dataDir), 'utf8');
+  const mtime = statSync(storePath(dataDir)).mtimeMs;
+  assert.deepEqual(backfillKeys(dataDir, { prefix: 'owner-ledger:' }).changed, []);
+  assert.equal(readFileSync(storePath(dataDir), 'utf8'), bytes);
+  assert.equal(statSync(storePath(dataDir)).mtimeMs, mtime);
+});
+
+test('backfillKeys: an empty workspace creates no store file, a bad prefix is refused', () => {
+  const { dataDir } = workspace({ rules: false });
+  assert.deepEqual(backfillKeys(dataDir, { prefix: 'owner-ledger:' }).changed, []);
+  assert.equal(existsSync(storePath(dataDir)), false);
+  assert.throws(() => backfillKeys(dataDir, { prefix: 'bad prefix' }), /prefix may hold only/);
+  assert.throws(() => backfillKeys(dataDir, {}), /prefix is required/);
+});
+
+test('backfill-keys CLI: a keyless retired order then answers a different relay of its decision', () => {
+  const { root } = workspace();
+  const j = (a) => JSON.parse(cliRun(a, { now: NOW }));
+  j(['add', '--root', root, '--text', "D-0099 OWNER 'freeze': hold deploys", '--source', 'ledger.md#h1']);
+  j(['supersede', '--root', root, '--id', 'LO-1', '--by', 'manual']);
+  assert.equal(j(['add', '--root', root, '--text', 'reworded', '--source', 'ledger.md#h2', '--key', 'owner-ledger:h2', '--key', 'owner-ledger:D-0099']).created, true); // before the backfill: the gap
+  j(['supersede', '--root', root, '--id', 'LO-2', '--by', 'manual']);
+  assert.deepEqual(j(['backfill-keys', '--root', root, '--prefix', 'owner-ledger:']).changed, ['LO-1']);
+  const r = j(['add', '--root', root, '--text', 'third wording', '--source', 'ledger.md#h3', '--key', 'owner-ledger:h3', '--key', 'owner-ledger:D-0099']);
+  assert.equal(r.handled, true);
+  assert.deepEqual(j(['read', '--root', root]).view.orders, []);
+});
+
+test('backfill-keys CLI: refused to the implementer and reviewer profiles', () => {
+  const { root } = workspace();
+  for (const profile of ['implementer', 'reviewer']) {
+    assert.throws(() => cliRun(['backfill-keys', '--root', root, '--prefix', 'owner-ledger:'], { now: NOW, env: { COMPOSE_SESSION_PROFILE: profile } }), /OWNER_ORDER_WRITER_DENIED/);
+  }
+});
+
+test('backfill-keys: eight processes at once change each order once and lose nothing', () => {
+  const { root, dataDir } = workspace();
+  for (let i = 0; i < 3; i++) addOrder(dataDir, { text: `D-009${i} keyless`, source: `ledger.md#h${i}` }, { now: NOW });
+  const cli = join(REPO, 'lib', 'live-state-cli.js');
+  const env = { ...process.env };
+  delete env.COMPOSE_SESSION_PROFILE;
+  const script = `const {spawn}=require('node:child_process');let done=0;const out=[];
+    for(let i=0;i<8;i++){const c=spawn(process.execPath,[${JSON.stringify(cli)},'backfill-keys','--root',${JSON.stringify(root)},'--prefix','owner-ledger:'],{env:process.env});
+      let b='';c.stdout.on('data',d=>b+=d);c.on('close',code=>{out.push([code,b.trim()]);if(++done===8)console.log(JSON.stringify(out));});}`;
+  const r = spawnSync(process.execPath, ['-e', script], { encoding: 'utf8', env });
+  const replies = JSON.parse(r.stdout);
+  assert.ok(replies.every(([code]) => code === 0), r.stdout);
+  assert.equal(replies.reduce((n, [, b]) => n + JSON.parse(b).changed.length, 0), 3);
+  assert.deepEqual(readStore(dataDir).live_orders.map((o) => o.key), ['owner-ledger:D-0090', 'owner-ledger:D-0091', 'owner-ledger:D-0092']);
+});
+
+test('the decision-id rule is the same pattern as the ops feeder\'s DECISION_RE', () => {
+  assert.equal(DECISION_RE.source, '\\bD-\\d{4}\\b');
+  const ops = '/Users/ruze/reg/my/SmartMemory/smart-memory-ops/claude/scripts/owner_orders_feed.py';
+  if (existsSync(ops)) assert.match(readFileSync(ops, 'utf8'), /DECISION_RE = re\.compile\(r'\\bD-\\d\{4\}\\b', re\.ASCII\)/);
 });
 
 test('contract: an order with `keys` validates, a duplicate or malformed extra key does not', () => {
