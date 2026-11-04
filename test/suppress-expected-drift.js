@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { deadPortSync } from './helpers/dead-port.js';
@@ -10,6 +10,17 @@ const TEST_COMMIT_SENTINEL = 'compose-test-sentinel@invalid';
 const testStateRoot = mkdtempSync(join(tmpdir(), 'compose-test-flows-'));
 process.env.STRATUM_STATE_ROOT = testStateRoot;
 process.once('exit', () => rmSync(testStateRoot, { recursive: true, force: true }));
+
+// COMP-DOGFOOD-OWNER-QUEUE-TEST-ISOLATION-1: lib/owner-gates.js resolves the fleet owner queue from four env names and then
+// the live default under $HOME, so a test that sets none of them read the owner's real open asks (retire-store.test.js
+// saw count 7 where it expects 0). Default every test process to its own empty queue file; a test or shell that sets any of
+// the four names keeps its own. The file exists and is empty: a missing one reads as `unreadable`, which is a different result.
+if (!process.env.COMPOSE_OWNER_QUEUE_FILE && !process.env.COMPOSE_RIBBON_OWNER_QUEUE && !process.env.SM_OWNER_QUEUE) {
+  const queueRoot = mkdtempSync(join(tmpdir(), 'compose-test-owner-queue-'));
+  writeFileSync(join(queueRoot, 'owner-queue.jsonl'), '');
+  process.env.COMPOSE_OWNER_QUEUE_FILE = join(queueRoot, 'owner-queue.jsonl');
+  process.once('exit', () => rmSync(queueRoot, { recursive: true, force: true }));
+}
 
 // COMP-TEST-STATE-LEAK-1: every write into this checkout's .compose/data (the owner's live cockpit state) is refused
 // and fails the run; node children inherit the guard via NODE_OPTIONS. See the helper for the incident and limits.

@@ -100,7 +100,11 @@ test('retirement propagates to every dependent vision-read tool (single chokepoi
   const summary = toolGetPhasesSummary({})
   assert.equal(summary.total, 0, 'phase summary: zero items')
   assert.deepEqual(toolGetBlockedItems(), { count: 0, blocked: [] }, 'blocked items: empty')
-  assert.deepEqual(toolGetPendingGates({}), { count: 0, gates: [] }, 'pending gates: empty')
+  // The policy-gate half is empty because the store is retired; owner asks are fleet-level, so the tool also reports how it
+  // read the owner queue. The preload points that at an empty file, so the read is a readable zero and never the live queue.
+  const pending = toolGetPendingGates({})
+  assert.deepEqual({ count: pending.count, gates: pending.gates, owner_count: pending.owner_gates?.count },
+    { count: 0, gates: [], owner_count: 0 }, 'pending gates: empty')
 
   // Enabled control: the same item IS visible when the store is live.
   switchProject(mkWorkspace({ capabilities: { lifecycle: true }, items: SAMPLE_ITEMS }))
