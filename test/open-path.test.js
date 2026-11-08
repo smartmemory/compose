@@ -85,6 +85,10 @@ describe('openLocalPath', () => {
     chmodSync(join(home, 'binary'), 0o755);
     writeFileSync(join(home, 'tool.py'), 'print(1)\n');
     chmodSync(join(home, 'tool.py'), 0o755);
+    writeFileSync(join(home, 'notes.txt'), 'plain\n');
+    chmodSync(join(home, 'notes.txt'), 0o755);
+    writeFileSync(join(home, 'script.pl'), 'print 1;\n');
+    writeFileSync(join(home, 'session.term'), '<plist/>\n');
   });
   after(() => { rmSync(home, { recursive: true, force: true }); rmSync(outside, { recursive: true, force: true }); });
 
@@ -123,6 +127,10 @@ describe('openLocalPath', () => {
     ['an app bundle', () => ({ path: join(home, 'Evil.app') }), /apps, scripts and launchers/, 'launcher'],
     ['a .command launcher', () => ({ path: join(home, 'run.command') }), /apps, scripts and launchers/, 'launcher'],
     ['an executable with no extension', () => ({ path: join(home, 'binary') }), /executable/, 'executable'],
+    ['an exec-bit .txt file', () => ({ path: join(home, 'notes.txt') }), /executable/, 'executable'],
+    ['a .py script (also exec-bit)', () => ({ path: join(home, 'tool.py') }), /apps, scripts and launchers/, 'launcher'],
+    ['a .pl script (no exec bit)', () => ({ path: join(home, 'script.pl') }), /apps, scripts and launchers/, 'launcher'],
+    ['a .term file (no exec bit)', () => ({ path: join(home, 'session.term') }), /apps, scripts and launchers/, 'launcher'],
   ];
   for (const [name, input, reason, cls] of refusals) {
     it(`refused: ${name}`, async () => {
@@ -135,8 +143,11 @@ describe('openLocalPath', () => {
       assert.match(warns[0], new RegExp(`^\\[fleet\\] open-path rejected \\(${cls}\\): `));
     });
   }
-  it('an executable WITH an extension (a .py) is opened, as the default app decides', async () => {
-    assert.equal((await run(join(home, 'tool.py'))).reply.status, 'accepted');
+  it('a plain .md is still accepted and spawns exactly once', async () => {
+    const { reply, calls } = await run(join(home, 'docs', 'report.md'));
+    assert.equal(reply.status, 'accepted');
+    assert.equal(calls.length, 1);
+    assert.deepEqual(calls[0].argv, ['open', join(realHome, 'docs', 'report.md')]);
   });
   it('a throwing spawner is a rejected reply, never a crash', async () => {
     const { reply } = await run(join(home, 'docs', 'report.md'), { spawner: () => { throw new Error('ENOENT'); } });

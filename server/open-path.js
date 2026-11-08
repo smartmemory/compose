@@ -6,7 +6,7 @@
  * to the home dir (`~user` is refused); no segment is `..`; its realpath (every symlink resolved) lies strictly under the
  * realpath of the home dir; it exists and is a regular file or a directory. Because `open` LAUNCHES some things rather than
  * showing them, it also refuses an app or script bundle or launcher by extension (`LAUNCHER_EXT`) anywhere on the real path,
- * and a file with an execute bit and no extension (`open` runs one in Terminal). The opener is spawned with argv only
+ * and any regular file with an execute bit, whatever its extension (`open` runs one in Terminal). The opener is spawned with argv only
  * (`['open', <realpath>]` on darwin, `['xdg-open', <realpath>]` otherwise), never a shell, through an injectable `spawner`.
  * Replies are `{status: 'accepted', path}` or `{status: 'rejected', reason}`; every refusal logs one warn line tagged with its
  * class (`[fleet] open-path rejected (<class>)`), never the requested path.
@@ -14,7 +14,7 @@
 import { spawn } from 'node:child_process';
 import { realpath, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { basename, extname, isAbsolute, join, sep } from 'node:path';
+import { extname, isAbsolute, join, sep } from 'node:path';
 
 export const OPEN_PATH_ROUTE = '/api/fleet/open-path';
 export const MAX_PATH = 4096;
@@ -26,6 +26,9 @@ export const LAUNCHER_EXT = new Set([
   '.command', '.tool', '.sh', '.bash', '.zsh', '.csh', '.ksh', '.terminal',
   '.scpt', '.scptd', '.applescript', '.workflow', '.action', '.osax',
   '.pkg', '.mpkg', '.jar', '.webloc', '.inetloc', '.fileloc', '.url', '.desktop', '.mobileconfig',
+  // Interpreter scripts and launcher files whose default handler here is a terminal or launcher (.pl -> iTerm, .term -> Terminal,
+  // .jnlp -> JavaLauncher), or that a Python Launcher or similar runs on open.
+  '.pl', '.pm', '.term', '.jnlp', '.py', '.pyw', '.rb', '.php', '.tcl', '.expect', '.ps1',
 ]);
 
 /** The default spawner: detached, no stdio, no shell. An `error` event (opener missing) is logged, never thrown. */
@@ -75,7 +78,7 @@ export async function openLocalPath(body, { home = homedir(), platform = process
   if (!st.isFile() && !st.isDirectory()) return rejected('type', 'path is not a regular file or a folder');
   const segments = real.slice(realHome.length + 1).split(sep);
   if (segments.some((seg) => LAUNCHER_EXT.has(extname(seg).toLowerCase()))) return rejected('launcher', 'apps, scripts and launchers are not opened from the cockpit');
-  if (st.isFile() && (st.mode & 0o111) && !extname(basename(real))) return rejected('executable', 'an executable with no extension is not opened from the cockpit');
+  if (st.isFile() && (st.mode & 0o111)) return rejected('executable', 'an executable file is not opened from the cockpit');
 
   const argv = [platform === 'darwin' ? 'open' : 'xdg-open', real];
   try {
