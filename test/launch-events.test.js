@@ -210,7 +210,7 @@ describe('the retry queue', () => {
 });
 
 describe('the CLI door launch_events.py writes through', () => {
-  const io = (stdin = '') => { const out = []; const err = []; return { out: { write: (s) => out.push(s) }, err: { write: (s) => err.push(s) }, stdin: () => stdin, lines: () => out.join('').trim().split('\n').map((l) => JSON.parse(l)) }; };
+  const io = (stdin = '') => { const out = []; const err = []; return { out: { write: (s) => out.push(s) }, err: { write: (s) => err.push(s) }, stdin: () => stdin, now: () => NOW, lines: () => out.join('').trim().split('\n').map((l) => JSON.parse(l)) }; };
   it('append (stdin lines) writes, then dedupes; queue reads it back; a bad event exits 2', () => {
     const root = tmpRoot();
     const a = io(TONIGHT.map((e) => JSON.stringify(e)).join('\n'));
