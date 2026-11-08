@@ -30,6 +30,8 @@
  *   `GET /api/fleet` is built from the same file (`readOpenQueuePanel`: every open row in sm_status's row shape, so the inbox's Decided and
  *   FYI groups fill), and `ownerAsks` filters it to what MCP `get_pending_gates` and the day ribbon count. The queue file resolves from `env` (`resolveOwnerQueueFile`); an env that names none (no HOME)
  *   keeps sm_status's panel, which reads the same file.
+ * COMP-INBOX-LOCAL-FILE-LINKS-1 adds the second: POST /api/fleet/open-path `{path}` (requireSensitiveOrPaired) opens a file
+ *   or folder under the home dir in the Mac's default app (server/open-path.js holds every check), argv only, never a shell.
  * When a notify store is wired (server/notify-state-routes.js), every GET /api/fleet body also carries `notify`
  * (Compose's own ack/snooze/dismiss/answered list, read fresh per request) so the cockpit needs no second poll.
  *
@@ -46,6 +48,7 @@ import { groupOf, stripTag } from '../lib/owner-queue-class.js';
 import { optionsOf, choiceText } from '../lib/ask-options.js';
 import { readOpenQueuePanel, readOwnerGates, resolveOwnerQueueFile } from '../lib/owner-gates.js';
 import { requireSensitiveOrPaired } from './security.js';
+import { OPEN_PATH_ROUTE, openLocalPath, defaultSpawner } from './open-path.js';
 
 export const FLEET_ROUTE = '/api/fleet';
 export const OWNER_ANSWER_ROUTE = '/api/fleet/owner-answer';
@@ -410,6 +413,7 @@ export function attachFleetRoutes(app, {
   timeoutMs = TIMEOUT_MS,
   notifyStore = null,
   ownerQueueFile = resolveOwnerQueueFile(env),
+  openPath = {},
 } = {}) {
   const opts = (name) => ({ ttlMs: ttlMs[name], now, warn, info });
   // An env with no queue path (no HOME: only a hermetic test env) keeps sm_status's own panel, a reader of the same file,
@@ -455,6 +459,12 @@ export function attachFleetRoutes(app, {
         caches.sm_status.invalidate();
       },
     });
+    res.set('cache-control', 'no-store');
+    res.json(reply);
+  });
+
+  app.post(OPEN_PATH_ROUTE, requireSensitiveOrPaired, async (req, res) => {
+    const reply = await openLocalPath(req.body, { spawner: defaultSpawner, warn, ...openPath });
     res.set('cache-control', 'no-store');
     res.json(reply);
   });

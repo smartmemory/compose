@@ -81,7 +81,7 @@ export function linkParts(text) {
 }
 
 /**
- * COMP-UI-LINKS-2: `linkParts` with the plain-text parts split once more into entity parts: `{entity: 'feature'|'file', text}`.
+ * COMP-UI-LINKS-2: `linkParts` with the plain-text parts split once more into entity parts: `{entity: 'feature'|'file'|'localfile', text}`.
  * URL parts and the text around them are unchanged. Whether an entity part has a target is the renderer's call.
  */
 export function entityLinkParts(text) {

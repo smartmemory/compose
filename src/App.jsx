@@ -96,6 +96,7 @@ import GateNotificationBar from './components/vision/shared/GateNotificationBar.
 import { computeBuildStateMap, computeAgentOverlay } from './components/vision/graphOpsOverlays.js';
 import { withComposeToken } from './lib/compose-api.js';
 import { wsFetch, getAuthMode } from './lib/wsFetch.js';
+import { openLocalFile } from './lib/openLocalFile.js';
 import { buildSubappHost, attentionSink, opsLaneOf } from './components/cockpit/subappHost.js';
 import { useGatePublishers } from './components/cockpit/notify/useNotifySources.js';
 import { createStratumDataClient } from './lib/clients/stratum.js';
@@ -1318,6 +1319,7 @@ function AppInner() {
     openRoom,
     openFlowGate,
     openFile: navigateToWiki,
+    openLocalFile, // COMP-INBOX-LOCAL-FILE-LINKS-1: an absolute home-dir path opens on the Mac (POST /api/fleet/open-path)
   }), [handleSelect, openGate, handleViewChange, openFeature, canNavigate, openRoom, openFlowGate, navigateToWiki]);
 
   const handleCreateConnection = useCallback(async (data) => {

@@ -3,7 +3,8 @@
  *
  * Props:
  *   kind      {string}  one of 'item' | 'feature' | 'gate' | 'view', or (COMP-UI-LINKS-2) 'unit' (Cadence room), 'session'
- *                       (Fleet room, by session name), 'file' (a repo doc path, opened in the wiki)
+ *                       (Fleet room, by session name), 'file' (a repo doc path, opened in the wiki), or
+ *                       (COMP-INBOX-LOCAL-FILE-LINKS-1) 'localfile' (an absolute home-dir path, opened on the Mac by the server)
  *   id        {string}  entity id passed to the navigation callback
  *   label     {node}    visible text (defaults to id)
  *   className {string}  extra classes merged onto the element
@@ -15,12 +16,14 @@
  * gate id, unknown feature code), the link degrades to a plain muted <span>
  * so consumers (tests, mobile) never crash and never show dead blue links.
  * A throwing navigation callback is swallowed: the link is a convenience
- * jump, never a load-bearing action.
+ * jump, never a load-bearing action. A `localfile` callback may return a
+ * promise of the open-path reply: a `rejected` reply's reason becomes the
+ * link's title, so a refusal is visible without a toast.
  */
 import React from 'react';
 import { cn } from '@/lib/utils.js';
 import { useNavigation } from '@/lib/navigation.jsx';
-import { entityParts, isSafeRepoPath } from '@/lib/entityParts.js';
+import { entityParts, isSafeRepoPath, isSafeLocalPath } from '@/lib/entityParts.js';
 
 const KIND_TO_CALLBACK = {
   item: 'openItem',
@@ -31,7 +34,11 @@ const KIND_TO_CALLBACK = {
   step: 'openRoom',
   session: 'openRoom',
   file: 'openFile',
+  localfile: 'openLocalFile',
 };
+
+/** The tooltip a `localfile` link carries until a refusal replaces it. */
+export const LOCALFILE_TITLE = 'open on this Mac';
 
 // The call each kind makes. Room kinds file a focus (roomFocus.js) the target room applies when it opens.
 const CALL = {
@@ -46,6 +53,7 @@ export function canOpenEntity(nav, kind, id) {
   const cb = nav?.[KIND_TO_CALLBACK[kind]];
   if (typeof cb !== 'function' || !id) return false;
   if (kind === 'file' && !isSafeRepoPath(id)) return false;
+  if (kind === 'localfile' && !isSafeLocalPath(id)) return false;
   return typeof nav.canNavigate === 'function' ? nav.canNavigate(kind, id) : true;
 }
 
@@ -53,6 +61,7 @@ export function canOpenEntity(nav, kind, id) {
 export function noTargetReason(nav, kind, id) {
   if (typeof nav?.[KIND_TO_CALLBACK[kind]] !== 'function') return 'No link here: this view has no place to open it';
   if (kind === 'file' && !isSafeRepoPath(id)) return `${id} is not a repo document path, so it cannot be opened`;
+  if (kind === 'localfile' && !isSafeLocalPath(id)) return `${id} is not a path under a home folder, so it cannot be opened`;
   if (kind === 'unit') return `The Cadence room is not available here, so unit ${id} cannot be opened`;
   if (kind === 'step') return `The Stratum room is not available here, so step ${id} cannot be opened`;
   if (kind === 'file') return `The Wiki tab is not available here, so ${id} cannot be opened`;
@@ -68,6 +77,7 @@ export default function EntityLink({ kind, id, label, className, title }) {
   const nav = useNavigation();
   const text = label ?? id;
   const handler = nav?.[KIND_TO_CALLBACK[kind]];
+  const [refusal, setRefusal] = React.useState(null);
 
   if (!canOpenEntity(nav, kind, id)) { // providers without canNavigate keep the old optimistic behavior
     return (
@@ -87,12 +97,16 @@ export default function EntityLink({ kind, id, label, className, title }) {
       onClick={(e) => {
         e.stopPropagation();
         try {
-          (CALL[kind] ?? ((h, i) => h(i)))(handler, id);
+          const out = (CALL[kind] ?? ((h, i) => h(i)))(handler, id);
+          if (kind === 'localfile' && typeof out?.then === 'function') {
+            out.then((r) => setRefusal(r?.status === 'rejected' ? `not opened: ${r.reason ?? 'rejected'}` : null), () => setRefusal('not opened: the open request failed'));
+          }
         } catch {
           // Navigation is best-effort — a vanished target must not crash the view.
         }
       }}
-      title={title}
+      title={refusal ?? title ?? (kind === 'localfile' ? LOCALFILE_TITLE : undefined)}
+      data-refused={refusal ? '' : undefined}
       className={cn('text-[11px] font-mono text-blue-400 hover:underline focus-visible:underline focus-visible:outline focus-visible:outline-1 focus-visible:outline-blue-400 cursor-pointer text-left', className)}
     >
       {text}

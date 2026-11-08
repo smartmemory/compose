@@ -27,7 +27,9 @@ const asOf = (fleet) => {
 
 // COMP-UI-LINKS-2: a feature code opens its feature when Compose holds it, else (the queue is Cadence-fed) the Cadence unit of that
 // name; a repo path opens in the wiki. An entity with no way to open stays plain text.
+// COMP-INBOX-LOCAL-FILE-LINKS-1: an absolute home-dir path opens on the Mac (EntityLink titles it "open on this Mac").
 function entityTarget(nav, p) {
+  if (p.entity === 'localfile') return canOpenEntity(nav, 'localfile', p.text) ? 'localfile' : null;
   if (p.entity === 'file') return canOpenEntity(nav, 'file', p.text) ? 'file' : null;
   if (canOpenEntity(nav, 'feature', p.text)) return 'feature';
   return canOpenEntity(nav, 'unit', p.text) ? 'unit' : null;

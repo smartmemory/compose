@@ -5,10 +5,31 @@
  * so a stray ALL-CAPS-WITH-DASHES word never turns into a dead link.
  *
  * A feature code is two or more dash-joined upper-case segments (`COMP-UI-LINKS-2`). A path is a repo-relative markdown doc with a directory part: the wiki opens documents, and its doc lookup answers 404 for a source file, so a code path (`lib/x.js`) is left as text.
+ * COMP-INBOX-LOCAL-FILE-LINKS-1: a `localfile` is an absolute path under a home dir (`/Users/<name>/...`, `/home/<name>/...`
+ * or `~/...`) with an optional `:<line>` suffix, opened on the Mac by `POST /api/fleet/open-path`. It is matched first, so a
+ * unit code or a doc path inside it does not split it. No whitespace, quotes, `<>`, `%` or backslash can be in one (they end
+ * it), and one with a `..` segment stays text. A trailing `.`, `,` `;` or `:` is sentence punctuation and stays text.
  */
 const FEATURE = String.raw`\b[A-Z][A-Z0-9]*(?:-[A-Z0-9]+){1,}\b`;
 const PATH = String.raw`(?<![\w/.:-])(?:[\w.-]+/)+[\w.-]+\.md\b(?:#L?\d+)?`;
-const TOKEN = new RegExp(`(${PATH})|(${FEATURE})`, 'g');
+const LOCALFILE = String.raw`(?<![\w/.:~-])(?:~|/(?:Users|home)/[\w.-]+)(?:/[\w.@+,=-]+)+(?::\d+)?`;
+const TOKEN = new RegExp(`(${LOCALFILE})|(${PATH})|(${FEATURE})`, 'g');
+const TRAILING_PUNCT = /[.,;:]+$/;
+
+/**
+ * An absolute home-dir path the open-path route may be asked for (the server re-checks everything against the real home and
+ * the real file): `/Users/<name>/...`, `/home/<name>/...` or `~/...`, an optional `:<line>`, no `..` or `.` or empty segment,
+ * no whitespace, quote, `<>`, `%`, backslash or NUL.
+ */
+export function isSafeLocalPath(p) {
+  if (typeof p !== 'string' || p.length > 4096) return false;
+  const path = p.replace(/:\d+$/, '');
+  if (!/^(?:~|\/(?:Users|home)\/[\w.-]+)(?:\/[\w.@+,=-]+)+$/.test(path)) return false;
+  return !path.split('/').slice(1).some((seg) => seg === '..' || seg === '.' || seg === '');
+}
+
+/** The path to hand the opener: a `localfile` without its `:<line>` suffix (the opener takes no line). */
+export const localPathOf = (p) => String(p ?? '').replace(/:\d+$/, '');
 
 /**
  * A repo-relative document path the wiki may be asked for: no `..` segment, not absolute, no `~`, no backslash, no `%` escape,
@@ -21,7 +42,7 @@ export function isSafeRepoPath(p) {
   return !path.split('/').some((seg) => seg === '..' || seg === '');
 }
 
-/** @returns {Array<{kind: 'text'|'file'|'feature', value: string}>} the parts, in order; their values join back to `text` */
+/** @returns {Array<{kind: 'text'|'localfile'|'file'|'feature', value: string}>} the parts, in order; their values join back to `text` */
 export function entityParts(text) {
   if (typeof text !== 'string' || !text) return [];
   const parts = [];
@@ -33,8 +54,13 @@ export function entityParts(text) {
   let last = 0;
   for (const m of text.matchAll(TOKEN)) {
     pushText(text.slice(last, m.index));
-    if (m[1] && !isSafeRepoPath(m[0])) pushText(m[0]);
-    else parts.push({ kind: m[1] ? 'file' : 'feature', value: m[0] });
+    if (m[1]) {
+      const tail = TRAILING_PUNCT.exec(m[0])?.[0] ?? '';
+      const value = m[0].slice(0, m[0].length - tail.length);
+      if (isSafeLocalPath(value)) parts.push({ kind: 'localfile', value }); else pushText(value);
+      pushText(tail);
+    } else if (m[2] && !isSafeRepoPath(m[0])) pushText(m[0]);
+    else parts.push({ kind: m[2] ? 'file' : 'feature', value: m[0] });
     last = m.index + m[0].length;
   }
   pushText(text.slice(last));
@@ -43,7 +69,7 @@ export function entityParts(text) {
 
 export const ENTITY_HREF = '#entity:';
 /** The kinds an `#entity:<kind>:<id>` href may name (the keys EntityLink knows how to open). */
-export const ENTITY_KINDS = ['item', 'feature', 'gate', 'view', 'unit', 'step', 'session', 'file'];
+export const ENTITY_KINDS = ['item', 'feature', 'gate', 'view', 'unit', 'step', 'session', 'file', 'localfile'];
 
 /** The `{kind, id}` an entity href names, or null for any other href or an unknown kind. */
 export function parseEntityHref(href) {

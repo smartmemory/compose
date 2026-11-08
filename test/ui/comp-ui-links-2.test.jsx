@@ -275,7 +275,9 @@ describe('FU-1 M1: a room that is unavailable makes its links text', () => {
 });
 
 describe('FU-1 M3: file tokens and authored hrefs', () => {
-  it.each(['../x.md', 'a/../../x.md', '/etc/x.md', '~/x.md', '~/a/x.md', 'https://h.test/a/x.md', 'file:///a/x.md'])(
+  // `~/x.md` and `~/a/x.md` left this list in COMP-INBOX-LOCAL-FILE-LINKS-1: a home-dir path is now a `localfile` (opened on the
+  // Mac, test/open-path.test.js); a `~` path with a traversal segment still stays text.
+  it.each(['../x.md', 'a/../../x.md', '/etc/x.md', '~/../x.md', '~/a/../../x.md', 'https://h.test/a/x.md', 'file:///a/x.md'])(
     '%s stays text in the tokenizer and in LinkedText', (path) => {
       expect(entityParts(`see ${path} now`).every((p) => p.kind === 'text')).toBe(true);
       const nav = makeNav();
