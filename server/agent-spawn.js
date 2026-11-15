@@ -4,6 +4,7 @@
  * Routes: POST /api/agent/spawn, GET /api/agent/:id, GET /api/agents
  */
 
+import { cleanSpawnEnv } from './spawn-env.js';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 
@@ -47,8 +48,7 @@ export function attachAgentSpawnRoutes(app, { projectRoot = getTargetRoot(), bro
       return res.status(409).json({ error: `Agent ${agentId} already running` });
     }
 
-    const cleanEnv = { ...process.env, COMPOSE_TARGET: projectRoot, NO_COLOR: '1' };
-    delete cleanEnv.CLAUDECODE;
+    const cleanEnv = cleanSpawnEnv({ COMPOSE_TARGET: projectRoot, NO_COLOR: '1' });
     // COMP-MCP-ENFORCE-1: inject a TRUSTED, spawn-time MCP profile the subagent
     // cannot rewrite (its compose-mcp child inherits this env). Only restrictive
     // profiles are injected; an orchestrator/unspecified spawn stays unrestricted.

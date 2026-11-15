@@ -254,6 +254,28 @@ test('agent workspace LRU evicts idle history and protects an unfinished SDK que
   assert.equal((await (await request(a)).json()).sessionId, (await import('node:fs')).realpathSync(a), 'a was touched more recently than c');
 });
 
+test('the agent bar child env drops CLAUDECODE and keeps CLAUDE_CONFIG_DIR (COMP-PROJECT-GRAPH-DOC-PANEL-1)', async t => {
+  t.mock.method(BuildStreamBridge.prototype, 'start', () => {});
+  const root = await mkdtemp(join(tmpdir(), 'sdk-env-'));
+  const a = await project(root, 'a');
+  const saved = { token: process.env.COMPOSE_API_TOKEN, cc: process.env.CLAUDECODE, cfg: process.env.CLAUDE_CONFIG_DIR };
+  process.env.COMPOSE_API_TOKEN = 'env-token'; process.env.CLAUDECODE = '1'; process.env.CLAUDE_CONFIG_DIR = '/tmp/seat-cfg';
+  let seen;
+  const sdk = createAgentApp({ query: async function* ({ options }) { seen = options.env; yield { type: 'system', subtype: 'init', session_id: 's' }; } });
+  t.after(async () => {
+    sdk.close();
+    for (const [k, v] of [['COMPOSE_API_TOKEN', saved.token], ['CLAUDECODE', saved.cc], ['CLAUDE_CONFIG_DIR', saved.cfg]]) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+    await rm(root, { recursive: true, force: true });
+  });
+  const res = await httpRequest(sdk.app, '/api/agent/session', { method: 'POST', headers: { 'x-compose-project-root': a, 'x-compose-token': 'env-token' }, body: JSON.stringify({ prompt: 'hi' }) });
+  assert.equal(res.status, 200);
+  await delay(10);
+  assert.ok(seen, 'query ran');
+  assert.equal('CLAUDECODE' in seen, false);
+  assert.equal(seen.CLAUDE_CONFIG_DIR, '/tmp/seat-cfg');
+  assert.equal(seen.COMPOSE_TARGET, (await import('node:fs')).realpathSync(a));
+});
+
 test('retention protects active HTTP builds and monitored agents but permits terminal build history', async t => {
   t.mock.method(FileWatcherServer.prototype, 'startWatching', () => {});
   const oldRoot = getTargetRoot();

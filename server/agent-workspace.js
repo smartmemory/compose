@@ -8,6 +8,7 @@ import { hooksForProject } from './agent-hooks.js';
 import { CoalescingBuffer } from './coalescing-buffer.js';
 import { BuildStreamBridge } from './build-stream-bridge.js';
 import { hasPersistedWork } from './workspace-activity.js';
+import { cleanSpawnEnv } from './spawn-env.js';
 
 /** One SDK session, message history and stream bridge per project. */
 export function createAgentWorkspace(binding, { query }) {
@@ -189,7 +190,7 @@ export function createAgentWorkspace(binding, { query }) {
   function _buildOptions(prompt, resumeId) {
     return {
       cwd: binding.targetRoot,
-      env: { ...process.env, COMPOSE_TARGET: binding.targetRoot },
+      env: cleanSpawnEnv({ COMPOSE_TARGET: binding.targetRoot }),
       model: _readModelSetting() || getModelCatalog().catalog.claude.default.model,
       permissionMode: 'acceptEdits',
       settingSources: ['project'],

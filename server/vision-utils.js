@@ -5,6 +5,7 @@
  * can be unit-tested or reused independently.
  */
 
+import { cleanSpawnEnv } from './spawn-env.js';
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -125,8 +126,7 @@ Session data:
 After writing the entry, update ${journalRel}/README.md with the new entry row.
 Then commit both files.`;
 
-  const cleanEnv = { ...process.env, COMPOSE_TARGET: projectRoot, NO_COLOR: '1' };
-  delete cleanEnv.CLAUDECODE;
+  const cleanEnv = cleanSpawnEnv({ COMPOSE_TARGET: projectRoot, NO_COLOR: '1' });
   const proc = spawn('claude', ['-p', prompt, '--dangerously-skip-permissions'], {
     cwd: projectRoot,
     env: cleanEnv,

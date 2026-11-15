@@ -6,6 +6,7 @@ import { getModelCatalog } from '../lib/model-catalog.js';
  * Extracted from SessionManager for independent reuse and testing.
  */
 
+import { cleanSpawnEnv } from './spawn-env.js';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 
@@ -68,8 +69,7 @@ JSON schema:
  */
 export function summarize(prompt, { model = defaultModel(), projectRoot = getTargetRoot() } = {}) {
   return new Promise((resolve) => {
-    const cleanEnv = { ...process.env, COMPOSE_TARGET: projectRoot, NO_COLOR: '1' };
-    delete cleanEnv.CLAUDECODE;
+    const cleanEnv = cleanSpawnEnv({ COMPOSE_TARGET: projectRoot, NO_COLOR: '1' });
 
     const proc = spawn('claude', [
       '-p', prompt,
