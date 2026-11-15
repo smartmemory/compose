@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- **Agent bar SSE stream sends one `: connected` comment on connect** (`server/agent-workspace.js`): a relay in front (the API proxy, the Vite dev proxy) forwards the headers only with the first body byte, so an idle stream left the agent bar on "connecting". Needs a server restart to take effect.
 - **COMP-PROJECT-GRAPH-DOC-PANEL-1: Projects / Roadmap / Graph double-click shows the doc formatted** (`ProjectGraphView.jsx`): the item's design doc renders as markdown (`MarkdownViewer`, headings, lists, tables, code) in the right pane instead of raw text; a single click fills the pane with the item's header; no doc and a failed fetch say so in words. `ItemDetailPanel` is store-bound and editable, so the read-only pane stays its own aside.
 - **COMP-PROJECT-GRAPH-DOC-PANEL-1: the agent bar's agent no longer inherits `CLAUDECODE`** (`server/spawn-env.js`, `agent-workspace.js`): one `cleanSpawnEnv` helper builds the child env at all four Claude spawn sites (agent bar, agent-spawn, summarizer, vision-utils); `CLAUDE_CONFIG_DIR` stays inherited.
 - **FILING BAR constant re-synced** (`lib/filing-bar.js`): it equals smart-memory-ops `claude/rules/review-loop.md:11` again, which gained the OWNER D-0113 "DEFERRED-POST-LAUNCH" text. `test/control-incident.test.js` had been red on it, blocking the compose push.

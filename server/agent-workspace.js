@@ -87,6 +87,9 @@ export function createAgentWorkspace(binding, { query }) {
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('X-Accel-Buffering', 'no'); // disable nginx buffering if proxied
     res.flushHeaders();
+    // One SSE comment on connect: a relay in front (the API proxy, the Vite dev proxy) only forwards the response headers with
+    // the first body byte, so an idle stream otherwise leaves the client stuck on "connecting".
+    res.write(': connected\n\n');
 
     _sseClients.add(res);
 
