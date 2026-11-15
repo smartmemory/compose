@@ -14,6 +14,11 @@
  *   wikiWorkspace {string?}  the wiki's served workspace (COMP-SUBAPP-CONTEXT-1; not the Compose workspace)
  *   availability {{stratum,cadence,wiki}?} each yes|no|unknown; `no` shows "<source> not connected" and skips the read
  *   sourceClients {{stratum,cadence,wiki}?} injectable data clients (tests)
+ *   external {{item, items, connections}?} COMP-PROJECT-GRAPH-DOC-PANEL-1 r2: a project graph item that is not in the
+ *            bound workspace's store. It shows read-only (ItemDetailPanel `readOnly`), Overview only (the other tabs and
+ *            the sources read the bound workspace by feature code), with no Focus and no View in Graph/Tree.
+ *   doc      {object?} the item's design doc from a project graph double-click ({loading}|{error}|{text,path}, plus
+ *            `requestedAt`); adds a Doc tab, which opens on each new request
  */
 import React, { useState, useMemo, useEffect } from 'react';
 import { useVisionStore } from '../vision/useVisionStore.js';
@@ -31,8 +36,11 @@ import useRecallEnabled from './useRecallEnabled.js';
 import { DETAIL_TABS } from './contextPanelState.js';
 import { itemFeatureCode } from './focusedFeature.js';
 import ContextSources from './ContextSources.jsx';
+import ContextDocTab from './ContextDocTab.jsx';
 
-export default function ContextItemDetail({ itemId, onSelect, onClose, onOpenFile, onViewInGraph, onViewInTree, focusedFeature, onFocusFeature, wikiWorkspace, availability, sourceClients }) {
+const DOC_TAB = { id: 'doc', label: 'Doc' };
+
+export default function ContextItemDetail({ itemId, onSelect, onClose, onOpenFile, onViewInGraph, onViewInTree, focusedFeature, onFocusFeature, wikiWorkspace, availability, sourceClients, external = null, doc = null }) {
   const {
     items, connections, gates, updateItem, deleteItem,
     createConnection, deleteConnection, resolveGate,
@@ -45,7 +53,10 @@ export default function ContextItemDetail({ itemId, onSelect, onClose, onOpenFil
     sessions: s.sessions, agentErrors: s.agentErrors,
   })));
 
-  const item = items.find(i => i.id === itemId) || null;
+  const readOnly = !!external;
+  const item = external ? external.item : (items.find(i => i.id === itemId) || null);
+  const shownItems = external ? external.items : items;
+  const shownConnections = external ? external.connections : connections;
   const [activeDetailTab, setActiveDetailTab] = useState('overview');
   const [challengeOpen, setChallengeOpen] = useState(false);
 
@@ -66,10 +77,17 @@ export default function ContextItemDetail({ itemId, onSelect, onClose, onOpenFil
   const workspaceId = workspace?.id ?? workspace?.root ?? null;
   const recallEnabled = useRecallEnabled(workspaceId);
   const showRecall = recallEnabled === true && !!featureCode;
-  const visibleTabs = useMemo(
-    () => (showRecall ? DETAIL_TABS : DETAIL_TABS.filter(t => t.id !== 'recall')),
-    [showRecall],
-  );
+  const hasDoc = !!doc;
+  const visibleTabs = useMemo(() => {
+    const base = readOnly ? DETAIL_TABS.filter(t => t.id === 'overview')
+      : (showRecall ? DETAIL_TABS : DETAIL_TABS.filter(t => t.id !== 'recall'));
+    return hasDoc ? [base[0], DOC_TAB, ...base.slice(1)] : base;
+  }, [showRecall, readOnly, hasDoc]);
+  // A new doc request (each double-click) opens the Doc tab; a plain click carries no doc and so drops the tab.
+  const docRequest = doc?.requestedAt ?? null;
+  useEffect(() => {
+    if (docRequest != null) setActiveDetailTab('doc');
+  }, [docRequest]);
   // Active-tab reset rule: whenever the visible-tab set is computed and the
   // active tab is not in it, reset to overview — derived at render so a
   // hidden tab never renders its body for even one frame, and persisted into
@@ -93,7 +111,7 @@ export default function ContextItemDetail({ itemId, onSelect, onClose, onOpenFil
 
   return (
     <div className="h-full flex flex-col">
-      {focusCode && onFocusFeature && (
+      {!readOnly && focusCode && onFocusFeature && (
         <div className="flex items-center justify-end px-3 py-1 shrink-0" style={{ borderBottom: '1px solid hsl(var(--border))' }}>
           <button
             data-testid="focus-feature"
@@ -115,6 +133,18 @@ export default function ContextItemDetail({ itemId, onSelect, onClose, onOpenFil
       <div className="flex-1 min-h-0 overflow-auto">
         {effectiveTab === 'overview' && (
           <>
+            {readOnly ? (
+              <ItemDetailPanel
+                item={item}
+                items={shownItems}
+                connections={shownConnections}
+                gates={[]}
+                onSelect={onSelect}
+                onClose={onClose}
+                readOnly
+              />
+            ) : (
+            <>
             <ItemDetailPanel
               item={item}
               items={items}
@@ -143,7 +173,10 @@ export default function ContextItemDetail({ itemId, onSelect, onClose, onOpenFil
                 onClose={() => setChallengeOpen(false)}
               />
             )}
+            </>
+            )}
             {/* COMP-UX-1e: View in Graph / View in Tree navigation links */}
+            {!readOnly && (
             <div
               className="flex items-center gap-3 px-4 py-2 mt-1"
               style={{ borderTop: '1px solid hsl(var(--border))' }}
@@ -165,8 +198,10 @@ export default function ContextItemDetail({ itemId, onSelect, onClose, onOpenFil
                 </button>
               )}
             </div>
+            )}
           </>
         )}
+        {effectiveTab === 'doc' && <ContextDocTab doc={doc} />}
         {effectiveTab === 'pipeline' && (
           <ContextPipelineDots item={item} activeBuild={activeBuild} />
         )}

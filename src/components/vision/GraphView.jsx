@@ -13,6 +13,7 @@ import { separateLayout } from './graphSeparate.js';
 import { settleAfterLayout } from './graphAfterLayout.js';
 import { sortElements, withSeededRandom } from './graphStableLayout.js';
 import GroupFilter from './GroupFilter.jsx';
+import { markdownToPlain } from '../../lib/markdownPlain.js';
 
 try { cytoscape.use(cytoscapeDagre); } catch (e) { /* already registered */ }
 try { cytoscape.use(cytoscapeFcose); } catch (e) { /* already registered */ }
@@ -344,6 +345,8 @@ function Tooltip({ data }) {
   const typeColor = TYPE_COLORS[item.itemType] || '#94a3b8';
   const left = x + 300 > window.innerWidth ? x - 294 : x + 14;
   const top = Math.min(y - 10, window.innerHeight - 200);
+  // COMP-PROJECT-GRAPH-DOC-PANEL-1 r2: descriptions are markdown; the card shows them as plain text, never raw `##` or links.
+  const desc = markdownToPlain(item.description);
 
   return (
     <div style={{
@@ -359,9 +362,9 @@ function Tooltip({ data }) {
         <Badge color={typeColor}>{item.itemType}</Badge>
         {item.phase && <Badge color="#94a3b8">{PHASE_LABELS[item.phase] || item.phase}</Badge>}
       </div>
-      {item.description && (
-        <div style={{ marginTop: 8, color: '#94a3b8', fontSize: 11, lineHeight: 1.4 }}>
-          {item.description.length > 140 ? item.description.slice(0, 140) + '\u2026' : item.description}
+      {desc && (
+        <div style={{ marginTop: 8, color: '#94a3b8', fontSize: 11, lineHeight: 1.4 }} data-testid="graph-tooltip-desc">
+          {desc.length > 140 ? desc.slice(0, 140) + '\u2026' : desc}
         </div>
       )}
       <div style={{ marginTop: 6, color: '#64748b', fontSize: 10 }}>

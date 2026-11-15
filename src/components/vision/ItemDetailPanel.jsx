@@ -19,6 +19,14 @@ import { useVisionStore } from './useVisionStore.js';
 import { wsFetch } from '../../lib/wsFetch.js';
 import { notify } from '../cockpit/NotificationBar.jsx';
 import { useConfirm } from '@/components/ui/DialogProvider.jsx';
+import MarkdownViewer from './shared/MarkdownViewer.jsx';
+
+// COMP-PROJECT-GRAPH-DOC-PANEL-1 r2: a description is markdown. Its links are relative to the item's own repo, so they
+// show as styled text with the target on hover instead of navigating the cockpit to a path it cannot serve.
+const DESC_MD = { a: ({ href, children }) => <span className="text-accent" title={href}>{children}</span> };
+export function DescriptionMarkdown({ text }) {
+  return <MarkdownViewer content={text} className="prose prose-invert prose-xs max-w-none text-xs text-muted-foreground [&_h1]:text-xs [&_h2]:text-xs [&_h3]:text-xs [&_h1]:my-1 [&_h2]:my-1 [&_h3]:my-1 [&_p]:my-1 [&_ul]:my-1" components={DESC_MD} />;
+}
 
 function ConfidenceControl({ level, onChange }) {
   const colors = ['hsl(var(--muted-foreground))', 'hsl(var(--destructive))', 'hsl(var(--accent))', 'hsl(var(--success))', 'hsl(var(--success))'];
@@ -386,7 +394,12 @@ function GateBannerActions({ gate, onResolveGate }) {
   );
 }
 
-export default function ItemDetailPanel({ item, items, connections, gates, onUpdate, onDelete, onCreateConnection, onDeleteConnection, onSelect, onClose, onPressureTest, onResolveGate, onOpenFile }) {
+/**
+ * readOnly (COMP-PROJECT-GRAPH-DOC-PANEL-1 r2): an item from a project graph that is not in the bound workspace's store.
+ * Nothing can be edited, connected, started, killed or deleted, and nothing is read from the bound workspace by the
+ * item's feature code (drift, branch compare, evidence, completion, sessions would describe another repo's feature).
+ */
+export default function ItemDetailPanel({ item, items, connections, gates, onUpdate, onDelete, onCreateConnection, onDeleteConnection, onSelect, onClose, onPressureTest, onResolveGate, onOpenFile, readOnly = false }) {
   const confirm = useConfirm(); // COMP-COCKPIT-1
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
@@ -478,8 +491,9 @@ export default function ItemDetailPanel({ item, items, connections, gates, onUpd
           ) : (
             <h3
               className="text-sm font-semibold text-foreground cursor-pointer hover:text-accent transition-colors"
-              onDoubleClick={startEditTitle}
-              title="Double-click to edit"
+              onDoubleClick={readOnly ? undefined : startEditTitle}
+              title={readOnly ? undefined : 'Double-click to edit'}
+              data-testid="item-detail-title"
             >
               {item.title}
             </h3>
@@ -496,13 +510,29 @@ export default function ItemDetailPanel({ item, items, connections, gates, onUpd
       <ScrollArea className="flex-1">
         <div className="p-3 space-y-4">
           {/* COMP-OBS-DRIFT: per-feature drift alert ribbon (region ⑥) — FIRST child */}
-          <DriftRibbon item={item} />
+          {!readOnly && <DriftRibbon item={item} />}
 
           {/* COMP-OBS-BRANCH: per-feature branch compare panel (region ⑤) */}
-          {item.lifecycle?.featureCode && (
+          {!readOnly && item.lifecycle?.featureCode && (
             <BranchComparePanelMount featureCode={item.lifecycle.featureCode} lineage={item.lifecycle.lifecycle_ext?.branch_lineage} />
           )}
 
+          {readOnly ? (
+            <div className="flex items-end gap-3 flex-wrap" data-testid="item-detail-readonly">
+              <div>
+                <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1">Status</p>
+                <p className="text-xs text-foreground" data-testid="item-detail-status">{item.status || 'planned'}</p>
+              </div>
+              {item.module && (
+                <div>
+                  <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1">Module</p>
+                  <p className="text-xs text-foreground">{item.module}</p>
+                </div>
+              )}
+              <p className="text-[10px] text-muted-foreground">Read-only: this item lives in another workspace</p>
+            </div>
+          ) : (
+          <>
           {/* Status + Confidence row (COMP-AUDIT-18: labelled so the three models read apart) */}
           <div className="flex items-end gap-3 flex-wrap">
             <div>
@@ -538,11 +568,15 @@ export default function ItemDetailPanel({ item, items, connections, gates, onUpd
 
           {/* PARITY-5: recorded-completion vs status divergence badge */}
           <CompletionBadge featureCode={item.lifecycle?.featureCode} status={item.status} />
+          </>
+          )}
 
           {/* Phase: read-only when `compose build` owns it (lifecycle.currentPhase), else the legacy selector */}
           <div>
             <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1">Phase</p>
-            {item.lifecycle?.currentPhase ? (
+            {readOnly && !item.lifecycle?.currentPhase ? (
+              <p className="text-xs text-foreground">{item.phase ? (PHASE_LABELS[item.phase] || item.phase) : 'No phase'}</p>
+            ) : item.lifecycle?.currentPhase ? (
               <p className="text-xs text-foreground" data-testid="phase-readonly">
                 {LIFECYCLE_PHASE_LABELS[item.lifecycle.currentPhase] ?? item.lifecycle.currentPhase}
                 <span className="ml-2 text-[10px] text-muted-foreground">set by compose build</span>
@@ -564,6 +598,7 @@ export default function ItemDetailPanel({ item, items, connections, gates, onUpd
           {/* Group — free-text, persists to feature.json on save */}
           <div>
             <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1">Group</p>
+            {readOnly ? <p className="text-xs text-foreground">{item.group || '(none)'}</p> : (
             <input
               type="text"
               className="w-full text-xs bg-muted text-foreground px-2 py-1 rounded-md border border-border outline-none focus:border-ring"
@@ -580,6 +615,7 @@ export default function ItemDetailPanel({ item, items, connections, gates, onUpd
               }}
               data-testid="item-detail-group-input"
             />
+            )}
           </div>
 
           {/* Description */}
@@ -598,15 +634,19 @@ export default function ItemDetailPanel({ item, items, connections, gates, onUpd
                 autoFocus
               />
             ) : (
-              <p
+              <div
                 className={cn(
-                  'text-xs leading-relaxed cursor-pointer rounded px-2 py-1.5 hover:bg-muted/50 transition-colors',
+                  'text-xs leading-relaxed rounded px-2 py-1.5 transition-colors',
+                  !readOnly && 'cursor-pointer hover:bg-muted/50',
                   item.description ? 'text-muted-foreground' : 'text-muted-foreground/50 italic'
                 )}
-                onClick={startEditDesc}
+                onClick={readOnly ? undefined : startEditDesc}
+                data-testid="item-detail-description"
               >
-                {item.description || 'Click to add description...'}
-              </p>
+                {item.description
+                  ? <DescriptionMarkdown text={item.description} />
+                  : (readOnly ? 'No description' : 'Click to add description...')}
+              </div>
             )}
           </div>
 
@@ -631,7 +671,7 @@ export default function ItemDetailPanel({ item, items, connections, gates, onUpd
           />
 
           {/* Session history for lifecycle-bound items */}
-          {item.lifecycle?.featureCode && (
+          {!readOnly && item.lifecycle?.featureCode && (
             <SessionHistory featureCode={item.lifecycle.featureCode} />
           )}
 
@@ -800,8 +840,9 @@ export default function ItemDetailPanel({ item, items, connections, gates, onUpd
             </p>
           </div>
 
-          {/* Actions */}
-          <div className="flex items-center gap-1.5 flex-wrap">
+          {/* Actions (none on a read-only item) */}
+          {!readOnly && (
+          <div className="flex items-center gap-1.5 flex-wrap" data-testid="item-detail-actions">
             {!item.lifecycle && item.status !== 'killed' && item.type !== 'question' && (
               <div className="relative">
                 <Button
@@ -905,6 +946,7 @@ export default function ItemDetailPanel({ item, items, connections, gates, onUpd
               </Button>
             )}
           </div>
+          )}
         </div>
       </ScrollArea>
     </div>

@@ -10,7 +10,7 @@
  *   errorCount  {number}  badge count for the errors tab (0 = hidden)
  */
 import React from 'react';
-import { FileText, GitBranch, Clock, AlertTriangle, Folder, Brain } from 'lucide-react';
+import { FileText, GitBranch, Clock, AlertTriangle, Folder, Brain, BookOpen } from 'lucide-react';
 import { DETAIL_TABS } from './contextPanelState.js';
 
 const ICONS = {
@@ -20,6 +20,7 @@ const ICONS = {
   errors: AlertTriangle,
   files: Folder,
   recall: Brain,
+  doc: BookOpen, // COMP-PROJECT-GRAPH-DOC-PANEL-1 r2: a project graph item's design doc
 };
 
 export default function DetailTabs({ activeTab = 'overview', onTabChange, errorCount = 0, tabs = DETAIL_TABS }) {

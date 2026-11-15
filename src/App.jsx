@@ -25,6 +25,7 @@ import { useIdeaboxStore } from './components/vision/useIdeaboxStore.js';
 import AgentBar from './components/cockpit/AgentBar.jsx';
 import ContextPanel from './components/cockpit/ContextPanel.jsx';
 import ContextItemDetail from './components/cockpit/ContextItemDetail.jsx';
+import { projectItemSelection } from './lib/projectItemSelection.js';
 import ContextStepDetail from './components/cockpit/ContextStepDetail.jsx';
 import DesignDocPanel from './components/cockpit/DesignDocPanel.jsx';
 import NotificationBar, { notify } from './components/cockpit/NotificationBar.jsx';
@@ -289,7 +290,7 @@ function CockpitView({
   // COMP-AUDIT-17: view keys reachable by clicks (Settings default-view picker)
   reachableViewKeys,
   // COMP-COCKPIT-PROJECT-MODEL-1: the open project graph ({project, lane} | null) and the project model
-  projectFocus, projectModel,
+  projectFocus, projectModel, onProjectItemSelect,
   // COMP-SUBAPP-HOST-1: the host object for the mounted sub-apps (subappHost.js)
   subappHost,
 }) {
@@ -345,7 +346,7 @@ function CockpitView({
         />
       );
     case 'graph':
-      if (projectFocus?.project) return <ProjectGraphView project={projectFocus.project} lane={projectFocus.lane} model={projectModel} />;
+      if (projectFocus?.project) return <ProjectGraphView project={projectFocus.project} lane={projectFocus.lane} model={projectModel} onSelectItem={onProjectItemSelect} />;
       return (
         <GraphView
           items={items}
@@ -1391,6 +1392,20 @@ function AppInner() {
     navigateToWiki(primaryDocPath(item));
   }, [items, onContextSelect, navigateToWiki]);
 
+  // COMP-PROJECT-GRAPH-DOC-PANEL-1 r2: a project graph click fills this app's right panel. An item in the bound
+  // workspace's store takes the List view's path (handleSelect's selection, set outright); any other item shows
+  // read-only from the graph's own data. A double-click carries the doc, which the panel shows in its Doc tab.
+  const handleProjectItemSelect = useCallback((pick) => {
+    const sel = projectItemSelection(pick, items, composeWorkspace?.root ?? null);
+    if (sel.storeId) setSelectedItemId(sel.storeId);
+    onContextSelect(sel);
+  }, [items, composeWorkspace?.root, onContextSelect]);
+
+  // A read-only project item stays in the panel only while its project graph is showing.
+  useEffect(() => {
+    if (contextSelection?.external && !(activeView === 'graph' && projectFocus?.project)) setContextSelection(null);
+  }, [activeView, projectFocus?.project, contextSelection?.external]);
+
   // ── Render ──────────────────────────────────────────────────────────────
   return (
     <NavigationContext.Provider value={navigationValue}>
@@ -1648,6 +1663,7 @@ function AppInner() {
                       reachableViewKeys={reachableViews(VIEW_KEYS, availability)}
                       projectFocus={projectFocus}
                       projectModel={projectModel}
+                      onProjectItemSelect={handleProjectItemSelect}
                       subappHost={subappHost}
                     />
                     )}
@@ -1666,7 +1682,15 @@ function AppInner() {
                   {contextSelection?.type === 'item' && (
                     <ContextItemDetail
                       itemId={contextSelection.id}
-                      onSelect={(id) => { setContextSelection({ type: 'item', id }); setSelectedItemId(id); }}
+                      external={contextSelection.external ?? null}
+                      doc={contextSelection.doc ?? null}
+                      onSelect={(id) => {
+                        // A related item of a read-only project item is another project graph item.
+                        const ext = contextSelection.external;
+                        const related = ext?.items?.find((i) => i.id === id);
+                        if (related) { handleProjectItemSelect({ item: related, items: ext.items, connections: ext.connections }); return; }
+                        setContextSelection({ type: 'item', id }); setSelectedItemId(id);
+                      }}
                       onClose={() => { setContextSelection(null); setSelectedItemId(null); }}
                       onOpenFile={navigateToWiki}
                       onViewInGraph={handleViewInGraph}

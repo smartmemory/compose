@@ -5,12 +5,12 @@
  * the `{items, connections}` to GraphView with `readOnly` (no layout save, no group change, no Save HTML). A lane with
  * a module focuses that module: only its items show, and "Whole project" clears the focus. A module with no store
  * shows one plain line instead of nodes, never another store's items. A double-click opens the item's doc from its
- * owning module (GET /api/projects/:name/doc) in the right pane, rendered as markdown (MarkdownViewer, the renderer the Library and gates use). A single click fills the pane
- * with the item's header; ItemDetailPanel is store-bound and editable, so it is not reused here (read-only view).
+ * owning module (GET /api/projects/:name/doc). COMP-PROJECT-GRAPH-DOC-PANEL-1 r2: there is no pane of its own. A click
+ * hands the item to the app's right panel through `onSelectItem({item, items, connections, doc})` (App turns it into the
+ * List view's selection, or a read-only one for an item outside the bound workspace); a double-click hands the doc too.
  */
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import GraphView from './GraphView.jsx';
-import MarkdownViewer from './shared/MarkdownViewer.jsx';
 import { OPS_PREFIX, closeProjectGraph, fetchProjectDoc, fetchProjectGraph, openProjectGraph } from '../../lib/fleetProjects.js';
 
 const MUTED = { color: 'hsl(var(--muted-foreground))' };
@@ -24,11 +24,12 @@ export function focusGraph(graph, modules) {
   return { items, connections: graph.connections.filter((c) => ids.has(c.fromId) && ids.has(c.toId)) };
 }
 
-export default function ProjectGraphView({ project, lane = null, model = null }) {
+export default function ProjectGraphView({ project, lane = null, model = null, onSelectItem = null }) {
   const [graph, setGraph] = useState(null);
   const [error, setError] = useState(null);
   const [selected, setSelected] = useState(null);
-  const [doc, setDoc] = useState(null);
+  // The latest doc request: a reply for an item the user has since left is dropped.
+  const docFor = useRef(null);
 
   useEffect(() => {
     let live = true;
@@ -55,15 +56,22 @@ export default function ProjectGraphView({ project, lane = null, model = null })
   const emptyModule = focusModules.length > 0 && shown.items.length === 0
     ? (info?.modules ?? []).find((m) => focusModules.includes(m.name) && !m.hasStore) : null;
 
-  const select = (id) => { setSelected(id); setDoc((d) => (d?.id === id ? d : null)); };
+  const hand = (id, doc) => {
+    const it = graph?.items?.find((i) => i.id === id);
+    if (it && onSelectItem) onSelectItem({ item: it, items: graph.items, connections: graph.connections, doc });
+  };
+  // Clicks before a double-click arrive too: a click never toggles, it just selects (and drops any open doc request).
+  const select = (id) => { setSelected(id); docFor.current = null; hand(id, null); };
   const openDoc = (id) => {
     setSelected(id);
-    setDoc({ id, loading: true });
+    const requestedAt = Date.now();
+    docFor.current = requestedAt;
+    hand(id, { loading: true, requestedAt });
+    const settle = (d) => { if (docFor.current === requestedAt) hand(id, { ...d, requestedAt }); };
     fetchProjectDoc(project, id)
-      .then((d) => setDoc({ ...d, id }))
-      .catch((e) => setDoc({ id, error: String(e?.message ?? e) }));
+      .then((d) => settle({ text: d?.text ?? '', path: d?.path ?? null }))
+      .catch((e) => settle({ error: String(e?.message ?? e) }));
   };
-  const selectedItem = selected ? graph?.items?.find((i) => i.id === selected) ?? null : null;
 
   return (
     <div className="flex h-full min-h-0 flex-col" data-testid="project-graph">
@@ -96,37 +104,6 @@ export default function ProjectGraphView({ project, lane = null, model = null })
             <GraphView items={shown.items} connections={shown.connections} selectedItemId={selected} onSelect={select}
               onOpenDoc={openDoc} readOnly />
           </div>
-          {selectedItem ? (
-            <aside className="flex w-[min(420px,45%)] flex-col border-l" style={{ borderColor: 'hsl(var(--border))' }} data-testid="project-graph-doc">
-              <div className="flex items-center gap-2 border-b px-3 py-1.5 text-[11px]" style={{ borderColor: 'hsl(var(--border))' }}>
-                <span className="font-medium">{selectedItem.module ?? ''}</span>
-                <span className="truncate" style={MUTED} title={doc?.path ?? selectedItem.id}>{doc?.path ?? selectedItem.id}</span>
-                <button type="button" className="ml-auto underline" style={MUTED} data-testid="project-graph-doc-close"
-                  onClick={() => { setDoc(null); setSelected(null); }}>Close</button>
-              </div>
-              <div className="flex-1 overflow-auto p-3 text-sm" data-testid="project-graph-doc-body">
-                <h3 className="text-sm font-semibold" data-testid="project-graph-doc-title">{selectedItem.title}</h3>
-                <p className="mb-2 text-[11px]" style={MUTED}>{[selectedItem.type, selectedItem.status, selectedItem.featureCode].filter(Boolean).join(' · ')}</p>
-                {!doc ? (
-                  <>
-                    {selectedItem.description ? <p className="text-xs whitespace-pre-wrap">{selectedItem.description}</p> : null}
-                    <p className="mt-2 text-[11px]" style={MUTED} data-testid="project-graph-doc-hint">Double-click the item to open its design doc.</p>
-                  </>
-                ) : null}
-                {doc?.loading ? <p className="text-xs" style={MUTED} data-testid="project-graph-doc-loading">Loading the doc…</p> : null}
-                {doc?.error ? (
-                  <p className="text-xs" style={{ color: 'hsl(var(--warning))' }} data-testid="project-graph-doc-error">
-                    {/no (design )?doc|^no item/i.test(doc.error) ? `No design doc for this item: ${doc.error}` : `Could not load the doc: ${doc.error}`}
-                  </p>
-                ) : null}
-                {doc && !doc.loading && !doc.error ? (
-                  doc.text?.trim()
-                    ? <div data-testid="project-graph-doc-text"><MarkdownViewer content={doc.text} /></div>
-                    : <p className="text-xs" style={MUTED} data-testid="project-graph-doc-error">No design doc for this item: the file is empty.</p>
-                ) : null}
-              </div>
-            </aside>
-          ) : null}
         </div>
       ) : null}
     </div>
