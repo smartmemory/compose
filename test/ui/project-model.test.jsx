@@ -11,7 +11,14 @@ import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 vi.mock('../../src/components/vision/GraphView.jsx', () => ({
-  default: ({ items, readOnly }) => <div data-testid="graph-stub" data-readonly={String(readOnly)}>{items.map((i) => i.id).join(',')}</div>,
+  default: ({ items, readOnly, onSelect, onOpenDoc }) => (
+    <>
+      <div data-testid="graph-stub" data-readonly={String(readOnly)}>{items.map((i) => i.id).join(',')}</div>
+      {items.map((i) => (
+        <button key={i.id} type="button" data-testid={`tap-${i.id}`} onClick={() => onSelect(i.id)} onDoubleClick={() => onOpenDoc(i.id)} />
+      ))}
+    </>
+  ),
 }));
 
 const { ProjectTree } = await import('../../src/components/vision/ProjectsHome.jsx');
@@ -118,6 +125,36 @@ const ROWS = [
     render(<ProjectGraphView project="forge" lane="choir" model={MODEL} />);
     expect((await screen.findByTestId('project-graph-no-store')).textContent).toBe('choir has no Compose store');
     expect(screen.queryByTestId('graph-stub')).toBeNull();
+  }],
+  ['single click fills the right pane with the item header; double-click renders the doc as formatted markdown', async () => {
+    const md = '# Design\n\n- one\n- two\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\n```js\nconst x = 1;\n```\n';
+    stubFetch({ '/api/projects/forge/doc?id=compose%3Ac1': { id: 'compose:c1', module: 'compose', path: '/r/d.md', text: md } });
+    render(<ProjectGraphView project="forge" model={MODEL} />);
+    await screen.findByTestId('graph-stub');
+    fireEvent.click(screen.getByTestId('tap-compose:c1'));
+    expect(screen.getByTestId('project-graph-doc-title').textContent).toBe('compose:c1');
+    expect(screen.queryByTestId('project-graph-doc-text')).toBeNull();
+    fireEvent.doubleClick(screen.getByTestId('tap-compose:c1'));
+    const body = await screen.findByTestId('project-graph-doc-text');
+    expect(body.querySelector('h1').textContent).toBe('Design');
+    expect(body.querySelectorAll('li').length).toBe(2);
+    expect(body.querySelector('table')).not.toBeNull();
+    expect(body.querySelector('pre code').textContent).toContain('const x = 1;');
+    expect(body.textContent).not.toContain('# Design');
+  }],
+  ['an item with no doc says so in words; a failed fetch says so; neither is an empty pane', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (url) => {
+      const u = String(url);
+      if (u.includes('/doc?id=forge%3Ar1')) return { ok: false, status: 404, json: async () => ({ error: 'forge: no doc on disk for X' }) };
+      if (u.includes('/doc?id=')) throw new Error('network down');
+      return { ok: true, status: 200, json: async () => (u === '/api/projects' ? MODEL : GRAPH) };
+    }));
+    render(<ProjectGraphView project="forge" model={MODEL} />);
+    await screen.findByTestId('graph-stub');
+    fireEvent.doubleClick(screen.getByTestId('tap-forge:r1'));
+    expect((await screen.findByTestId('project-graph-doc-error')).textContent).toBe('No design doc for this item: forge: no doc on disk for X');
+    fireEvent.doubleClick(screen.getByTestId('tap-compose:c1'));
+    await waitFor(() => expect(screen.getByTestId('project-graph-doc-error').textContent).toBe('Could not load the doc: network down'));
   }],
   ['focusGraph keeps only edges between focused items; no focus is the whole graph', async () => {
     expect(focusGraph(GRAPH, ['forge', 'compose']).connections).toEqual([GRAPH.connections[0]]);
