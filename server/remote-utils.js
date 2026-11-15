@@ -105,6 +105,8 @@ export function attachAgentProxy(app, { agentPort }) {
       const upstream = http.request(options, (upstreamRes) => {
         // Copy status + headers verbatim (including SSE headers)
         res.writeHead(upstreamRes.statusCode, upstreamRes.headers);
+        // An idle SSE upstream sends headers and no bytes: without this the client never sees the response and stays "connecting".
+        res.flushHeaders();
         upstreamRes.pipe(res, { end: true });
       });
 
