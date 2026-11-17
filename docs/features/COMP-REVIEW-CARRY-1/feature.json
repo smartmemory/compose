@@ -1,0 +1,10 @@
+{
+  "code": "COMP-REVIEW-CARRY-1",
+  "description": "**C4, ROADMAP.** The review prompt carries prior-round findings and their dispositions, and a blocked verification run says how it resumes. 0 attributable incidents. TRIGGER: the next revision of the review-fix/history interface, or a lost-finding incident. Round policy unchanged; no automatic escape after two blocks; no unreviewed continuation through a security stop. Extends lib/review-prompt.js, server/vision-routes.js abort reason. Source: smart-memory-ops units/OPS-VERIFY-CONFORM-1/report-significance.md",
+  "status": "PARKED",
+  "phase": "COMP-VERIFY: Verification that proves the outcome (OPS-VERIFY-CONFORM-1 ruling, owner \"agree all\" 2026-11-17)",
+  "created": "2026-11-17",
+  "updated": "2026-11-17",
+  "complexity": "S",
+  "position": 7
+}

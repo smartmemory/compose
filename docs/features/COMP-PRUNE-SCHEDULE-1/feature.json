@@ -1,0 +1,10 @@
+{
+  "code": "COMP-PRUNE-SCHEDULE-1",
+  "description": "**C10.** Schedule automatic cleanup of every consumer project's tests, instructions and Markdown. Source: smart-memory-ops units/OPS-VERIFY-CONFORM-1/report-significance.md **KILLED (2026-11-17):** C10 REJECTED 2026-11-17 (owner \"agree all\"): a universal scheduled cleanup of every project's tests, rules and Markdown has 0 Compose incidents behind it and the one harmful-cut incident argues for consumer proof, not more automatic deletion; the human-chosen cut list (lib/context-budget.js) and lesson retirement suggestions stay.",
+  "status": "KILLED",
+  "phase": "COMP-VERIFY: Verification that proves the outcome (OPS-VERIFY-CONFORM-1 ruling, owner \"agree all\" 2026-11-17)",
+  "created": "2026-11-17",
+  "updated": "2026-11-17",
+  "complexity": "L",
+  "position": 8
+}

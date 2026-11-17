@@ -1,0 +1,10 @@
+{
+  "code": "COMP-EVIDENCE-OBSERVE-1",
+  "description": "**C6, ROADMAP.** Evidence refusals carry their reason and a new consumer can observe them before they block (per-consumer observe/enforce), and a receipt can record what was verified and any approved process exception. Own-use: true bridge-deploy claims refused because the sha receipt required the default branch, one class seen on 4 deploys (I12). TRIGGER: the next evidence-contract release, or the first consumer needing deploy-branch receipts. Fix receipt semantics before enforcement; no per-commit stamp, no automatic bypass of security checks. Extends lib/evidence.js, lib/evidence-cli.js, contracts/evidence.schema.json. Source: smart-memory-ops units/OPS-VERIFY-CONFORM-1/report-significance.md",
+  "status": "PARKED",
+  "phase": "COMP-VERIFY: Verification that proves the outcome (OPS-VERIFY-CONFORM-1 ruling, owner \"agree all\" 2026-11-17)",
+  "created": "2026-11-17",
+  "updated": "2026-11-17",
+  "complexity": "M",
+  "position": 3
+}

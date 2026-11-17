@@ -1,0 +1,10 @@
+{
+  "code": "COMP-VERIFY-DIFF-1",
+  "description": "**C2, ROADMAP.** Optional old-versus-new behaviour comparison: project-supplied baseline and candidate commands, comparator, normalization and approved expected differences, run through the completion-gate command path. 0 direct Compose incidents (SmartMemory demand only). TRIGGER: a migration or backend-comparison consumer supplies a real scenario and a deterministic oracle. Start with that one adapter; no production sampling, no global corpus service, no mandatory property-test lane. Extends lib/completion-gate.js, lib/evidence.js. Source: smart-memory-ops units/OPS-VERIFY-CONFORM-1/report-significance.md",
+  "status": "PARKED",
+  "phase": "COMP-VERIFY: Verification that proves the outcome (OPS-VERIFY-CONFORM-1 ruling, owner \"agree all\" 2026-11-17)",
+  "created": "2026-11-17",
+  "updated": "2026-11-17",
+  "complexity": "M",
+  "position": 6
+}

@@ -1,0 +1,10 @@
+{
+  "code": "COMP-LESSON-ADMIT-1",
+  "description": "**C8.** Universal incident checklist and lesson-admission system (PR/comment/revert ingestion, diff predicates, multi-agent admission votes). Source: smart-memory-ops units/OPS-VERIFY-CONFORM-1/report-significance.md **KILLED (2026-11-17):** C8 REJECTED 2026-11-17 (owner \"agree all\"): a diff-triggered lesson system with fixed PR, vote and critic admission rituals has 0 attributable incidents; lib/qa-scoping.js and Stratum learn (recurrence, candidate staging, reasoned retirement) already cover it and get extended only on a demonstrated consumer miss.",
+  "status": "KILLED",
+  "phase": "COMP-VERIFY: Verification that proves the outcome (OPS-VERIFY-CONFORM-1 ruling, owner \"agree all\" 2026-11-17)",
+  "created": "2026-11-17",
+  "updated": "2026-11-17",
+  "complexity": "L",
+  "position": 9
+}

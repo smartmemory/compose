@@ -1,0 +1,10 @@
+{
+  "code": "COMP-REVIEWER-EVAL-1",
+  "description": "**C7.** Reviewer-quality evaluation product: labeled incidents, matched clean changes, replay snapshots, held-out tuning/test sets, recall before/after confidence filtering. Source: smart-memory-ops units/OPS-VERIFY-CONFORM-1/report-significance.md **KILLED (2026-11-17):** C7 REJECTED for now 2026-11-17 (owner \"agree all\"): a reviewer benchmark and grading service (labels, answer-key replay, held-out sets) has 0 reviewer-quality incidents and is large ongoing work at one owner plus agents; reconsider only on a measured reviewer miss or filter loss, or a paying consumer need.",
+  "status": "KILLED",
+  "phase": "COMP-VERIFY: Verification that proves the outcome (OPS-VERIFY-CONFORM-1 ruling, owner \"agree all\" 2026-11-17)",
+  "created": "2026-11-17",
+  "updated": "2026-11-17",
+  "complexity": "L",
+  "position": 10
+}

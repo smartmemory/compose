@@ -1,0 +1,10 @@
+{
+  "code": "COMP-FLAKE-DISPOSITION-1",
+  "description": "**C9, ROADMAP.** An unreliable check gets a diagnosis and a disposition (original failure, cause, change, retain/delete reason), not another attempt; reruns use the failing ids, not an unqualified whole-suite retry. Own-use: leak-gate false blame (I13), push suite 2/1139 red under load then green alone (I14). TRIGGER: the next reproduced repeated test failure in dogfood use, or the next bug-fix pipeline revision. Never delete a valuable security check to finish; never label an unresolved product fault a flake. Extends pipelines/bug-fix.stratum.yaml and run history. Source: smart-memory-ops units/OPS-VERIFY-CONFORM-1/report-significance.md",
+  "status": "PARKED",
+  "phase": "COMP-VERIFY: Verification that proves the outcome (OPS-VERIFY-CONFORM-1 ruling, owner \"agree all\" 2026-11-17)",
+  "created": "2026-11-17",
+  "updated": "2026-11-17",
+  "complexity": "S",
+  "position": 4
+}

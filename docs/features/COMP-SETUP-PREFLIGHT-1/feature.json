@@ -1,0 +1,10 @@
+{
+  "code": "COMP-SETUP-PREFLIGHT-1",
+  "description": "**C3, BUILD NOW.** Cheap setup failures are found before expensive verification and review: before a full test gate or a review stage, Compose checks the prerequisites that run truly depends on (engine artifact present and stable for the run, no other live verification run on the same repo, project-declared cheap checks) and reports a visible SETUP-FAIL instead of a product red; expensive stages actually wait for cheaper tiers. Own-use incidents: full gate red because the Stratum engine artifact was rebuilt mid-gate (I19), landing blocked after 2 full runs by a leak gate blaming a concurrent test's worktree (I13). Extends lib/build.js, lib/gate-tiers.js and the existing preflight/startup checks (lib/codex-preflight.js pattern, lib/hooks-status.js). Out: a new daemon, a rewrite of the COMP-GOLDEN-LEAK-RACE-1 repair, any default-on new gate. Notes, plan and build brief in docs/features/COMP-SETUP-PREFLIGHT-1/. Source: smart-memory-ops units/OPS-VERIFY-CONFORM-1/report-significance.md",
+  "status": "PLANNED",
+  "phase": "COMP-VERIFY: Verification that proves the outcome (OPS-VERIFY-CONFORM-1 ruling, owner \"agree all\" 2026-11-17)",
+  "created": "2026-11-17",
+  "updated": "2026-11-17",
+  "complexity": "M",
+  "position": 2
+}

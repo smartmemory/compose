@@ -1,0 +1,10 @@
+{
+  "code": "COMP-REVIEW-PROVENANCE-1",
+  "description": "**C5, ROADMAP.** A review result names the commit and diff it reviewed, where its criteria came from, why each finding matters, and whether a finding is new or pre-existing. 0 direct Compose incidents (ops I09/I10 are adjacent motivation only). TRIGGER: the next review-result contract revision, or a consumer asking to enforce candidate-bound review. Start with provenance and explanations; protected base criteria only on a demonstrated need; no new default custody gate. Extends lib/review-prompt.js, contracts/review-result.json. Source: smart-memory-ops units/OPS-VERIFY-CONFORM-1/report-significance.md",
+  "status": "PARKED",
+  "phase": "COMP-VERIFY: Verification that proves the outcome (OPS-VERIFY-CONFORM-1 ruling, owner \"agree all\" 2026-11-17)",
+  "created": "2026-11-17",
+  "updated": "2026-11-17",
+  "complexity": "M",
+  "position": 5
+}

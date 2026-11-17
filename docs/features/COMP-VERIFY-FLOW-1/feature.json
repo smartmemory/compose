@@ -1,0 +1,10 @@
+{
+  "code": "COMP-VERIFY-FLOW-1",
+  "description": "**C1, BUILD NOW.** A project can prove a user flow before a feature is called done: an opt-in, project-declared flow command (start, drive, inspect, clean up) with frozen expected outcomes, run by Compose and bound to the completion as evidence, so \"tests pass\" is no longer the only proof. Own-use incidents: pipeline edit lost all 62 dependency edges on save/reload (I17), builder Save missed a blur-committed edit (I18). Extends lib/completion-gate.js, lib/evidence.js and the compose skill. Out: a universal browser agent, a new daemon, any default-on gate. Real-use notes, plan and build brief in docs/features/COMP-VERIFY-FLOW-1/. Source: smart-memory-ops units/OPS-VERIFY-CONFORM-1/report-significance.md",
+  "status": "PLANNED",
+  "phase": "COMP-VERIFY: Verification that proves the outcome (OPS-VERIFY-CONFORM-1 ruling, owner \"agree all\" 2026-11-17)",
+  "created": "2026-11-17",
+  "updated": "2026-11-17",
+  "complexity": "M",
+  "position": 1
+}
