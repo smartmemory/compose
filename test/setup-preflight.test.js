@@ -167,6 +167,33 @@ const ROWS = [
     assert.deepEqual(got.setupInvalid.sort(), ['test/a.test.js', 'test/b.test.js']);
     assert.deepEqual(got.other, ['test/c.test.js']);
   }],
+  ['spec attribution (fix round 1, case 1b replay): the DEFAULT node --test reporter is read too', () => {
+    // Node 26 (the node the installed pre-push hook pins here) prints the spec reporter even
+    // into a log file. The case 1b replay through a real `git push` got SETUP-INVALID with
+    // no file named, because only TAP was parsed. Forced here so any node version tests it.
+    const { dir, cli } = project();
+    mkdirSync(join(dir, 'test'));
+    writeFileSync(join(dir, 'test', 'a.test.js'), `import {test} from 'node:test'; test('a', () => { throw new Error('Cannot find module ${cli}'); });`);
+    writeFileSync(join(dir, 'test', 'b.test.js'), `import {test} from 'node:test'; import fs from 'node:fs'; test('b', () => { fs.readFileSync(${JSON.stringify(cli + '.gone')}); });`);
+    writeFileSync(join(dir, 'test', 'c.test.js'), "import {test} from 'node:test'; import assert from 'node:assert'; test('c', () => assert.equal(1, 2));");
+    const r = spawnSync(process.execPath, ['--test', '--test-reporter=spec', '--test-concurrency=3', 'test/a.test.js', 'test/b.test.js', 'test/c.test.js'],
+      { cwd: dir, encoding: 'utf8', env: Object.fromEntries(Object.entries(process.env).filter(([k]) => k !== 'NODE_TEST_CONTEXT')) });
+    assert.match(r.stdout, /failing tests:/, 'spec output carries a failing-tests summary');
+    const fp = runPreflight({ cwd: dir, mode: 'gate', env: NO_SKIP }).fingerprint;
+    const got = classifyTapFailures(r.stdout, engineMarkers(fp), dir);
+    assert.deepEqual(got.setupInvalid.sort(), ['test/a.test.js', 'test/b.test.js']);
+    assert.deepEqual(got.other, ['test/c.test.js']);
+  }],
+  ['engine drift with a red the log does not name: WARNING, never a silent empty split', async () => {
+    const { dir, cli } = project();
+    const log = join(dir, 'run.log');
+    const script = `const fs=require('fs');const b=fs.readFileSync(${JSON.stringify(cli)});fs.unlinkSync(${JSON.stringify(cli)});fs.writeFileSync(${JSON.stringify(cli)},b);`
+      + `console.log("some unknown reporter output");process.exit(1);`;
+    const { code, out } = await gate(dir, [process.execPath, '-e', script], { logPath: log });
+    assert.equal(code, 1, out);
+    assert.match(out, /SETUP-INVALID stratum-engine changed during the run/);
+    assert.match(out, /WARNING: no failing test file could be read from .*run\.log/);
+  }],
   ['rerun command keeps the test script options and drops its globs', () => {
     const { dir } = project();
     assert.equal(rerunCommand(dir, ['test/a.test.js']), 'node --import ./x.js --test --test-concurrency=2 test/a.test.js');
