@@ -332,7 +332,10 @@ test('F-2: a missing Playwright browser is FLOW_SETUP_ERROR naming the install s
     const flowDecl = cfg.verify.flows.find((f) => f.id === 'builder-save-blur');
     const empty = mkdtempSync(path.join(SCRATCH, 'no-browsers-'));
     const [r] = await runFlows([{ ...flowDecl, timeout_s: 120 }], {
-      workspaceRoot: REPO, featureCode: 'FEAT-F2', commitSha: null, onLine: () => {},
+      // Logs and receipts go to scratch; only the command runs in the repo (the leak guard
+      // refuses any write to the checkout's .compose/data).
+      workspaceRoot: mkdtempSync(path.join(SCRATCH, 'f2-ws-')), cwd: REPO, store: path.join(empty, 'evidence.jsonl'),
+      featureCode: 'FEAT-F2', commitSha: null, onLine: () => {},
       env: { ...process.env, PLAYWRIGHT_BROWSERS_PATH: empty },
     });
     assert.equal(r.code, VERIFY_CODES.SETUP, JSON.stringify(r));
