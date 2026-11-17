@@ -1,0 +1,59 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://smartmemory.ai/compose/contracts/verify-config.schema.json",
+  "title": "Compose verify block (COMP-VERIFY-FLOW-1)",
+  "description": "The optional `verify` block of `.compose/compose.json`. A project declares user flows: a command that starts the app, drives it the way a user does, prints what it saw, and cleans up. Compose runs the flows a change touches before a feature becomes COMPLETE (lib/completion-gate.js) and on demand (`compose verify`). A flow PASSes when it exits 0 AND every `expect` line appears in its stdout (lib/verify-flows.js judgeRun). No `verify` block means no flow ever runs.",
+  "type": "object",
+  "required": ["flows"],
+  "additionalProperties": false,
+  "properties": {
+    "flows": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/flow" }
+    }
+  },
+  "definitions": {
+    "flow": {
+      "type": "object",
+      "required": ["id", "command", "covers", "expect"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "Unique within the block. Names the flow in output, logs and refusal codes.",
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"
+        },
+        "command": {
+          "description": "argv array, run with the workspace root as cwd, in its own process group (same shape as guard.testCommand). Never a shell string.",
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "covers": {
+          "description": "Repo-relative path globs (`*` one segment, `**` any depth, `?` one character). A completion whose changed files match any glob runs this flow.",
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "expect": {
+          "description": "Literal lines that must each appear in stdout as a whole line (compared after trimming surrounding whitespace). They are the answer; the exit code alone never passes a flow.",
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1, "maxLength": 2000 }
+        },
+        "timeout_s": {
+          "description": "Seconds before the flow's whole process group is killed and the run refused FLOW_TIMEOUT. Default 600.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 7200
+        },
+        "setup_exit_codes": {
+          "description": "Exit codes meaning the flow could not start (a missing tool, a port it could not get), reported FLOW_SETUP_ERROR rather than FLOW_FAILED. Default [127]. A spawn error (command not found) is always a setup error.",
+          "type": "array",
+          "items": { "type": "integer", "minimum": 1, "maximum": 255 }
+        }
+      }
+    }
+  }
+}

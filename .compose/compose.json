@@ -90,5 +90,56 @@
       "~/reg/my/forge",
       "~/reg/my/stock/trader"
     ]
+  },
+  "verify": {
+    "flows": [
+      {
+        "id": "pipeline-roundtrip",
+        "command": [
+          "node",
+          "scripts/flows/pipeline-roundtrip.mjs"
+        ],
+        "covers": [
+          "src/lib/pipeline-model.js",
+          "src/components/vision/**",
+          "server/pipeline-routes.js",
+          "pipelines/*.stratum.yaml"
+        ],
+        "expect": [
+          "EDGES build 18",
+          "EDGES bug-fix 8",
+          "EDGES total 62",
+          "EDIT build 19",
+          "KEY after"
+        ],
+        "timeout_s": 300,
+        "setup_exit_codes": [
+          3,
+          127
+        ]
+      },
+      {
+        "id": "builder-save-blur",
+        "command": [
+          "node_modules/.bin/playwright",
+          "test",
+          "--config",
+          "e2e/playwright.config.js",
+          "e2e/builder-save-blur.spec.js"
+        ],
+        "covers": [
+          "src/components/cockpit/StratumBuilderPane.jsx",
+          "server/stratum-spec-routes.js"
+        ],
+        "expect": [
+          "RELOADED id=renamed-step"
+        ],
+        "timeout_s": 300,
+        "setup_exit_codes": [
+          3,
+          127
+        ]
+      }
+    ]
   }
 }
