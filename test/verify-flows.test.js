@@ -290,7 +290,7 @@ test('F-1: covers patterns are normalised at load (./, leading /, a folder) and 
 
 test('F-1: a covers pattern that can never match a repo path is refused at load, the pattern named', async () => {
   const { loadVerifyConfig, VerifyConfigError } = await import('../lib/verify-flows.js');
-  for (const [bad, why] of [['../web/**', /outside the repository/], ['src\\a.js', /backslash/], ['./', /names nothing/], ['/', /names nothing/]]) {
+  for (const [bad, why] of [['../web/**', /outside the repository/], ['src\\a.js', /backslash/], ['./', /names nothing/], ['/', /names nothing/], ['.', /names nothing.*use "\*\*" for every file/]]) {
     const dir = mkdtempSync(path.join(SCRATCH, 'covers-'));
     mkdirSync(path.join(dir, '.compose'));
     writeFileSync(path.join(dir, '.compose', 'compose.json'), JSON.stringify({ verify: { flows: [{ id: 'a', command: ['x'], covers: ['src/**', bad], expect: ['OK'] }] } }));
