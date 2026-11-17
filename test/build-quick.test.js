@@ -44,7 +44,8 @@ const QUICK_PATH = join(COMPOSE_ROOT, 'pipelines', 'build-quick.stratum.yaml');
 const KEPT = [
   'explore_design', 'design_gate', 'decompose', 'execute', 'execute_merge', 'coverage',
   'review_triage', 'review_lenses', 'review_lenses_gate', 'review_merge', 'review_gate',
-  'codex_review', 'test_review', 'docs', 'ship', 'ship_gate',
+  // `retest` (COMP-SETUP-PREFLIGHT-1 fix round 2): the tests again after the last review fix.
+  'codex_review', 'retest', 'test_review', 'docs', 'ship', 'ship_gate',
 ];
 const DROPPED = ['prd', 'architecture', 'blueprint', 'verification', 'plan', 'plan_gate', 'report'];
 
