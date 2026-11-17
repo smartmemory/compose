@@ -82,4 +82,4 @@ tiers to pass.
 - Project checks and the run lock are opt-in per project; only the engine check is built in.
 - No automatic retry of anything. Setup-invalid results print a rerun command; a person or agent runs it.
 - No resource-fit qualification of remote runners (that is SmartMemory ops tooling, U4, not Compose).
-- No `flake diagnosis` records (COMP-FLAKE-DISPOSITION-1, parked).
+- No `flake diagnosis` records (`COMP-FLAKE-DISPOSITION-1`, parked).
