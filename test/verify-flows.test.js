@@ -22,7 +22,7 @@ process.env.COMPOSE_PORT = deadPortSync();
 const SCRATCH = mkdtempSync(path.join(process.env.SM_SCRATCH_ROOT || tmpdir(), 'verify-flows-'));
 process.env.COMPOSE_EVIDENCE_STORE = path.join(SCRATCH, 'evidence.jsonl');
 
-const { runFlows, validateVerifyBlock, selectFlows, verifyForCompletion, VERIFY_CODES } = await import('../lib/verify-flows.js');
+const { runFlows, validateVerifyBlock, selectFlows, verifyForCompletion, VERIFY_CODES, matchGlob: matchGlobForTest } = await import('../lib/verify-flows.js');
 const { completionGate } = await import('../lib/completion-gate.js');
 const { readEvidence, verifyEvidence } = await import('../lib/evidence.js');
 
@@ -249,3 +249,96 @@ test('gate: a misspelled flows key next to preflight is refused, never read as "
   assert.equal(r.code, 'VERIFY_CONFIG_INVALID');
   assert.match(r.reasons[0], /unknown field "flow"/);
 });
+
+// COMP-SETUP-PREFLIGHT-1 fix round 1, P-2: an unparseable compose.json is a refusal that
+// names the file, at the flow reader and at the completion gate, never "no flows".
+test('P-2: an unparseable compose.json refuses (flow reader and completion gate), naming the file', async () => {
+  const { loadVerifyConfig, VerifyConfigError } = await import('../lib/verify-flows.js');
+  const { guardEnabled } = await import('../lib/completion-gate.js');
+  const dir = mkdtempSync(path.join(SCRATCH, 'badjson-'));
+  mkdirSync(path.join(dir, '.compose'));
+  const file = path.join(dir, '.compose', 'compose.json');
+  writeFileSync(file, '{"verify":{"flows":[{"id":"a","command":["x"],"covers":["src/**"],"expect":["OK"]}]},}');
+  assert.throws(() => loadVerifyConfig(dir), (e) => e instanceof VerifyConfigError && e.message.includes(`${file} is not valid JSON`));
+  assert.throws(() => guardEnabled(dir), /is not valid JSON/);
+  const r = await completionGate({ featureCode: 'FEAT-BAD', commitSha: 'a'.repeat(40), testsPass: true, filesChanged: ['src/a.js'], workspaceRoot: dir });
+  assert.equal(r.ok, false);
+  assert.equal(r.refusedAt, 'config');
+  assert.match(r.reasons[0], /compose\.json is not valid JSON/);
+  rmSync(file);
+  assert.equal(loadVerifyConfig(dir), null, 'an absent file is still "no flows"');
+  assert.equal(guardEnabled(dir), false);
+});
+
+// ---------------------------------------------------------------------------
+// COMP-SETUP-PREFLIGHT-1 fix round 1, F-1: `covers` written the habitual ways matches.
+// ---------------------------------------------------------------------------
+test('F-1: covers patterns are normalised at load (./, leading /, a folder) and match', async () => {
+  const { normalizeCovers } = await import('../lib/verify-flows.js');
+  const n = (g) => normalizeCovers([g], 'verify.flows[0].covers');
+  assert.deepEqual(n('./src/**'), ['src/**']);
+  assert.deepEqual(n('/src/**'), ['src/**']);
+  assert.deepEqual(n('src/'), ['src/**']);
+  assert.deepEqual(n('src'), ['src', 'src/**']);
+  assert.deepEqual(n('src/components/vision'), ['src/components/vision', 'src/components/vision/**']);
+  assert.deepEqual(n('src/**/*.js'), ['src/**/*.js'], 'a real glob is left alone');
+  for (const g of ['./src/**', '/src/**', 'src/', 'src', 'src/**']) {
+    const covers = n(g);
+    assert.ok(covers.some((c) => matchGlobForTest(c, 'src/a.js')), `${g} covers src/a.js`);
+  }
+});
+
+test('F-1: a covers pattern that can never match a repo path is refused at load, the pattern named', async () => {
+  const { loadVerifyConfig, VerifyConfigError } = await import('../lib/verify-flows.js');
+  for (const [bad, why] of [['../web/**', /outside the repository/], ['src\\a.js', /backslash/], ['./', /names nothing/], ['/', /names nothing/]]) {
+    const dir = mkdtempSync(path.join(SCRATCH, 'covers-'));
+    mkdirSync(path.join(dir, '.compose'));
+    writeFileSync(path.join(dir, '.compose', 'compose.json'), JSON.stringify({ verify: { flows: [{ id: 'a', command: ['x'], covers: ['src/**', bad], expect: ['OK'] }] } }));
+    assert.throws(() => loadVerifyConfig(dir), (e) => e instanceof VerifyConfigError && e.message.includes(`verify.flows[0].covers[1] ${JSON.stringify(bad)}`) && why.test(e.message), bad);
+  }
+});
+
+test('F-1: a completion with covers "./src/**" runs the flow (it used to be silently skipped)', async () => {
+  const ws = workspace({ flows: [{ id: 'roundtrip', command: node("console.log('EDGES build 0')"), covers: ['./src/**'], expect: ['EDGES build 18'], timeout_s: 20 }] });
+  const lines = [];
+  const r = await completionGate({ featureCode: 'FEAT-1', commitSha: ws.sha, testsPass: true,
+    filesChanged: ['src/lib/model.js'], workspaceRoot: ws.root, verifyLog: (l) => lines.push(l) });
+  assert.equal(r.ok, false, lines.join('\n'));
+  assert.equal(r.code, 'FLOW_FAILED');
+  assert.ok(lines.some((l) => l.startsWith('verify: 1 of 1 declared flow cover the 1 changed file')), lines.join('\n'));
+});
+
+test('F-1: a flow whose covers match no file in the repository prints one WARNING naming it', async () => {
+  const ws = workspace({ flows: [
+    { id: 'ghost', command: node("console.log('OK')"), covers: ['srcs/**', './web/app.js'], expect: ['OK'], timeout_s: 20 },
+    { id: 'readme', command: node("console.log('OK')"), covers: ['README.md'], expect: ['OK'], timeout_s: 20 },
+  ] });
+  const lines = [];
+  const r = await verifyForCompletion({ workspaceRoot: ws.root, featureCode: 'FEAT-1', filesChanged: ['docs/x.md'], onLine: (l) => lines.push(l) });
+  assert.equal(r.ok, true);
+  const warnings = lines.filter((l) => l.startsWith('WARNING:'));
+  assert.equal(warnings.length, 1, lines.join('\n'));
+  assert.match(warnings[0], /flow "ghost" covers no file in the repository \(covers: "srcs\/\*\*", "\.\/web\/app\.js"\)/, 'the patterns as written');
+});
+
+// COMP-SETUP-PREFLIGHT-1 fix round 1, F-2: a missing Playwright browser is "the flow cannot
+// start" (FLOW_SETUP_ERROR), never FLOW_FAILED. Drives Compose's own builder-save-blur flow
+// as declared in .compose/compose.json, with the browser cache pointed at an empty folder.
+const REPO = path.join(path.dirname(new URL(import.meta.url).pathname), '..');
+const HAS_PLAYWRIGHT = existsSync(path.join(REPO, 'node_modules', '.bin', 'playwright'));
+test('F-2: a missing Playwright browser is FLOW_SETUP_ERROR naming the install step, not FLOW_FAILED',
+  { skip: !HAS_PLAYWRIGHT && 'node_modules/.bin/playwright absent (F-3: @playwright/test not installed here)', timeout: 180_000 }, async () => {
+    const cfg = JSON.parse(readFileSync(path.join(REPO, '.compose', 'compose.json'), 'utf8'));
+    const flowDecl = cfg.verify.flows.find((f) => f.id === 'builder-save-blur');
+    const empty = mkdtempSync(path.join(SCRATCH, 'no-browsers-'));
+    const [r] = await runFlows([{ ...flowDecl, timeout_s: 120 }], {
+      // Logs and receipts go to scratch; only the command runs in the repo (the leak guard
+      // refuses any write to the checkout's .compose/data).
+      workspaceRoot: mkdtempSync(path.join(SCRATCH, 'f2-ws-')), cwd: REPO, store: path.join(empty, 'evidence.jsonl'),
+      featureCode: 'FEAT-F2', commitSha: null, onLine: () => {},
+      env: { ...process.env, PLAYWRIGHT_BROWSERS_PATH: empty },
+    });
+    assert.equal(r.code, VERIFY_CODES.SETUP, JSON.stringify(r));
+    assert.match(r.detail, /exit 3\): SETUP: the Playwright browser .* cannot start/);
+    assert.match(r.detail, /npx playwright install/);
+  });

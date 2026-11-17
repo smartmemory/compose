@@ -16,8 +16,34 @@ export const SEED_NAME = 'flow-seed';
 export const SEED_STEP = 'draft-step';
 const MARKER = '# saved by Compose pipeline builder'; // server/stratum-spec-routes.js MARKER
 
-export default async function setup() {
+export default async function setup(config) {
+  await browserCanStart(config);
   try { return await build(); } catch (error) { return setupFail(error.message); }
+}
+
+/**
+ * COMP-SETUP-PREFLIGHT-1 fix round 1 (F-2): launch and close the configured browser
+ * once, before any sandbox is built. A missing browser (fresh machine, CI, a cleared
+ * ms-playwright cache) otherwise fails inside the spec with exit 1, the same as a real
+ * product failure, and is reported FLOW_FAILED. Here it exits 3: FLOW_SETUP_ERROR.
+ */
+async function browserCanStart(config) {
+  const use = config?.projects?.[0]?.use ?? {};
+  const channel = use.channel ?? 'chromium';
+  let chromium;
+  try {
+    ({ chromium } = await import('@playwright/test'));
+  } catch (error) {
+    return setupFail(`@playwright/test cannot be loaded: ${error.message.split('\n')[0]}`);
+  }
+  try {
+    const browser = await chromium.launch({ channel, headless: use.headless ?? true });
+    await browser.close();
+  } catch (error) {
+    const first = error.message.split('\n').map((l) => l.trim()).find(Boolean);
+    return setupFail(`the Playwright browser (${channel}) cannot start: ${first}; install it with \`npx playwright install ${channel}\``);
+  }
+  return true;
 }
 
 async function build() {

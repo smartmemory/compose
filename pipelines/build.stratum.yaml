@@ -249,14 +249,27 @@ flows:
       - id: execute_merge
         after: [execute]
         gate:
-          on_approve: review_triage
+          on_approve: coverage
           on_revise: execute
           on_kill: null
           max_rounds: 10
 
+
+      # COMP-SETUP-PREFLIGHT-1 fix round 1 (P-1): the tests (T2) run right after the
+      # implementation merge and BEFORE any paid review. A failing tests step ends the
+      # build here, so the Claude lenses (T3), the Codex review (T4) and the advisory
+      # test_review are never dispatched on code that does not pass its tests. Reviews
+      # that revise code are re-tested by ship, which runs the full suite.
+      - id: coverage
+        run: coverage_check
+        with:
+          task: "${input.description}"
+          plan: "${plan.output.artifact}"
+
       # The former parallel_review subflow is flattened because TS v1 permits
       # fanout only in the entry flow.
       - id: review_triage
+        after: [coverage]
         agent: claude
         do: >
           Select review lenses for the implementation results ${execute.output}.
@@ -330,16 +343,9 @@ flows:
           blueprint: "${blueprint.output.artifact}"
           reviewer_agent: "${input.reviewer_agent}"
 
-      - id: coverage
-        after: [codex_review]
-        run: coverage_check
-        with:
-          task: "${input.description}"
-          plan: "${plan.output.artifact}"
-
       # Advisory by construction: no output contract and no ensure.
       - id: test_review
-        after: [coverage]
+        after: [codex_review]
         agent: "$.input.reviewer_agent"
         do: >
           Review tests generated for ${input.featureCode}. Flag placeholders,

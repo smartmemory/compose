@@ -105,7 +105,7 @@
           }
         },
         "covers": {
-          "description": "Repo-relative path globs (`*` one segment, `**` any depth, `?` one character). A completion whose changed files match any glob runs this flow.",
+          "description": "Repo-relative path globs (`*` one segment, `**` any depth, `?` one character). A completion whose changed files match any glob runs this flow. A leading `./` or `/` is dropped; a path with no glob character covers itself and everything under it (`src/x` = `src/x` and `src/x/**`). A `..` segment, a backslash, or a pattern that names nothing is refused at load. A flow matching no tracked file prints one WARNING.",
           "type": "array",
           "minItems": 1,
           "items": {

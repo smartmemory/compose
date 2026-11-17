@@ -169,3 +169,28 @@ test('estimateTierCost: unknown tier returns 0', () => {
   assert.equal(estimateTierCost('T99'), 0);
   assert.equal(estimateTierCost(''), 0);
 });
+
+// COMP-SETUP-PREFLIGHT-1 fix round 1 (P-1): the build reports sub-flow and fanout steps
+// as paths; the parent names the stage. Without this the shipped pipeline's tests step
+// (`coverage/run_tests`) was unclassified and a failing T2 skipped nothing.
+test('classifyStepAsTier: sub-step paths classify parent-first; shipped review ids are T3', () => {
+  assert.equal(classifyStepAsTier('coverage/run_tests'), 'T2');
+  assert.equal(classifyStepAsTier('codex_review/review'), 'T4', 'the Codex pass, not a Claude review');
+  assert.equal(classifyStepAsTier('review_lenses/0'), 'T3');
+  assert.equal(classifyStepAsTier('review_triage'), 'T3');
+  assert.equal(classifyStepAsTier('review_merge'), 'T3');
+  assert.equal(classifyStepAsTier('execute/0'), null);
+});
+
+test('paidReviewBeforeTests: names a pipeline that runs a paid review before its tests', async () => {
+  const { paidReviewBeforeTests } = await import('../lib/gate-tiers.js');
+  const YAML = (await import('yaml')).default;
+  const { readFileSync } = await import('node:fs');
+  const old = { flows: { entry: 'b', b: { steps: [{ id: 'execute' }, { id: 'review_triage' }, { id: 'codex_review' }, { id: 'coverage' }] } } };
+  assert.deepEqual(paidReviewBeforeTests(old), { paid: 'review_triage', tests: 'coverage' });
+  for (const name of ['build', 'build-quick']) {
+    const shipped = YAML.parse(readFileSync(new URL(`../pipelines/${name}.stratum.yaml`, import.meta.url), 'utf8'));
+    assert.equal(paidReviewBeforeTests(shipped), null, `${name}: the shipped pipeline runs tests first`);
+  }
+  assert.equal(paidReviewBeforeTests({ flows: { entry: 'b', b: { steps: [{ id: 'review' }] } } }), null, 'no tests step: nothing to say');
+});
