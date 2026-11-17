@@ -320,3 +320,22 @@ test('F-1: a flow whose covers match no file in the repository prints one WARNIN
   assert.equal(warnings.length, 1, lines.join('\n'));
   assert.match(warnings[0], /flow "ghost" covers no file in the repository \(covers: "srcs\/\*\*"\)/);
 });
+
+// COMP-SETUP-PREFLIGHT-1 fix round 1, F-2: a missing Playwright browser is "the flow cannot
+// start" (FLOW_SETUP_ERROR), never FLOW_FAILED. Drives Compose's own builder-save-blur flow
+// as declared in .compose/compose.json, with the browser cache pointed at an empty folder.
+const REPO = path.join(path.dirname(new URL(import.meta.url).pathname), '..');
+const HAS_PLAYWRIGHT = existsSync(path.join(REPO, 'node_modules', '.bin', 'playwright'));
+test('F-2: a missing Playwright browser is FLOW_SETUP_ERROR naming the install step, not FLOW_FAILED',
+  { skip: !HAS_PLAYWRIGHT && 'node_modules/.bin/playwright absent (F-3: @playwright/test not installed here)', timeout: 180_000 }, async () => {
+    const cfg = JSON.parse(readFileSync(path.join(REPO, '.compose', 'compose.json'), 'utf8'));
+    const flowDecl = cfg.verify.flows.find((f) => f.id === 'builder-save-blur');
+    const empty = mkdtempSync(path.join(SCRATCH, 'no-browsers-'));
+    const [r] = await runFlows([{ ...flowDecl, timeout_s: 120 }], {
+      workspaceRoot: REPO, featureCode: 'FEAT-F2', commitSha: null, onLine: () => {},
+      env: { ...process.env, PLAYWRIGHT_BROWSERS_PATH: empty },
+    });
+    assert.equal(r.code, VERIFY_CODES.SETUP, JSON.stringify(r));
+    assert.match(r.detail, /exit 3\): SETUP: the Playwright browser .* cannot start/);
+    assert.match(r.detail, /npx playwright install/);
+  });
