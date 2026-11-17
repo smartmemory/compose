@@ -219,4 +219,6 @@ then only that file was rerun: verify-flows `# tests 30 / # pass 30`. Total 859/
 - P-5: the hook treats a test command's own exit 75/78/79 as a setup result.
 - F-3: main's checkout has no `@playwright/test` installed; the coordinator owns that install.
 
-FIX-1 reproduced=4/4 fixed=4 redesign_needed=0 cases=16/16 tests=859/859 merged_to_main=<yes|no> main=<sha> pushed=no
+Merge commit `7acd41b0` on local main; this line was filled in by the next commit on main.
+
+FIX-1 reproduced=4/4 fixed=4 redesign_needed=0 cases=16/16 tests=859/859 merged_to_main=yes main=7acd41b0 pushed=no
