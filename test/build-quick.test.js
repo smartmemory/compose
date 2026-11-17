@@ -38,10 +38,13 @@ const COMPOSE_ROOT = resolve(fileURLToPath(import.meta.url), '..', '..');
 const COMPOSE_BIN = join(COMPOSE_ROOT, 'bin', 'compose.js');
 const QUICK_PATH = join(COMPOSE_ROOT, 'pipelines', 'build-quick.stratum.yaml');
 
+// COMP-SETUP-PREFLIGHT-1 fix round 1 (P-1): `coverage` (the tests, T2) runs right after
+// execute_merge and before every paid review, so a failing test suite dispatches no
+// Claude lens (T3) or Codex pass (T4). Same order as build.stratum.yaml.
 const KEPT = [
-  'explore_design', 'design_gate', 'decompose', 'execute', 'execute_merge',
+  'explore_design', 'design_gate', 'decompose', 'execute', 'execute_merge', 'coverage',
   'review_triage', 'review_lenses', 'review_lenses_gate', 'review_merge', 'review_gate',
-  'codex_review', 'coverage', 'test_review', 'docs', 'ship', 'ship_gate',
+  'codex_review', 'test_review', 'docs', 'ship', 'ship_gate',
 ];
 const DROPPED = ['prd', 'architecture', 'blueprint', 'verification', 'plan', 'plan_gate', 'report'];
 

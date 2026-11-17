@@ -329,3 +329,125 @@ test('a verify block holding only flows is "no preflight configured", and flows 
     assert.equal(c.exclusive_runs, true);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+// Fix round 1, P-1: Case 4 on the SHIPPED pipeline, not a made-up one. The bundled
+// pipelines/build.stratum.yaml is copied verbatim into a throwaway git project; every
+// agent is faked and the tests step (run_tests, T2) reports failing. The dispatch log
+// must show no paid review (review_triage, review lenses, review_merge, the codex
+// review) and no test_review, before or after the failing tests.
+const SHIPPED_PIPELINE_FAKE_OUTPUTS = (featureCode) => ({
+  explore_design: { phase: 'design', artifact: `docs/features/${featureCode}/design.md`, outcome: 'skipped', summary: 'x', explorations: [] },
+  blueprint: { phase: 'blueprint', artifact: `docs/features/${featureCode}/design.md`, outcome: 'complete', summary: 'x' },
+  verification: { phase: 'verification', artifact: 'x', outcome: 'complete', summary: 'x' },
+  plan: { phase: 'plan', artifact: `docs/features/${featureCode}/design.md`, outcome: 'complete', summary: 'x' },
+  decompose: { tasks: [{ id: 't1', description: 'touch a.txt (no test: fixture)', files_owned: ['a.txt'], files_read: [], depends_on: [] }] },
+  execute: { outcome: 'complete', summary: 'x', files_changed: [] },
+  review_triage: { tasks: [{ id: 'l1', lens_name: 'diff-quality', lens_focus: 'x', confidence_gate: 7, exclusions: [] }] },
+  review: { clean: true, summary: 'clean', findings: [], meta: {}, lenses_run: [], auto_fixes: [], asks: [] },
+  run_tests: { passing: false, summary: '1 failing', failures: ['test/a.test.js'] },
+  other: { phase: 'x', artifact: 'x', outcome: 'complete', summary: 'x' },
+});
+
+async function runShippedPipeline(featureCode, { testsPass, pipeline = 'build' }) {
+  process.env.NODE_ENV = 'test';
+  const { runBuild } = await import('../lib/build.js');
+  const { runBuildWithAgentFactory } = await import('./helpers/ts-agent-harness.js');
+  const dir = mkdtempSync(join(tmpdir(), 'setup-preflight-shipped-'));
+  try {
+    mkdirSync(join(dir, '.compose', 'data'), { recursive: true });
+    writeFileSync(join(dir, '.compose', 'compose.json'), JSON.stringify({ version: 2, capabilities: { stratum: true } }));
+    const gates = ['design_gate', 'plan_gate', 'execute_merge', 'review_lenses_gate', 'ship_gate'];
+    writeFileSync(join(dir, '.compose', 'data', 'settings.json'), JSON.stringify({ policies: Object.fromEntries(gates.map((g) => [g, 'skip'])) }));
+    mkdirSync(join(dir, 'docs', 'features', featureCode), { recursive: true });
+    writeFileSync(join(dir, 'docs', 'features', featureCode, 'design.md'), `# ${featureCode}\n`);
+    mkdirSync(join(dir, 'pipelines'));
+    writeFileSync(join(dir, 'pipelines', `${pipeline}.stratum.yaml`), readFileSync(join(HERE, '..', 'pipelines', `${pipeline}.stratum.yaml`), 'utf8'));
+    for (const args of [['init', '-q', '-b', 'main'], ['add', '-A'], ['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'init']]) {
+      spawnSync('git', args, { cwd: dir });
+    }
+    const outputs = SHIPPED_PIPELINE_FAKE_OUTPUTS(featureCode);
+    if (pipeline === 'build-quick') delete outputs.explore_design.explorations; // its PhaseResult has no explorations field
+    if (testsPass) outputs.run_tests = { passing: true, summary: 'all pass', failures: [] };
+    const dispatched = [];
+    const factory = (agentType) => ({
+      async *run(prompt) {
+        const raw = prompt.match(/step "([^"]+)"/)?.[1] ?? 'unknown';
+        dispatched.push(`${raw}(${agentType})`);
+        const known = Object.keys(outputs).find((k) => raw.split('/').includes(k));
+        yield { type: 'assistant', content: JSON.stringify(outputs[known] ?? outputs.other) };
+      },
+      interrupt() {}, get isRunning() { return false; },
+    });
+    let error = null;
+    try {
+      await runBuildWithAgentFactory(runBuild, featureCode, { cwd: dir, connectorFactory: factory, description: 'x', gateOpts: { nonInteractive: true }, ...(pipeline === 'build' ? {} : { template: pipeline }) });
+    } catch (err) { error = err; }
+    if (process.env.COMPOSE_P1_DISPATCH_LOG) writeFileSync(`${process.env.COMPOSE_P1_DISPATCH_LOG}.${testsPass ? 'pass' : 'fail'}`, `${dispatched.join('\n')}\nerror: ${error?.message ?? 'none'}\n`);
+    const streamPath = join(dir, '.compose', 'build-stream.jsonl');
+    const stream = existsSync(streamPath) ? readFileSync(streamPath, 'utf8').trim().split('\n').map((l) => JSON.parse(l)) : [];
+    const skippedLine = stream.filter((e) => e.type === 'gate_tier_summary').at(-1)?.skippedLine ?? null;
+    return { dispatched, error, skippedLine };
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+}
+
+const PAID = /(^|\/)(review_triage|review_lenses|review_merge|review|codex_review|test_review|docs|ship)(\/|\()/;
+const SHIPPED_OPTS = { skip: !existsSync(TS_MCP_BIN) && 'TS engine unavailable', timeout: 240_000 };
+
+test('P-1: on the shipped build pipeline a failing tests step (T2) dispatches no paid review', SHIPPED_OPTS, async () => {
+  const { dispatched, skippedLine } = await runShippedPipeline('FEAT-P1', { testsPass: false });
+  assert.equal(skippedLine, 'skipped T3,T4: T2 failed');
+  assert.ok(dispatched.some((d) => /(^|\/)run_tests\(/.test(d)), `the tests step was dispatched: ${dispatched.join(' ')}`);
+  const paid = dispatched.filter((d) => PAID.test(d) || d.endsWith('(codex)'));
+  assert.deepEqual(paid, [], `no paid review dispatched; log: ${dispatched.join(' ')}`);
+});
+
+test('P-1 control: on the shipped build pipeline passing tests run first, then the Claude and Codex reviews, and the build completes', SHIPPED_OPTS, async () => {
+  const { dispatched, error } = await runShippedPipeline('FEAT-P1C', { testsPass: true });
+  const at = (re) => dispatched.findIndex((d) => re.test(d));
+  const tests = at(/(^|\/)run_tests\(/);
+  const triage = at(/^review_triage\(/);
+  const codex = at(/^codex_review\/review\(codex\)/);
+  const docs = at(/^docs\(/);
+  assert.equal(error, null, 'the build completed');
+  assert.ok(tests >= 0 && triage > tests && codex > triage && docs > codex, `order tests < triage < codex < docs; log: ${dispatched.join(' ')}`);
+  assert.ok(at(/^review_lenses\//) > tests, 'a review lens ran after the tests');
+});
+
+test('P-1: the shipped build-quick pipeline also stops at failing tests before any paid review', SHIPPED_OPTS, async () => {
+  const { dispatched } = await runShippedPipeline('FEAT-P1Q', { testsPass: false, pipeline: 'build-quick' });
+  assert.ok(dispatched.some((d) => /(^|\/)run_tests\(/.test(d)), `the tests step was dispatched: ${dispatched.join(' ')}`);
+  assert.deepEqual(dispatched.filter((d) => PAID.test(d) || d.endsWith('(codex)')), [], `log: ${dispatched.join(' ')}`);
+});
+
+test('P-1: a project-local pipeline that reviews before testing gets one WARNING naming the file', { skip: !existsSync(TS_MCP_BIN) && 'TS engine unavailable' }, async () => {
+  const { runBuild } = await import('../lib/build.js');
+  const { runBuildWithAgentFactory } = await import('./helpers/ts-agent-harness.js');
+  const dir = mkdtempSync(join(tmpdir(), 'setup-preflight-oldorder-'));
+  const warned = [];
+  const realWarn = console.warn;
+  console.warn = (...a) => { warned.push(a.join(' ')); };
+  try {
+    mkdirSync(join(dir, '.compose', 'data'), { recursive: true });
+    writeFileSync(join(dir, '.compose', 'compose.json'), JSON.stringify({ version: 2, capabilities: { stratum: true } }));
+    mkdirSync(join(dir, 'docs', 'features', 'FEAT-OLD'), { recursive: true });
+    writeFileSync(join(dir, 'docs', 'features', 'FEAT-OLD', 'design.md'), '# FEAT-OLD\n');
+    mkdirSync(join(dir, 'pipelines'));
+    writeFileSync(join(dir, 'pipelines', 'build.stratum.yaml'), `version: 1
+contracts:
+  PhaseResult: { phase: string, artifact: string, outcome: string }
+flows:
+  entry: build
+  build:
+    input: { featureCode: string, description: string, pre_merge_gate: "string[]?", implementer_agent: string, reviewer_agent: string }
+    output: { from: "\${run_tests.output}", contract: PhaseResult }
+    steps:
+      - { id: codex_review, agent: codex, do: "codex", out: PhaseResult, attempts: 1 }
+      - { id: run_tests, after: [codex_review], agent: claude, do: "tests", out: PhaseResult, attempts: 1 }
+`);
+    const factory = () => ({ async *run() { yield { type: 'assistant', content: JSON.stringify({ phase: 'x', artifact: 'x', outcome: 'complete' }) }; }, interrupt() {}, get isRunning() { return false; } });
+    try { await runBuildWithAgentFactory(runBuild, 'FEAT-OLD', { cwd: dir, connectorFactory: factory, description: 'x' }); } catch { /* the warning is the subject */ }
+  } finally { console.warn = realWarn; rmSync(dir, { recursive: true, force: true }); }
+  const hits = warned.filter((w) => w.startsWith('WARNING:') && w.includes('paid review step "codex_review" before the tests step "run_tests"'));
+  assert.equal(hits.length, 1, `one WARNING; got: ${warned.join(' | ')}`);
+  assert.match(hits[0], /pipelines\/build\.stratum\.yaml/);
+});
