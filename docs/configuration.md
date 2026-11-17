@@ -128,6 +128,49 @@ Optional. Written by the cockpit's left bar (COMP-COCKPIT-FLEET-PROJECTS-1, -2);
 | `projects` | absent | The PROJECTS list in the Fleet room's left bar, in order: the lanes the Process tab shows (comparison columns and time-split rows) and their order. Absent means every lane `GET /api/process` knows, in builder order. A name the builder no longer knows is skipped. Written by `POST /api/fleet/projects` (loopback callers only, known lane names only, no duplicates) as an atomic rewrite that keeps every other key; a `compose.json` that is not valid JSON is refused (409), never overwritten. |
 | `roots` | absent | Lane name to the Compose project a PROJECTS click opens in Home, Ideas, Roadmap, Build and Review: a path (`~` expands) or `null` for none. A lane absent here uses the built-in default (forge, cadence, 2.0, maya and trader, taken from the status builder's configs); every other lane has none. A root counts only while `<root>/.compose` is a directory; otherwise the room shows "No Compose project for <lane>". Served by `GET /api/fleet/roots`. A malformed value is ignored whole and named in that route's `error`. Saving the order keeps this key. |
 
+### `verify` block
+
+Optional (COMP-VERIFY-FLOW-1). Declares the project's **user flows**: commands that do what a person does
+(start the app, click, save, reload) and print lines that prove it worked. When the block is present,
+`compose record-completion` runs the flows that cover the changed files before it writes anything, and
+refuses the completion if one fails. A project without the block sees no change at all: no flow runs, no
+new line, no new file. Schema: `contracts/verify-config.schema.json`; an invalid block refuses at load
+(`VERIFY_CONFIG_INVALID`, naming the field).
+
+```json
+{
+  "verify": {
+    "flows": [
+      {
+        "id": "pipeline-roundtrip",
+        "command": ["node", "scripts/flows/pipeline-roundtrip.mjs"],
+        "covers": ["src/lib/pipeline-model.js", "server/pipeline-routes.js"],
+        "expect": ["EDGES total 62", "KEY after"],
+        "timeout_s": 300,
+        "setup_exit_codes": [3, 127]
+      }
+    ]
+  }
+}
+```
+
+| Field | Default | Notes |
+|-------|---------|-------|
+| `id` | required | Lowercase letters, digits and dashes, at most 64 characters; unique in the block. |
+| `command` | required | An argv array, run from the project root with no shell. A string is refused. |
+| `covers` | required | Globs (`**`, `*`, `?`) over repo-relative paths. A flow runs when a changed file matches one. With no changed-file list (`--files-changed-from-stdin` absent or empty) every flow runs. |
+| `expect` | required | Lines the output must contain, each as a whole line after trimming. The flow passes only on exit 0 **and** every line present: exit 0 with a line missing, or a failing exit with every line present, is `FLOW_FAILED`. |
+| `timeout_s` | `600` | 1 to 7200. Past it the flow's whole process group gets SIGTERM, then SIGKILL after 3 s (servers the flow started go too): `FLOW_TIMEOUT`. |
+| `setup_exit_codes` | `[127]` | Exit codes that mean "could not start" (a missing tool, no free port). They report `FLOW_SETUP_ERROR` ("nothing was tested"), not `FLOW_FAILED`, so nobody fixes product code for them. A command that cannot be spawned at all is a setup error too. |
+
+Each run writes a log to `.compose/data/verify/<FEATURE|_adhoc>/<id>-<time>.log` and a line to
+`runs.jsonl` beside it. A pass mints a `command` evidence receipt (`lib/evidence.js`) whose claimed line
+is the last expected line, so `evidence-cli show <id>` re-checks it against the log; the completion record
+keeps `verify_flows[]` (id, verdict, evidence id, log, commit). The flows run whatever
+`capabilities.guard` and `--tests-pass` say: no flag completes a feature whose covering flow failed. The
+backfill path (`backfill_completions`) does not run flows, because they test today's tree, not a historical
+commit. Run them by hand with `compose verify`.
+
 ## `.compose/questionnaire.json`
 
 Saved questionnaire answers (enriched intent, project type, language, scope, research preference, notes, review agent choice).

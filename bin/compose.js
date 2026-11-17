@@ -1969,6 +1969,8 @@ if (cmd === 'record-completion') {
         force:          flags['force'] === true || undefined,
         idempotencyKey: flags['idempotency-key'] || undefined,
         workspaceRoot:  cwd,
+        // COMP-VERIFY-FLOW-1: declared user flows report on stderr (stdout stays the JSON result).
+        verifyLog:      (line) => console.error(line),
       })
       if (!gated.ok) {
         console.error(`Refused at ${gated.refusedAt}:\n  - ${gated.reasons.join('\n  - ')}`)
@@ -4485,6 +4487,117 @@ if (cmd === 'build') {
   }
   process.stdout.write(`${pointer.url}\n${pointer.generatedAt}\n${target}\n`)
   process.exit(0)
+
+} else if (cmd === 'verify') {
+  // ---------------------------------------------------------------------------
+  // compose verify [--flow <id>] [--feature <CODE>] [--commit-sha <sha>] [--files-changed-from-stdin]
+  // compose verify --show <CODE>                                   (COMP-VERIFY-FLOW-1)
+  // Runs the project's declared user flows (.compose/compose.json verify.flows) the
+  // way the completion gate does, or shows what a feature's latest completion proved.
+  // Exit: 0 every flow passed (or --show found results), 1 a flow failed, 2 usage/config.
+  // ---------------------------------------------------------------------------
+  const vflags = {}
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i]
+    if (a === '--help' || a === '-h') { vflags.help = true; continue }
+    if (a === '--files-changed-from-stdin') { vflags.stdin = true; continue }
+    const m = /^--(flow|feature|show|commit-sha|workspace)(?:=(.*))?$/.exec(a)
+    if (!m) { console.error(`compose verify: unknown argument ${a}`); process.exit(2) }
+    const v = m[2] ?? args[++i]
+    if (!v || v.startsWith('--')) { console.error(`compose verify: --${m[1]} requires a value`); process.exit(2) }
+    vflags[m[1]] = v
+  }
+  if (vflags.help) {
+    console.log('Usage: compose verify [--flow <id>] [--feature <CODE>] [--commit-sha <sha>] [--files-changed-from-stdin]')
+    console.log('       compose verify --show <CODE>')
+    console.log('')
+    console.log('Runs the user flows declared in .compose/compose.json verify.flows (contracts/verify-config.schema.json).')
+    console.log('A flow passes when it exits 0 AND prints every expected line. A PASS prints an ev:<id> receipt.')
+    console.log('  --flow <id>                 run one flow (default: all, or those covering stdin\'s files)')
+    console.log('  --feature <CODE>            file logs and receipts under that feature')
+    console.log('  --commit-sha <sha>          the commit recorded beside each run (default: HEAD)')
+    console.log('  --files-changed-from-stdin  run only the flows whose covers match these paths')
+    console.log('  --show <CODE>               show the flows the feature\'s latest completion ran')
+    process.exit(0)
+  }
+  const { root: cwd } = resolveCwdWithWorkspace(args)
+  const vf = await import('../lib/verify-flows.js')
+
+  if (vflags.show) {
+    const code = vflags.show
+    const { getCompletions } = await import('../lib/completion-writer.js')
+    const { readEvidence } = await import('../lib/evidence.js')
+    const all = getCompletions(cwd, { feature_code: code, limit: 500 }).completions
+      .slice().sort((a, b) => String(a.recorded_at).localeCompare(String(b.recorded_at)))
+    const latest = all[all.length - 1] || null
+    let shown = 0
+    if (!latest) {
+      console.log(`${code}: no completion recorded`)
+    } else {
+      console.log(`${code}: latest completion ${latest.completion_id} recorded ${latest.recorded_at}`)
+      const flows = Array.isArray(latest.verify_flows) ? latest.verify_flows : []
+      if (!flows.length) console.log('  no declared user flow ran for this completion')
+      for (const f of flows) {
+        shown++
+        console.log(`  ${f.verdict} ${f.id}  ${f.evidence_id || '(no receipt)'}  commit ${f.commit_sha || '(none)'}`)
+        console.log(`    log: ${f.log}`)
+        const rec = f.evidence_id ? readEvidence(f.evidence_id) : null
+        if (f.evidence_id && !rec) console.log(`    receipt: ${f.evidence_id} is NOT in the evidence store`)
+        else if (rec) {
+          // Re-check the receipt's claim (the line is in the log it names). The store's
+          // 15-minute freshness window applies when a receipt is minted, not to a later read.
+          let held = false
+          try { held = readFileSync(rec.evidence.log, 'utf8').split(/\r?\n/).some((l) => l.includes(rec.evidence.output_line)) } catch { held = false }
+          console.log(held
+            ? `    receipt: ${rec.id} re-checked: ${JSON.stringify(rec.evidence.output_line)} is in ${rec.evidence.log}`
+            : `    receipt: ${rec.id} does NOT re-check: ${JSON.stringify(rec.evidence.output_line)} is not in ${rec.evidence.log}`)
+        }
+      }
+    }
+    // Runs after the latest completion (refused attempts, ad-hoc checks) are history, not proof.
+    const after = vf.readRuns(cwd, code).filter((r) => !latest || r.started_at > latest.recorded_at)
+    if (after.length) {
+      console.log(`  later runs not bound to a completion (${after.length}):`)
+      for (const r of after) console.log(`    ${r.verdict} ${r.id}${r.code ? ` ${r.code}` : ''}  ${r.started_at}  log: ${r.log}`)
+    }
+    process.exit(latest || after.length ? 0 : 1)
+  }
+
+  let cfg
+  try {
+    cfg = vf.loadVerifyConfig(cwd)
+  } catch (e) {
+    console.error(`compose verify: ${e.message}`)
+    process.exit(2)
+  }
+  if (!cfg) {
+    console.error(`compose verify: ${join(cwd, '.compose', 'compose.json')} declares no verify block; nothing to run`)
+    process.exit(2)
+  }
+  let flows = cfg.flows
+  if (vflags.flow) {
+    flows = cfg.flows.filter((f) => f.id === vflags.flow)
+    if (!flows.length) {
+      console.error(`compose verify: no declared flow "${vflags.flow}" (declared: ${cfg.flows.map((f) => f.id).join(', ')})`)
+      process.exit(2)
+    }
+  } else if (vflags.stdin) {
+    const { createInterface } = await import('readline')
+    const files = []
+    for await (const line of createInterface({ input: process.stdin, crlfDelay: Infinity })) if (line.trim()) files.push(line.trim())
+    const sel = vf.selectFlows(cfg.flows, files)
+    console.log(sel.line)
+    flows = sel.flows
+  } else {
+    console.log(`verify: running all ${cfg.flows.length} declared flow${cfg.flows.length === 1 ? '' : 's'}`)
+  }
+  let commitSha = vflags['commit-sha'] || null
+  if (!commitSha) {
+    const r = spawnSync('git', ['rev-parse', 'HEAD'], { cwd, encoding: 'utf8' })
+    commitSha = r.status === 0 ? r.stdout.trim() : null
+  }
+  const results = await vf.runFlows(flows, { workspaceRoot: cwd, featureCode: vflags.feature, commitSha, onLine: (l) => console.log(l) })
+  process.exit(results.every((r) => r.verdict === 'PASS') ? 0 : 1)
 
 } else {
   console.error(`Unknown command: ${cmd}`)
