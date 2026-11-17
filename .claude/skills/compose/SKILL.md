@@ -298,7 +298,8 @@ Uses `EnterPlanMode`. Plan writes to `docs/features/<feature-code>/plan.md`.
 **Gate:** All four steps complete:
 
 1. **All tasks executed** — tests pass
-2. **E2E smoke test** — start dev server (`npm run dev` from compose root — Vite on :5173, API on :3001, agent on :3002), run Playwright tests for affected flows
+2. **E2E smoke test** — when the project declares user flows (a `verify` block in `.compose/compose.json`), the step is `compose verify` (pipe the changed files with `--files-changed-from-stdin`); `record-completion` runs the same flows and refuses on a failure, so a flow that fails here is fixed before completion, never flagged past. A project without flows runs its own smoke test for the affected flows.
+   - **Compose's own repo:** declares `pipeline-roundtrip` and `builder-save-blur`; each starts this checkout's server (and cockpit) on test-range ports against a throwaway workspace, never the live :4001. For manual poking, `npm run dev` from the compose root (Vite on :5173, API on :3001, agent on :3002).
 3. **Review loop clean** — Codex reviews via `codex_run`, confidence >= 80, loop until `REVIEW CLEAN`
 4. **Coverage sweep clean** — loop until `TESTS PASSING`
 

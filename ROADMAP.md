@@ -1721,6 +1721,8 @@ OWNER DECISION D-0018 (2026-11-02, ops ledger `c798bfe19d52`): Stratum, Cadence 
 - [ ] `StratumView.jsx`, `CadenceView.jsx`, `WikiView.jsx` (existing) deleted or reduced to the placed bricks
 - [ ] Standalone Stratum, Cadence and wiki shells untouched
 
+---
+
 ## COMP-PROJECT: Project model v2 (groups and dependency graph) — PLANNED
 
 OWNER DECISION D-0023 (2026-11-02, ops ledger `9b7b85599264`): a folder is a project, with virtual groupings to sort its repos, and a PyCharm-style dependency graph among its sub-folders, repos and modules. Builds on the existing project model (COMP-COCKPIT-PROJECT-MODEL-1: `server/project-model.js:2-13` reads `<root>/.compose/compose.json` `project: {name, label, lanes, modules}`), never a second registry. Sequenced after the COMP-SUBAPP cycle (306a-311) unless a lane slot is free; neither row may delay it. 313 depends on 312 (nodes are colored and filtered by group); 314 depends on 312 and 313.
@@ -1757,6 +1759,8 @@ OWNER DECISION D-0023 (2026-11-02, ops ledger `9b7b85599264`): a folder is a pro
 - [ ] A deterministic deriver reads unit repo lists and feature-code citations in commits and CHANGELOGs; no field is hand-typed, and a feature with no evidence shows "no repos found", never an empty silent list
 - [ ] The graph has a feature filter: picking a feature (or a release tag such as 2.0) highlights the repos it touches
 - [ ] Item detail (`src/components/vision/ItemDetailPanel.jsx`, existing) shows owner module, touched repos and group
+
+---
 
 ## FORGE-WIKI: the wiki moves to forge and becomes project-independent — PLANNED
 

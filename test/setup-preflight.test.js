@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   runPreflight, runGate, runProjectCheck, engineDrift, refingerprint, checkEngine,
-  classifyTapFailures, rerunCommand, engineMarkers, SETUP_EXIT, RUN_LOCK_REL,
+  classifyTapFailures, rerunCommand, engineMarkers, SETUP_EXIT, RUN_LOCK_REL, readPreflightConfig,
 } from '../lib/preflight.js';
 import { declaredTiers, tierSkipLine } from '../lib/gate-tiers.js';
 import { TS_MCP_BIN } from './helpers/stratum-test-bin.js';
@@ -314,3 +314,18 @@ for (const [name, a, b] of ROWS) {
   if (typeof a === 'function') test(name, a);
   else test(name, a, b);
 }
+
+// Merge of COMP-VERIFY-FLOW-1: the verify block's two keys are independent.
+test('a verify block holding only flows is "no preflight configured", and flows next to preflight do not break it', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'pf-merge-'));
+  try {
+    mkdirSync(join(dir, '.compose'));
+    const flows = [{ id: 'a', command: ['x'], covers: ['src/**'], expect: ['OK'] }];
+    writeFileSync(join(dir, '.compose', 'compose.json'), JSON.stringify({ verify: { flows } }));
+    assert.equal(readPreflightConfig(dir).configured, false);
+    writeFileSync(join(dir, '.compose', 'compose.json'), JSON.stringify({ verify: { flows, preflight: { exclusive_runs: true } } }));
+    const c = readPreflightConfig(dir);
+    assert.equal(c.configured, true);
+    assert.equal(c.exclusive_runs, true);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});

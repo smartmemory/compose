@@ -50,6 +50,7 @@ The Command Index below is generated from the command table and lists every ship
 | `compose guard` | Manage the canon guard and drift detection |
 | `compose validate` | Validate feature/project artifacts against contracts |
 | `compose record-completion` | Record a completion bound to a commit SHA (flips status to COMPLETE) |
+| `compose verify` | Run the project's declared user flows (verify.flows), or --show what a completion proved |
 | `compose lineage` | PROV-O artifact lineage: stamp \| stale \| show |
 | `compose context` | Show the build decision log |
 
@@ -308,6 +309,32 @@ compose record-completion <FEATURE_CODE> --commit-sha=<full-40-hex> [--tests-pas
 - `--idempotency-key=<key>` — caller-supplied retry key.
 
 Writes the record to `feature.json` `completions[]` and (when `--no-status` is omitted) flips status to `COMPLETE` via `set_feature_status`. Stale state on partial-write failures surfaces typed via `STATUS_FLIP_AFTER_COMPLETION_RECORDED` with `Caused by [...]`.
+
+When the project declares a `verify` block (see [configuration](configuration.md#verify-block)), the
+flows that cover the changed files run first, with progress lines on stderr (stdout stays the JSON
+result). A flow that fails refuses the completion and writes nothing, whatever `--tests-pass` says:
+`Refused at verify:` then `FLOW_FAILED <id>: ...`, `FLOW_SETUP_ERROR <id>: setup problem, nothing was
+tested (...)`, `FLOW_TIMEOUT <id> after <n> s: ...` or `VERIFY_CONFIG_INVALID: ...`, each with its log
+path. Without the block the command behaves exactly as before.
+
+### `compose verify`
+
+Run the declared user flows by hand, or read what a completion proved.
+
+```bash
+compose verify                                   # every declared flow
+compose verify --flow pipeline-roundtrip         # one flow
+git diff --name-only HEAD~1 | compose verify --files-changed-from-stdin   # the flows covering those files
+compose verify --feature FEAT-1 --commit-sha=<40 hex>   # bind the receipts to a feature and commit
+compose verify --show FEAT-1                     # the latest completion's flows, receipts and logs
+```
+
+Prints one line per flow: `PASS <id> (n of n expected lines) ev:<id>`, `FAIL <id>: FLOW_FAILED, ...`,
+`SETUP-ERROR <id>: FLOW_SETUP_ERROR, ...` or `TIMEOUT <id>: FLOW_TIMEOUT, ...`, then its log path. Exit 0
+when every flow passed, 1 when one did not, 2 on a usage or config error. `--show` lists each flow of the
+feature's latest completion (verdict, evidence id, commit, log) and re-checks that the receipt's line is
+still in the log, then any later runs not bound to a completion. `--workspace <id>` picks the workspace as
+other commands do.
 
 ### `compose hooks install|uninstall|status`
 

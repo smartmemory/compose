@@ -1,7 +1,7 @@
 {
   "code": "COMP-WORKSPACE-SESSIONS",
-  "description": "Per-workspace SessionManager registry. Session, activity, agent-spawn, summarizer routes. Snapshot fixes for session-manager.js, summarizer.js, agent-spawn.js. Depends on 197.",
-  "status": "PLANNED",
+  "description": "Per-workspace SessionManager registry. Session, activity, agent-spawn, summarizer routes. Snapshot fixes for session-manager.js, summarizer.js, agent-spawn.js. Depends on 197. Delivered 2026-09-05 by the wiring repair (compose 67c791b3, CHANGELOG \"Workspace isolation\") as a per-workspace runtime: one router and service set per binding (`server/workspace-runtime.js:110-120`), not per-route `req.workspace`. Verified 2026-11-02: `test/workspace-switch-runtime.test.js` + `test/workspace-review-fixes.test.js` 18/18. SessionManager per binding (`server/workspace-runtime.js:114`).",
+  "status": "COMPLETE",
   "phase": "COMP-POLICY-CHECK: Pre-Response Policy Check (Adherence Enforcement)",
   "position": 284,
   "created": "2026-05-29",

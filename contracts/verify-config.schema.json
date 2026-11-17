@@ -2,10 +2,20 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://smartmemory.ai/compose/contracts/verify-config.schema.json",
   "title": "Compose verify block",
-  "description": "The optional `verify` block of `.compose/compose.json`. COMP-SETUP-PREFLIGHT-1 owns `preflight` (lib/preflight.js); COMP-VERIFY-FLOW-1 owns `flows` and extends this file with it. Neither key is required: a project may declare either, both, or neither.",
+  "description": "The optional `verify` block of `.compose/compose.json`. Two independent keys, neither required: `preflight` (COMP-SETUP-PREFLIGHT-1, lib/preflight.js) declares cheap setup checks and the run lock; `flows` (COMP-VERIFY-FLOW-1, lib/verify-flows.js) declares user flows that a completion must pass. A flow PASSes when it exits 0 AND every `expect` line appears in its stdout (lib/verify-flows.js judgeRun). No `flows` key means no flow ever runs; no `preflight` key means only the built-in Stratum engine check runs. Unknown keys are refused.",
   "type": "object",
+  "additionalProperties": false,
   "properties": {
-    "preflight": { "$ref": "#/definitions/preflight" }
+    "preflight": {
+      "$ref": "#/definitions/preflight"
+    },
+    "flows": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/definitions/flow"
+      }
+    }
   },
   "definitions": {
     "preflight": {
@@ -16,7 +26,9 @@
         "checks": {
           "type": "array",
           "maxItems": 20,
-          "items": { "$ref": "#/definitions/check" }
+          "items": {
+            "$ref": "#/definitions/check"
+          }
         },
         "exclusive_runs": {
           "description": "Hold a per-repository run lock (<main checkout>/.compose/data/verify-run.lock) for the whole gated run, so a second verification run on the same repository refuses SETUP-BUSY instead of racing the first. A holder whose pid is dead is a stale lock and is taken over. Default false.",
@@ -32,20 +44,28 @@
     },
     "check": {
       "type": "object",
-      "required": ["id", "command"],
+      "required": [
+        "id",
+        "command"
+      ],
       "additionalProperties": false,
       "properties": {
         "id": {
           "description": "Unique within the block. Names the check in output and in `failureReason: setup:<id>`. `stratum-engine` is reserved for the built-in check.",
           "type": "string",
           "pattern": "^[a-z0-9][a-z0-9-]{0,63}$",
-          "not": { "const": "stratum-engine" }
+          "not": {
+            "const": "stratum-engine"
+          }
         },
         "command": {
           "description": "argv array, run with the project root as cwd. Never a shell string.",
           "type": "array",
           "minItems": 1,
-          "items": { "type": "string", "minLength": 1 }
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
         },
         "expect": {
           "description": "Substring that must appear in the command's stdout or stderr. Without it, the check passes on exit 0.",
@@ -57,6 +77,66 @@
           "type": "number",
           "exclusiveMinimum": 0,
           "maximum": 120
+        }
+      }
+    },
+    "flow": {
+      "type": "object",
+      "required": [
+        "id",
+        "command",
+        "covers",
+        "expect"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "Unique within the block. Names the flow in output, logs and refusal codes.",
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"
+        },
+        "command": {
+          "description": "argv array, run with the workspace root as cwd, in its own process group (same shape as guard.testCommand). Never a shell string.",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "covers": {
+          "description": "Repo-relative path globs (`*` one segment, `**` any depth, `?` one character). A completion whose changed files match any glob runs this flow.",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "expect": {
+          "description": "Literal lines that must each appear in stdout as a whole line (compared after trimming surrounding whitespace). They are the answer; the exit code alone never passes a flow.",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        },
+        "timeout_s": {
+          "description": "Seconds before the flow's whole process group is killed and the run refused FLOW_TIMEOUT. Default 600.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 7200
+        },
+        "setup_exit_codes": {
+          "description": "Exit codes meaning the flow could not start (a missing tool, a port it could not get), reported FLOW_SETUP_ERROR rather than FLOW_FAILED. Default [127]. A spawn error (command not found) is always a setup error.",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 255
+          }
         }
       }
     }
