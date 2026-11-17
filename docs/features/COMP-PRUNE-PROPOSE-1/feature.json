@@ -1,0 +1,10 @@
+{
+  "code": "COMP-PRUNE-PROPOSE-1",
+  "description": "**C10b, ROADMAP.** A pruner that proposes and a person approves: on a schedule or on demand, Compose lists candidate cuts in a project's tests, rules and Markdown (dead, duplicate, never-loaded, permanently red or skipped), each with who still uses it and what covers it instead; nothing is deleted until a person approves that item, and an approved cut is reversible. Owner 2026-11-17: \"why would we reject the pruner though\", then \"yes propose and approve\" (to s1-chat's offer of a propose-and-approve version instead of the killed automatic scheduler COMP-PRUNE-SCHEDULE-1). TRIGGER: the next measured context-growth review or test-teardown round in dogfood use. Never auto-deletes; security, tenancy and ownership checks are never proposed without equivalent coverage named. Extends lib/context-budget.js, lib/learn-summary.js and Stratum learn/outcomes retirement reviews. Source: smart-memory-ops units/OPS-VERIFY-CONFORM-1/report-significance.md (C10).",
+  "status": "PARKED",
+  "phase": "COMP-VERIFY: Verification that proves the outcome (OPS-VERIFY-CONFORM-1 ruling, owner \"agree all\" 2026-11-17)",
+  "created": "2026-11-17",
+  "updated": "2026-11-17",
+  "complexity": "M",
+  "position": 11
+}
