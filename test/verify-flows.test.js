@@ -310,7 +310,7 @@ test('F-1: a completion with covers "./src/**" runs the flow (it used to be sile
 
 test('F-1: a flow whose covers match no file in the repository prints one WARNING naming it', async () => {
   const ws = workspace({ flows: [
-    { id: 'ghost', command: node("console.log('OK')"), covers: ['srcs/**'], expect: ['OK'], timeout_s: 20 },
+    { id: 'ghost', command: node("console.log('OK')"), covers: ['srcs/**', './web/app.js'], expect: ['OK'], timeout_s: 20 },
     { id: 'readme', command: node("console.log('OK')"), covers: ['README.md'], expect: ['OK'], timeout_s: 20 },
   ] });
   const lines = [];
@@ -318,7 +318,7 @@ test('F-1: a flow whose covers match no file in the repository prints one WARNIN
   assert.equal(r.ok, true);
   const warnings = lines.filter((l) => l.startsWith('WARNING:'));
   assert.equal(warnings.length, 1, lines.join('\n'));
-  assert.match(warnings[0], /flow "ghost" covers no file in the repository \(covers: "srcs\/\*\*"\)/);
+  assert.match(warnings[0], /flow "ghost" covers no file in the repository \(covers: "srcs\/\*\*", "\.\/web\/app\.js"\)/, 'the patterns as written');
 });
 
 // COMP-SETUP-PREFLIGHT-1 fix round 1, F-2: a missing Playwright browser is "the flow cannot
