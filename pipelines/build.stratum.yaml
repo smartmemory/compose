@@ -258,8 +258,9 @@ flows:
       # COMP-SETUP-PREFLIGHT-1 fix round 1 (P-1): the tests (T2) run right after the
       # implementation merge and BEFORE any paid review. A failing tests step ends the
       # build here, so the Claude lenses (T3), the Codex review (T4) and the advisory
-      # test_review are never dispatched on code that does not pass its tests. Reviews
-      # that revise code are re-tested by ship, which runs the full suite.
+      # test_review are never dispatched on code that does not pass its tests. A review
+      # fixer can still change code after this step, so `retest` (below, after
+      # codex_review) runs the same tests sub-flow again and must pass before ship.
       - id: coverage
         run: coverage_check
         with:
@@ -343,9 +344,23 @@ flows:
           blueprint: "${blueprint.output.artifact}"
           reviewer_agent: "${input.reviewer_agent}"
 
+      # COMP-SETUP-PREFLIGHT-1 fix round 2: the tests again, after the last review.
+      # The review_gate fixer and the codex_review fixer change code after `coverage`
+      # passed; this step must see that code pass before docs and ship. Ship's own
+      # test run is not that check (it commits whatever its result, and an unguarded
+      # project read an unreadable or timed-out run as a pass). When no code changed
+      # since `coverage` passed, Compose answers this step with that pass and logs
+      # the skip, so a clean review costs no second test run.
+      - id: retest
+        after: [codex_review]
+        run: coverage_check
+        with:
+          task: "${input.description}"
+          plan: "${plan.output.artifact}"
+
       # Advisory by construction: no output contract and no ensure.
       - id: test_review
-        after: [codex_review]
+        after: [retest]
         agent: "$.input.reviewer_agent"
         do: >
           Review tests generated for ${input.featureCode}. Flag placeholders,
