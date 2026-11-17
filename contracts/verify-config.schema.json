@@ -1,22 +1,93 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://smartmemory.ai/compose/contracts/verify-config.schema.json",
-  "title": "Compose verify block (COMP-VERIFY-FLOW-1)",
-  "description": "The optional `verify` block of `.compose/compose.json`. A project declares user flows: a command that starts the app, drives it the way a user does, prints what it saw, and cleans up. Compose runs the flows a change touches before a feature becomes COMPLETE (lib/completion-gate.js) and on demand (`compose verify`). A flow PASSes when it exits 0 AND every `expect` line appears in its stdout (lib/verify-flows.js judgeRun). No `verify` block means no flow ever runs.",
+  "title": "Compose verify block",
+  "description": "The optional `verify` block of `.compose/compose.json`. Two independent keys, neither required: `preflight` (COMP-SETUP-PREFLIGHT-1, lib/preflight.js) declares cheap setup checks and the run lock; `flows` (COMP-VERIFY-FLOW-1, lib/verify-flows.js) declares user flows that a completion must pass. A flow PASSes when it exits 0 AND every `expect` line appears in its stdout (lib/verify-flows.js judgeRun). No `flows` key means no flow ever runs; no `preflight` key means only the built-in Stratum engine check runs. Unknown keys are refused.",
   "type": "object",
-  "required": ["flows"],
   "additionalProperties": false,
   "properties": {
+    "preflight": {
+      "$ref": "#/definitions/preflight"
+    },
     "flows": {
       "type": "array",
       "minItems": 1,
-      "items": { "$ref": "#/definitions/flow" }
+      "items": {
+        "$ref": "#/definitions/flow"
+      }
     }
   },
   "definitions": {
+    "preflight": {
+      "description": "Cheap checks run before an expensive verification (the pre-push test gate, `compose build`, `compose preflight`). A failure is reported SETUP-FAIL, never as a product red. The built-in Stratum engine check runs with or without this block; this block only adds project checks and the run lock.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "checks": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "$ref": "#/definitions/check"
+          }
+        },
+        "exclusive_runs": {
+          "description": "Hold a per-repository run lock (<main checkout>/.compose/data/verify-run.lock) for the whole gated run, so a second verification run on the same repository refuses SETUP-BUSY instead of racing the first. A holder whose pid is dead is a stale lock and is taken over. Default false.",
+          "type": "boolean"
+        },
+        "busy_wait_s": {
+          "description": "Seconds a run waits for a live holder before refusing SETUP-BUSY. Default 0 (refuse at once).",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 7200
+        }
+      }
+    },
+    "check": {
+      "type": "object",
+      "required": [
+        "id",
+        "command"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "Unique within the block. Names the check in output and in `failureReason: setup:<id>`. `stratum-engine` is reserved for the built-in check.",
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]{0,63}$",
+          "not": {
+            "const": "stratum-engine"
+          }
+        },
+        "command": {
+          "description": "argv array, run with the project root as cwd. Never a shell string.",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "expect": {
+          "description": "Substring that must appear in the command's stdout or stderr. Without it, the check passes on exit 0.",
+          "type": "string",
+          "minLength": 1
+        },
+        "timeout_s": {
+          "description": "Seconds before the check is killed and fails. Default 10.",
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 120
+        }
+      }
+    },
     "flow": {
       "type": "object",
-      "required": ["id", "command", "covers", "expect"],
+      "required": [
+        "id",
+        "command",
+        "covers",
+        "expect"
+      ],
       "additionalProperties": false,
       "properties": {
         "id": {
@@ -28,19 +99,29 @@
           "description": "argv array, run with the workspace root as cwd, in its own process group (same shape as guard.testCommand). Never a shell string.",
           "type": "array",
           "minItems": 1,
-          "items": { "type": "string", "minLength": 1 }
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
         },
         "covers": {
           "description": "Repo-relative path globs (`*` one segment, `**` any depth, `?` one character). A completion whose changed files match any glob runs this flow.",
           "type": "array",
           "minItems": 1,
-          "items": { "type": "string", "minLength": 1 }
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
         },
         "expect": {
           "description": "Literal lines that must each appear in stdout as a whole line (compared after trimming surrounding whitespace). They are the answer; the exit code alone never passes a flow.",
           "type": "array",
           "minItems": 1,
-          "items": { "type": "string", "minLength": 1, "maxLength": 2000 }
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
         },
         "timeout_s": {
           "description": "Seconds before the flow's whole process group is killed and the run refused FLOW_TIMEOUT. Default 600.",
@@ -51,7 +132,11 @@
         "setup_exit_codes": {
           "description": "Exit codes meaning the flow could not start (a missing tool, a port it could not get), reported FLOW_SETUP_ERROR rather than FLOW_FAILED. Default [127]. A spawn error (command not found) is always a setup error.",
           "type": "array",
-          "items": { "type": "integer", "minimum": 1, "maximum": 255 }
+          "items": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 255
+          }
         }
       }
     }

@@ -230,3 +230,22 @@ test('gate: an invalid verify block refuses at load with the field named (never 
   assert.equal(r.code, 'VERIFY_CONFIG_INVALID');
   assert.match(r.reasons[0], /verify\.flows\[0\]\.command must be array/);
 });
+
+// Merge of COMP-SETUP-PREFLIGHT-1: the verify block's two keys are independent.
+test('gate: a verify block holding only preflight runs no flow and records exactly what it did before', async () => {
+  const ws = workspace({ preflight: { exclusive_runs: true } });
+  const r = await completionGate({ featureCode: 'FEAT-1', commitSha: ws.sha, testsPass: true, workspaceRoot: ws.root,
+    verifyLog: () => assert.fail('no verify line may print without verify.flows') });
+  assert.equal(r.ok, true, r.reasons?.join('; '));
+  assert.equal('verify' in r, false);
+  assert.equal('verify_flows' in ws.feature().completions[0], false);
+  assert.equal(existsSync(path.join(ws.root, '.compose', 'data', 'verify')), false);
+});
+
+test('gate: a misspelled flows key next to preflight is refused, never read as "no flows"', async () => {
+  const ws = workspace({ preflight: {}, flow: [{ id: 'x', command: ['x'], covers: ['a'], expect: ['b'] }] });
+  const r = await completionGate({ featureCode: 'FEAT-1', commitSha: ws.sha, testsPass: true, workspaceRoot: ws.root });
+  assert.equal(r.ok, false);
+  assert.equal(r.code, 'VERIFY_CONFIG_INVALID');
+  assert.match(r.reasons[0], /unknown field "flow"/);
+});

@@ -527,6 +527,18 @@ export class BuildStreamBridge {
           tiersRun: event.tiersRun ?? [],
           tiersSkipped: event.tiersSkipped ?? [],
           costSaved: event.costSaved ?? 0,
+          skippedLine: event.skippedLine ?? null,
+          _source: 'build',
+        };
+
+      // COMP-SETUP-PREFLIGHT-1: the engine changed during the build
+      case 'setup_invalid':
+        return {
+          type: 'system', subtype: 'setup_invalid',
+          featureCode: event.featureCode,
+          check: event.check ?? 'stratum-engine',
+          text: event.line,
+          buildStatus: event.buildStatus ?? null,
           _source: 'build',
         };
 

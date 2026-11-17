@@ -17,6 +17,7 @@ The Command Index below is generated from the command table and lists every ship
 | `compose install` | Legacy bootstrap — runs init + setup |
 | `compose import` | Scan an existing project and generate a structured analysis |
 | `compose doctor` | Check external skill dependencies |
+| `compose preflight` | Cheap setup checks (engine, project checks), --gate wraps a test run |
 | `compose update` (alias: `upgrade`) | Pull latest compose, reinstall deps, refresh global skill |
 
 ### Features & roadmap
@@ -402,6 +403,32 @@ compose doctor --json       # machine-readable, full dep records
 compose doctor --strict     # exit 1 on any missing required dep (use in CI)
 compose doctor --verbose    # also list scanned filesystem paths
 ```
+
+### `compose preflight`
+
+Cheap setup checks, run before anything expensive (COMP-SETUP-PREFLIGHT-1). A failure is a **setup** result with its own wording and exit code, never a test failure, and nothing is retried automatically.
+
+```bash
+compose preflight            # one line per check with its result and time
+compose preflight --json     # the same, machine-readable
+compose preflight --gate --log .compose/data/pre-push.log -- npm test
+                             # checks, run lock (if opted in), run the command into the log,
+                             # then re-check the engine (what the pre-push hook runs)
+```
+
+Checks: the built-in **`stratum-engine`** check (the Stratum engine file Compose runs, from the installed `@smartmemory/stratum` `dist/`, without falling back to the sibling `src/` the way the runtime resolver does. The CLI is probed to be sure it runs), then any project checks from `verify.preflight.checks` (see `docs/configuration.md`). `--gate` skips the engine check in a repository that depends on neither `@smartmemory/stratum` nor `@smartmemory/compose`, because its tests never load it.
+
+| Exit | Meaning |
+|------|---------|
+| 0 | all checks passed (with `--gate`: the command passed) |
+| 78 | `SETUP-FAIL`: a check failed. With `--gate` the command never started |
+| 75 | `SETUP-BUSY`: `--gate` only, another verification run holds the repository (`verify.preflight.exclusive_runs`) |
+| 79 | `SETUP-INVALID`: `--gate` only, the engine changed during the run and every red named it. The output prints a command that reruns only those files |
+| other | `--gate` only, the command's own exit code (a product red). Setup-invalid files, if any, are still listed |
+
+`compose build` runs the same checks (engine existence and fingerprint, plus project checks) after planning and before the first agent dispatch, the Codex worktree probe included. A failure stops the build with `failureReason: setup:<check id>` in build history, starts no fix iteration and charges no iteration budget. At the end of a build the engine is re-checked. A change prints a `SETUP-INVALID` line and emits a `setup_invalid` build-stream event.
+
+`COMPOSE_SKIP_PREFLIGHT=1` skips every check (one WARNING names them). The run lock is not a check and is unaffected.
 
 ## Server
 

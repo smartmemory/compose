@@ -130,16 +130,20 @@ Optional. Written by the cockpit's left bar (COMP-COCKPIT-FLEET-PROJECTS-1, -2);
 
 ### `verify` block
 
-Optional (COMP-VERIFY-FLOW-1). Declares the project's **user flows**: commands that do what a person does
-(start the app, click, save, reload) and print lines that prove it worked. When the block is present,
-`compose record-completion` runs the flows that cover the changed files before it writes anything, and
-refuses the completion if one fails. A project without the block sees no change at all: no flow runs, no
-new line, no new file. Schema: `contracts/verify-config.schema.json`; an invalid block refuses at load
-(`VERIFY_CONFIG_INVALID`, naming the field).
+Optional. Shape: `contracts/verify-config.schema.json`. Two independent keys, neither required, and a
+project may declare either, both or neither; any other key is refused. `preflight` is read by
+`lib/preflight.js` (COMP-SETUP-PREFLIGHT-1); `flows` by `lib/verify-flows.js` (COMP-VERIFY-FLOW-1).
 
 ```json
 {
   "verify": {
+    "preflight": {
+      "checks": [
+        { "id": "falkordb-up", "command": ["redis-cli", "-p", "19123", "ping"], "expect": "PONG", "timeout_s": 5 }
+      ],
+      "exclusive_runs": true,
+      "busy_wait_s": 0
+    },
     "flows": [
       {
         "id": "pipeline-roundtrip",
@@ -153,6 +157,27 @@ new line, no new file. Schema: `contracts/verify-config.schema.json`; an invalid
   }
 }
 ```
+
+#### `verify.preflight`
+
+An invalid `preflight` block fails the run as `SETUP-FAIL config` rather than being ignored.
+
+| Field | Default | Notes |
+|-------|---------|-------|
+| `preflight.checks[]` | none | Cheap checks run before the pre-push test gate, `compose build` (before the first agent dispatch) and `compose preflight`. `id` names the check in output and in `failureReason: setup:<id>` (`stratum-engine` is reserved). `command` is an argv array run in the project root, never a shell string. `expect` is a substring of stdout or stderr. Without it the check passes on exit 0. `timeout_s` defaults to 10. |
+| `preflight.exclusive_runs` | `false` | The pre-push gate holds a run lock for the whole suite at `<main checkout>/.compose/data/verify-run.lock`, one per repository (every worktree shares it). A second gate run prints `SETUP-BUSY` with the holder's pid, start time and command, and refuses. A holder whose pid is no longer running is a stale lock and is taken over, with a line saying so. A live holder is never overridden. A holder on another host, or an unreadable lock, is never judged stale: remove the directory by hand. |
+| `preflight.busy_wait_s` | `0` | Seconds a gate run waits for a live holder before refusing. `0` refuses at once. |
+
+Without a `preflight` block only the built-in Stratum engine check runs (`compose preflight` in `docs/cli.md`).
+
+#### `verify.flows`
+
+Declares the project's **user flows**: commands that do what a person does
+(start the app, click, save, reload) and print lines that prove it worked. When `flows` is present,
+`compose record-completion` runs the flows that cover the changed files before it writes anything, and
+refuses the completion if one fails. A project without `flows` (no `verify` block, or one holding only
+`preflight`) sees no change at all: no flow runs, no new line, no new file. An invalid `verify` block
+(either key) refuses the completion at load (`VERIFY_CONFIG_INVALID`, naming the field).
 
 | Field | Default | Notes |
 |-------|---------|-------|
@@ -227,6 +252,7 @@ Scaffolded from `templates/ROADMAP.md` with project name, date, and placeholder 
 | `CLAUDE_MODEL` | `claude-sonnet-5-5` | Default model for ClaudeSDKConnector |
 | `CODEX_MODEL` | `gpt-5.6-terra/high` | Default model for CodexConnector. Canonical source: `stratum/src/stratum/judge/codex_models.py` (see its docstring for how to change this or add a model) |
 | `COMPOSE_DEBUG` | (unset) | Enable verbose event logging to stderr |
+| `COMPOSE_SKIP_PREFLIGHT` | (unset) | `1` skips every setup check of `compose preflight`, the pre-push gate and `compose build` (built-in `stratum-engine` and `verify.preflight.checks`) with one WARNING naming them. The end-of-run engine re-check is off too. The run lock is unaffected. |
 | `COMPOSE_TARGET` | (unset) | Override project root for `compose start` |
 | `COMPOSE_SERVER_DISPATCH` | unset | Set to `1` to route `parallel_dispatch` steps through Stratum's server-side executor. Covers `isolation: "none"` unconditionally, and `isolation: "worktree"` steps that declare `capture_diff: true` (Compose consumes diffs from poll response and merges them client-side). When the step also declares `defer_advance: true`, Compose reports merge_status back via `stratum_parallel_advance` — client-side merge conflicts surface as `{status: 'complete', output: {merge_status: 'conflict'}}` and Compose sets `buildStatus='failed'` (non-zero CI exit). Worktree steps without `defer_advance` use the legacy throw-on-conflict path. |
 | `COMPOSE_SERVER_DISPATCH_POLL_MS` | `500` | Poll interval (ms) against `stratum_parallel_poll`. Lower = faster task-transition event propagation; higher = less MCP load. |

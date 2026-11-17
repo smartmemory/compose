@@ -29,9 +29,15 @@ function resolveTestBin(kind) {
   try {
     return require.resolve(distSpecifier);
   } catch {
+    // Name the dist path that was expected (COMP-SETUP-PREFLIGHT-1: the pre-push gate
+    // attributes a red to a mid-run engine rebuild by this path in the output).
+    let expected = distSpecifier;
+    try {
+      expected = resolve(dirname(require.resolve('@smartmemory/stratum/package.json')), distSpecifier.split('/').slice(2).join('/'));
+    } catch { /* package not installed at all */ }
     throw new Error(
-      `Cannot resolve the stratum ${kind} bin: no adjacent stratum checkout and `
-        + '@smartmemory/stratum is not installed. Install it or place a stratum sibling.',
+      `Cannot resolve the stratum ${kind} bin (not found: ${expected}; no adjacent checkout at ${sibling}). `
+        + 'Install @smartmemory/stratum or place a stratum sibling.',
     );
   }
 }

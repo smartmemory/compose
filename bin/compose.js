@@ -882,6 +882,38 @@ if (cmd === 'doctor') {
   process.exit(0)
 }
 
+// ---------------------------------------------------------------------------
+// compose preflight — COMP-SETUP-PREFLIGHT-1
+//   compose preflight [--json]                    run the setup checks, one line each
+//   compose preflight --gate [--log <file>] -- <cmd...>
+//                                                 checks, run lock (opt-in), run <cmd>,
+//                                                 then the end-of-run engine re-check
+// Exit: 0 ok, 78 SETUP-FAIL, 75 SETUP-BUSY, 79 SETUP-INVALID, else <cmd>'s own code.
+// ---------------------------------------------------------------------------
+if (cmd === 'preflight') {
+  const { runPreflight, formatPreflight, runGate, SETUP_EXIT } = await import('../lib/preflight.js')
+  const dd = args.indexOf('--')
+  const own = dd === -1 ? args : args.slice(0, dd)
+  const runArgv = dd === -1 ? [] : args.slice(dd + 1)
+  const logIdx = own.indexOf('--log')
+  const logPath = logIdx !== -1 ? own[logIdx + 1] : null
+  if (own.includes('--gate')) {
+    if (runArgv.length === 0) {
+      console.error('compose preflight --gate needs a command after `--` (e.g. -- npm test)')
+      process.exit(2)
+    }
+    process.exit(await runGate({ cwd: process.cwd(), argv: runArgv, logPath }))
+  }
+  const pre = runPreflight({ cwd: process.cwd(), mode: 'cli' })
+  if (own.includes('--json')) {
+    console.log(JSON.stringify({ ok: pre.ok, skipped: pre.skipped, warning: pre.warning ?? null,
+      results: pre.results.map(({ fingerprint, ...r }) => r) }, null, 2))
+  } else {
+    for (const line of formatPreflight(pre)) (pre.ok ? console.log : console.error)(line)
+  }
+  process.exit(pre.ok ? 0 : SETUP_EXIT.FAIL)
+}
+
 if (cmd === 'update' || cmd === 'upgrade') {
   await runUpdate(args)
   process.exit(0)
