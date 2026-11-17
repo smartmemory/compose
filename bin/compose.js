@@ -4617,6 +4617,8 @@ if (cmd === 'build') {
     const { createInterface } = await import('readline')
     const files = []
     for await (const line of createInterface({ input: process.stdin, crlfDelay: Infinity })) if (line.trim()) files.push(line.trim())
+    // F-1: a flow whose covers match nothing would read as a correct "not touched".
+    for (const w of vf.uncoveredFlowWarnings(cfg.flows, cwd, files)) console.log(w)
     const sel = vf.selectFlows(cfg.flows, files)
     console.log(sel.line)
     flows = sel.flows

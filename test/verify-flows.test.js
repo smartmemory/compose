@@ -22,7 +22,7 @@ process.env.COMPOSE_PORT = deadPortSync();
 const SCRATCH = mkdtempSync(path.join(process.env.SM_SCRATCH_ROOT || tmpdir(), 'verify-flows-'));
 process.env.COMPOSE_EVIDENCE_STORE = path.join(SCRATCH, 'evidence.jsonl');
 
-const { runFlows, validateVerifyBlock, selectFlows, verifyForCompletion, VERIFY_CODES } = await import('../lib/verify-flows.js');
+const { runFlows, validateVerifyBlock, selectFlows, verifyForCompletion, VERIFY_CODES, matchGlob: matchGlobForTest } = await import('../lib/verify-flows.js');
 const { completionGate } = await import('../lib/completion-gate.js');
 const { readEvidence, verifyEvidence } = await import('../lib/evidence.js');
 
@@ -268,4 +268,55 @@ test('P-2: an unparseable compose.json refuses (flow reader and completion gate)
   rmSync(file);
   assert.equal(loadVerifyConfig(dir), null, 'an absent file is still "no flows"');
   assert.equal(guardEnabled(dir), false);
+});
+
+// ---------------------------------------------------------------------------
+// COMP-SETUP-PREFLIGHT-1 fix round 1, F-1: `covers` written the habitual ways matches.
+// ---------------------------------------------------------------------------
+test('F-1: covers patterns are normalised at load (./, leading /, a folder) and match', async () => {
+  const { normalizeCovers } = await import('../lib/verify-flows.js');
+  const n = (g) => normalizeCovers([g], 'verify.flows[0].covers');
+  assert.deepEqual(n('./src/**'), ['src/**']);
+  assert.deepEqual(n('/src/**'), ['src/**']);
+  assert.deepEqual(n('src/'), ['src/**']);
+  assert.deepEqual(n('src'), ['src', 'src/**']);
+  assert.deepEqual(n('src/components/vision'), ['src/components/vision', 'src/components/vision/**']);
+  assert.deepEqual(n('src/**/*.js'), ['src/**/*.js'], 'a real glob is left alone');
+  for (const g of ['./src/**', '/src/**', 'src/', 'src', 'src/**']) {
+    const covers = n(g);
+    assert.ok(covers.some((c) => matchGlobForTest(c, 'src/a.js')), `${g} covers src/a.js`);
+  }
+});
+
+test('F-1: a covers pattern that can never match a repo path is refused at load, the pattern named', async () => {
+  const { loadVerifyConfig, VerifyConfigError } = await import('../lib/verify-flows.js');
+  for (const [bad, why] of [['../web/**', /outside the repository/], ['src\\a.js', /backslash/], ['./', /names nothing/], ['/', /names nothing/]]) {
+    const dir = mkdtempSync(path.join(SCRATCH, 'covers-'));
+    mkdirSync(path.join(dir, '.compose'));
+    writeFileSync(path.join(dir, '.compose', 'compose.json'), JSON.stringify({ verify: { flows: [{ id: 'a', command: ['x'], covers: ['src/**', bad], expect: ['OK'] }] } }));
+    assert.throws(() => loadVerifyConfig(dir), (e) => e instanceof VerifyConfigError && e.message.includes(`verify.flows[0].covers[1] ${JSON.stringify(bad)}`) && why.test(e.message), bad);
+  }
+});
+
+test('F-1: a completion with covers "./src/**" runs the flow (it used to be silently skipped)', async () => {
+  const ws = workspace({ flows: [{ id: 'roundtrip', command: node("console.log('EDGES build 0')"), covers: ['./src/**'], expect: ['EDGES build 18'], timeout_s: 20 }] });
+  const lines = [];
+  const r = await completionGate({ featureCode: 'FEAT-1', commitSha: ws.sha, testsPass: true,
+    filesChanged: ['src/lib/model.js'], workspaceRoot: ws.root, verifyLog: (l) => lines.push(l) });
+  assert.equal(r.ok, false, lines.join('\n'));
+  assert.equal(r.code, 'FLOW_FAILED');
+  assert.ok(lines.some((l) => l.startsWith('verify: 1 of 1 declared flow cover the 1 changed file')), lines.join('\n'));
+});
+
+test('F-1: a flow whose covers match no file in the repository prints one WARNING naming it', async () => {
+  const ws = workspace({ flows: [
+    { id: 'ghost', command: node("console.log('OK')"), covers: ['srcs/**'], expect: ['OK'], timeout_s: 20 },
+    { id: 'readme', command: node("console.log('OK')"), covers: ['README.md'], expect: ['OK'], timeout_s: 20 },
+  ] });
+  const lines = [];
+  const r = await verifyForCompletion({ workspaceRoot: ws.root, featureCode: 'FEAT-1', filesChanged: ['docs/x.md'], onLine: (l) => lines.push(l) });
+  assert.equal(r.ok, true);
+  const warnings = lines.filter((l) => l.startsWith('WARNING:'));
+  assert.equal(warnings.length, 1, lines.join('\n'));
+  assert.match(warnings[0], /flow "ghost" covers no file in the repository \(covers: "srcs\/\*\*"\)/);
 });
