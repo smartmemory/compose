@@ -249,3 +249,23 @@ test('gate: a misspelled flows key next to preflight is refused, never read as "
   assert.equal(r.code, 'VERIFY_CONFIG_INVALID');
   assert.match(r.reasons[0], /unknown field "flow"/);
 });
+
+// COMP-SETUP-PREFLIGHT-1 fix round 1, P-2: an unparseable compose.json is a refusal that
+// names the file, at the flow reader and at the completion gate, never "no flows".
+test('P-2: an unparseable compose.json refuses (flow reader and completion gate), naming the file', async () => {
+  const { loadVerifyConfig, VerifyConfigError } = await import('../lib/verify-flows.js');
+  const { guardEnabled } = await import('../lib/completion-gate.js');
+  const dir = mkdtempSync(path.join(SCRATCH, 'badjson-'));
+  mkdirSync(path.join(dir, '.compose'));
+  const file = path.join(dir, '.compose', 'compose.json');
+  writeFileSync(file, '{"verify":{"flows":[{"id":"a","command":["x"],"covers":["src/**"],"expect":["OK"]}]},}');
+  assert.throws(() => loadVerifyConfig(dir), (e) => e instanceof VerifyConfigError && e.message.includes(`${file} is not valid JSON`));
+  assert.throws(() => guardEnabled(dir), /is not valid JSON/);
+  const r = await completionGate({ featureCode: 'FEAT-BAD', commitSha: 'a'.repeat(40), testsPass: true, filesChanged: ['src/a.js'], workspaceRoot: dir });
+  assert.equal(r.ok, false);
+  assert.equal(r.refusedAt, 'config');
+  assert.match(r.reasons[0], /compose\.json is not valid JSON/);
+  rmSync(file);
+  assert.equal(loadVerifyConfig(dir), null, 'an absent file is still "no flows"');
+  assert.equal(guardEnabled(dir), false);
+});

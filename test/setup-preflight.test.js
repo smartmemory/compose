@@ -451,3 +451,23 @@ flows:
   assert.equal(hits.length, 1, `one WARNING; got: ${warned.join(' | ')}`);
   assert.match(hits[0], /pipelines\/build\.stratum\.yaml/);
 });
+
+// Fix round 1, P-2: a compose.json that exists but is not valid JSON is a loud refusal on
+// the push gate, never "not configured" (which dropped the run lock and every check).
+test('P-2: an unparseable compose.json refuses the gate (SETUP-FAIL config, file named) and runs no tests', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'pf-badjson-'));
+  try {
+    mkdirSync(join(dir, '.compose'));
+    writeFileSync(join(dir, 'package.json'), '{"name":"rig","version":"1.0.0"}');
+    writeFileSync(join(dir, '.compose', 'compose.json'), '{"verify":{"preflight":{"exclusive_runs":true}},}');
+    const r = spawnSync(process.execPath, [COMPOSE_BIN, 'preflight', '--gate', '--', process.execPath, '-e', 'console.log("TESTS-RAN")'], { cwd: dir, encoding: 'utf8', env: NO_SKIP });
+    const out = `${r.stdout}${r.stderr}`;
+    assert.equal(r.status, 78, out);
+    assert.match(out, /SETUP-FAIL\s+config/);
+    assert.match(out, /\.compose\/compose\.json is not valid JSON/);
+    assert.doesNotMatch(out, /TESTS-RAN/, 'the test command never ran');
+    assert.throws(() => readPreflightConfig(dir), (e) => e.code === 'COMPOSE_CONFIG_UNREADABLE' && e.message.includes(join(dir, '.compose', 'compose.json')));
+    rmSync(join(dir, '.compose', 'compose.json'));
+    assert.equal(readPreflightConfig(dir).configured, false, 'an absent file is still "not configured"');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
