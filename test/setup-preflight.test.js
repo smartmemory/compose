@@ -269,6 +269,45 @@ flows:
     assert.equal(existsSync(join(dir, '.compose', 'data', 'budget-ledger.json')), false, 'no iteration budget charged');
     rmSync(dir, { recursive: true, force: true });
   }],
+  ['case 4: a failed T1 step dispatches no T3/T4 agent (dispatch log, real build)', { skip: !existsSync(TS_MCP_BIN) && 'TS engine unavailable' }, async () => {
+    const { runBuild } = await import('../lib/build.js');
+    const { runBuildWithAgentFactory } = await import('./helpers/ts-agent-harness.js');
+    const dir = mkdtempSync(join(tmpdir(), 'setup-preflight-t1-'));
+    mkdirSync(join(dir, '.compose', 'data'), { recursive: true });
+    writeFileSync(join(dir, '.compose', 'compose.json'), JSON.stringify({ version: 2, capabilities: { stratum: true } }));
+    mkdirSync(join(dir, 'docs', 'features', 'FEAT-4'), { recursive: true });
+    writeFileSync(join(dir, 'docs', 'features', 'FEAT-4', 'design.md'), '# FEAT-4\n');
+    mkdirSync(join(dir, 'pipelines'));
+    writeFileSync(join(dir, 'pipelines', 'build.stratum.yaml'), `version: 1
+contracts:
+  PhaseResult: { phase: string, artifact: string, outcome: string }
+flows:
+  entry: build
+  build:
+    input: { featureCode: string, description: string, pre_merge_gate: "string[]?", implementer_agent: string, reviewer_agent: string }
+    output: { from: "\${codex_review.output}", contract: PhaseResult }
+    steps:
+      - { id: lint, agent: claude, do: "lint", out: PhaseResult, attempts: 1 }
+      - { id: review, after: [lint], agent: claude, do: "review", out: PhaseResult, attempts: 1 }
+      - { id: codex_review, after: [review], agent: codex, do: "codex", out: PhaseResult, attempts: 1 }
+`);
+    const dispatched = [];
+    const factory = (agentType) => ({
+      async *run(prompt) {
+        const stepId = (prompt.match(/step "([^"]+)"/)?.[1] ?? 'unknown').split('/').at(-1);
+        dispatched.push(`${stepId}(${agentType})`);
+        yield { type: 'assistant', content: JSON.stringify({ phase: stepId, artifact: 'x.md', outcome: stepId === 'lint' ? 'failed' : 'complete' }) };
+      },
+      interrupt() {}, get isRunning() { return false; },
+    });
+    try { await runBuildWithAgentFactory(runBuild, 'FEAT-4', { cwd: dir, connectorFactory: factory, description: 'x' }); } catch { /* a failed build may throw; the dispatch log is the proof */ }
+    assert.deepEqual(dispatched, ['lint(claude)'], 'only the T1 step was dispatched');
+    const stream = readFileSync(join(dir, '.compose', 'build-stream.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+    const summary = stream.filter((e) => e.type === 'gate_tier_summary').at(-1);
+    assert.equal(summary.skippedLine, 'skipped T3,T4: T1 failed');
+    assert.ok(['T3', 'T4'].every((t) => summary.tiersSkipped.includes(t)));
+    rmSync(dir, { recursive: true, force: true });
+  }],
 ];
 
 for (const [name, a, b] of ROWS) {
