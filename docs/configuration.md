@@ -128,6 +128,32 @@ Optional. Written by the cockpit's left bar (COMP-COCKPIT-FLEET-PROJECTS-1, -2);
 | `projects` | absent | The PROJECTS list in the Fleet room's left bar, in order: the lanes the Process tab shows (comparison columns and time-split rows) and their order. Absent means every lane `GET /api/process` knows, in builder order. A name the builder no longer knows is skipped. Written by `POST /api/fleet/projects` (loopback callers only, known lane names only, no duplicates) as an atomic rewrite that keeps every other key; a `compose.json` that is not valid JSON is refused (409), never overwritten. |
 | `roots` | absent | Lane name to the Compose project a PROJECTS click opens in Home, Ideas, Roadmap, Build and Review: a path (`~` expands) or `null` for none. A lane absent here uses the built-in default (forge, cadence, 2.0, maya and trader, taken from the status builder's configs); every other lane has none. A root counts only while `<root>/.compose` is a directory; otherwise the room shows "No Compose project for <lane>". Served by `GET /api/fleet/roots`. A malformed value is ignored whole and named in that route's `error`. Saving the order keeps this key. |
 
+### `verify` block
+
+Optional. Shape: `contracts/verify-config.schema.json`. `preflight` is read by `lib/preflight.js` (COMP-SETUP-PREFLIGHT-1). An invalid `preflight` block fails the run as `SETUP-FAIL config` rather than being ignored.
+
+```json
+{
+  "verify": {
+    "preflight": {
+      "checks": [
+        { "id": "falkordb-up", "command": ["redis-cli", "-p", "19123", "ping"], "expect": "PONG", "timeout_s": 5 }
+      ],
+      "exclusive_runs": true,
+      "busy_wait_s": 0
+    }
+  }
+}
+```
+
+| Field | Default | Notes |
+|-------|---------|-------|
+| `preflight.checks[]` | none | Cheap checks run before the pre-push test gate, `compose build` (before the first agent dispatch) and `compose preflight`. `id` names the check in output and in `failureReason: setup:<id>` (`stratum-engine` is reserved). `command` is an argv array run in the project root, never a shell string. `expect` is a substring of stdout or stderr. Without it the check passes on exit 0. `timeout_s` defaults to 10. |
+| `preflight.exclusive_runs` | `false` | The pre-push gate holds a run lock for the whole suite at `<main checkout>/.compose/data/verify-run.lock`, one per repository (every worktree shares it). A second gate run prints `SETUP-BUSY` with the holder's pid, start time and command, and refuses. A holder whose pid is no longer running is a stale lock and is taken over, with a line saying so. A live holder is never overridden. A holder on another host, or an unreadable lock, is never judged stale: remove the directory by hand. |
+| `preflight.busy_wait_s` | `0` | Seconds a gate run waits for a live holder before refusing. `0` refuses at once. |
+
+Without a `preflight` block only the built-in Stratum engine check runs (`compose preflight` in `docs/cli.md`).
+
 ## `.compose/questionnaire.json`
 
 Saved questionnaire answers (enriched intent, project type, language, scope, research preference, notes, review agent choice).
@@ -184,6 +210,7 @@ Scaffolded from `templates/ROADMAP.md` with project name, date, and placeholder 
 | `CLAUDE_MODEL` | `claude-sonnet-5-5` | Default model for ClaudeSDKConnector |
 | `CODEX_MODEL` | `gpt-5.6-terra/high` | Default model for CodexConnector. Canonical source: `stratum/src/stratum/judge/codex_models.py` (see its docstring for how to change this or add a model) |
 | `COMPOSE_DEBUG` | (unset) | Enable verbose event logging to stderr |
+| `COMPOSE_SKIP_PREFLIGHT` | (unset) | `1` skips every setup check of `compose preflight`, the pre-push gate and `compose build` (built-in `stratum-engine` and `verify.preflight.checks`) with one WARNING naming them. The end-of-run engine re-check is off too. The run lock is unaffected. |
 | `COMPOSE_TARGET` | (unset) | Override project root for `compose start` |
 | `COMPOSE_SERVER_DISPATCH` | unset | Set to `1` to route `parallel_dispatch` steps through Stratum's server-side executor. Covers `isolation: "none"` unconditionally, and `isolation: "worktree"` steps that declare `capture_diff: true` (Compose consumes diffs from poll response and merges them client-side). When the step also declares `defer_advance: true`, Compose reports merge_status back via `stratum_parallel_advance` — client-side merge conflicts surface as `{status: 'complete', output: {merge_status: 'conflict'}}` and Compose sets `buildStatus='failed'` (non-zero CI exit). Worktree steps without `defer_advance` use the legacy throw-on-conflict path. |
 | `COMPOSE_SERVER_DISPATCH_POLL_MS` | `500` | Poll interval (ms) against `stratum_parallel_poll`. Lower = faster task-transition event propagation; higher = less MCP load. |

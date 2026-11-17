@@ -14,7 +14,7 @@
 # (no flag change needed below). XREF_TARGET_MISSING stays error and blocks.
 
 set -u
-HOOK_VERSION="1"
+HOOK_VERSION="2"
 COMPOSE_NODE="__COMPOSE_NODE__"
 COMPOSE_BIN="__COMPOSE_BIN__"
 COMPOSE_WORKSPACE_ID="__COMPOSE_WORKSPACE_ID__"
@@ -157,9 +157,29 @@ elif [ -f package.json ]; then
     fi
 
     if [ "$TEST_CACHE_HIT" -eq 0 ]; then
-      echo "pre-push: running full test suite (npm test)…" >&2
-      PATH="$(dirname "$COMPOSE_NODE"):$PATH" npm test >> "$LOG" 2>&1
+      # COMP-SETUP-PREFLIGHT-1: `compose preflight --gate` checks the cheap things the
+      # suite depends on BEFORE it starts (the Stratum engine; project checks and the
+      # run lock from .compose/compose.json verify.preflight), runs `npm test` into
+      # $LOG, then re-checks the engine. Setup results get their own exit codes and
+      # wording below, never the "npm test failed" path. Skip the checks (one
+      # WARNING) with COMPOSE_SKIP_PREFLIGHT=1. Nothing is retried automatically.
+      echo "pre-push: setup checks, then running full test suite (npm test)…" >&2
+      PATH="$(dirname "$COMPOSE_NODE"):$PATH" "$COMPOSE_NODE" "$COMPOSE_BIN" preflight --gate --log "$LOG" -- npm test
       TEST_EXIT=$?
+      case "$TEST_EXIT" in
+        78)
+          echo "" >&2
+          echo "pre-push: SETUP-FAIL — a setup check failed before any test ran (not a test failure). Fix it as shown above and push again." >&2
+          exit "$TEST_EXIT" ;;
+        75)
+          echo "" >&2
+          echo "pre-push: SETUP-BUSY — another verification run holds this repository (not a test failure). Push again when it finishes." >&2
+          exit "$TEST_EXIT" ;;
+        79)
+          echo "" >&2
+          echo "pre-push: SETUP-INVALID — the engine changed during the run; every red named it (not product failures). Run the rerun command above, then push again." >&2
+          exit "$TEST_EXIT" ;;
+      esac
       if [ "$TEST_EXIT" -ne 0 ]; then
         tail -n 40 "$LOG" >&2
         echo "" >&2
