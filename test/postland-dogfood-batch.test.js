@@ -80,17 +80,31 @@ function shaEvidence(repo, sha) {
   return { kind: 'sha', repo, sha, at: AT, by: 'dogfood-probe' };
 }
 
-test('F1 refuses a tag-only name in the branch argument', { todo: 'F1' }, (t) => {
+test('F1 refuses a tag-only name in the branch argument', (t) => {
   const root = scratch(t);
-  initRepo(root, 'tag fixture');
+  const base = initRepo(root, 'tag fixture');
   git(root, 'tag', 'release-only');
 
   assert.throws(() => resolveLandSha({ code: CODE, branch: 'release-only' }, { root }), {
     code: 'BRANCH_NOT_FOUND',
   });
+  assert.throws(() => resolveLandSha({ code: CODE, branch: 'release-only', commit_sha: base }, { root }), {
+    code: 'BRANCH_NOT_FOUND',
+  });
+
+  git(root, 'tag', 'main');
+  git(root, '-c', 'core.hooksPath=/dev/null', 'commit', '--allow-empty', '-qm', 'branch advances');
+  const tip = git(root, 'rev-parse', 'refs/heads/main');
+  assert.equal(resolveLandSha({ code: CODE, branch: 'main' }, { root }).commit_sha, tip);
+  assert.equal(resolveLandSha({ code: CODE, branch: 'main', commit_sha: tip }, { root }).commit_sha, tip);
+
+  git(root, 'update-ref', 'refs/remotes/origin/published', base);
+  for (const branch of ['published', 'origin/published', 'refs/remotes/origin/published']) {
+    assert.equal(resolveLandSha({ code: CODE, branch }, { root }).commit_sha, base);
+  }
 });
 
-test('F2 guarded completion verifies a commit in the selected sibling repo', { todo: 'F2' }, async (t) => {
+test('F2 guarded completion verifies a commit in the selected sibling repo', async (t) => {
   const workspace = makeWorkspace(t, { guard: true, phase: 'ship' });
   const repo = join(scratch(t), 'sibling');
   initRepo(workspace.root, 'workspace commit');
@@ -130,7 +144,7 @@ test('F2 guarded completion verifies a commit in the selected sibling repo', { t
   /guard unreachable/);
 });
 
-test('F3 a clean flag cannot close a review with a repeated MEDIUM class', { todo: 'F3' }, async (t) => {
+test('F3 a clean flag cannot close a review with a repeated MEDIUM class', async (t) => {
   const post = attach(makeWorkspace(t));
   const started = await post('iteration/start', { loopType: 'review', tier: 'standard' });
   assert.equal(started.status, 200, JSON.stringify(started));
@@ -146,7 +160,7 @@ test('F3 a clean flag cannot close a review with a repeated MEDIUM class', { tod
   );
 });
 
-test('F4 a persisted legacy review cannot record a third standard round', { todo: 'F4' }, async (t) => {
+test('F4 a persisted legacy review cannot record a third standard round', async (t) => {
   const iterations = [1, 2].map((n) => ({
     n, startedAt: AT, result: { clean: false, findings: ['Stale output'] },
   }));
@@ -169,7 +183,7 @@ test('F4 a persisted legacy review cannot record a third standard round', { todo
   );
 });
 
-test('F5 a previously stored receipt with extra subject metadata remains readable by ID', { todo: 'F5' }, (t) => {
+test('F5 a previously stored receipt with extra subject metadata remains readable by ID', (t) => {
   const root = scratch(t);
   const sha = initRepo(root, 'receipt fixture');
   const store = join(root, 'evidence.jsonl');
@@ -184,4 +198,6 @@ test('F5 a previously stored receipt with extra subject metadata remains readabl
   const legacy = { ...current, id: 'ev:0123456789abcdef', subject: { ...subject, note: 'legacy context' } };
   appendFileSync(store, JSON.stringify(legacy) + '\n');
   assert.equal(readEvidence(legacy.id, { store })?.id, legacy.id, 'legacy receipt ID should still resolve');
+  assert.deepEqual(readEvidence(legacy.id, { store })?.subject, subject);
+  assert.throws(() => recordEvidence(evidence, { subject: legacy.subject, store }), { code: 'EVIDENCE_INVALID' });
 });
