@@ -4,10 +4,13 @@
  */
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, symlinkSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, symlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { fileURLToPath } from 'node:url';
 
+import { TOOLS } from '../server/mcp-tool-defs.js';
+import { SchemaValidator } from '../server/schema-validator.js';
 import {
   addRoadmapEntry,
   linkArtifact,
@@ -17,6 +20,10 @@ import {
 } from '../lib/feature-writer.js';
 import { readFeature } from '../lib/feature-json.js';
 import { readEvents } from '../lib/feature-events.js';
+
+const schemaPath = fileURLToPath(new URL('../contracts/feature-json.schema.json', import.meta.url));
+const schema = JSON.parse(readFileSync(schemaPath, 'utf8'));
+const allowedTypes = schema.properties.artifacts.items.properties.type.enum;
 
 function freshCwd() {
   const cwd = mkdtempSync(join(tmpdir(), 'feature-linker-'));
@@ -39,6 +46,33 @@ function touch(cwd, relPath, content = 'x') {
 // ---------------------------------------------------------------------------
 
 describe('linkArtifact', () => {
+  test('advertises exactly the artifact types that feature.json accepts', () => {
+    const { description } = TOOLS.find(tool => tool.name === 'link_artifact').inputSchema.properties.artifact_type;
+    const advertisedTypes = [...description.matchAll(/"([a-z-]+)"/g)].map(match => match[1]);
+    assert.deepEqual(advertisedTypes, allowedTypes);
+
+    const validator = new SchemaValidator(schemaPath);
+    for (const type of advertisedTypes) {
+      const artifact = { type, path: 'docs/artifact.md', ...(type === 'incident' && { line: 1, text: '- event' }) };
+      assert.equal(validator.validateRoot({ code: 'LA-1', artifacts: [artifact] }).valid, true, type);
+    }
+  });
+
+  test('rejects a bogus artifact type before writing feature.json', async (t) => {
+    const cwd = freshCwd();
+    t.after(() => rmSync(cwd, { recursive: true, force: true }));
+    await seed(cwd, 'BAD-TYPE-1');
+    const path = 'docs/features/BAD-TYPE-1/snapshot.md';
+    touch(cwd, path);
+    const featurePath = join(cwd, 'docs/features/BAD-TYPE-1/feature.json');
+    const before = readFileSync(featurePath);
+    await assert.rejects(
+      () => linkArtifact(cwd, { feature_code: 'BAD-TYPE-1', artifact_type: 'bogus', path }),
+      (error) => error.code === 'ARTIFACT_TYPE_INVALID' && error.message.includes(allowedTypes.join(', ')),
+    );
+    assert.deepEqual(readFileSync(featurePath), before);
+  });
+
   test('links a non-canonical artifact and stores in feature.json', async () => {
     const cwd = freshCwd();
     await seed(cwd, 'LA-1');
@@ -75,7 +109,7 @@ describe('linkArtifact', () => {
     touch(cwd, 'docs/random/design.md', '# elsewhere');
     const r = await linkArtifact(cwd, {
       feature_code: 'LC-1',
-      artifact_type: 'reference',
+      artifact_type: 'design',
       path: 'docs/random/design.md',
     });
     assert.equal(r.path, 'docs/random/design.md');
@@ -108,7 +142,7 @@ describe('linkArtifact', () => {
     }
     await assert.rejects(
       () => linkArtifact(cwd, {
-        feature_code: 'SYM-1', artifact_type: 'leak', path: 'docs/features/SYM-1/leak',
+        feature_code: 'SYM-1', artifact_type: 'snapshot', path: 'docs/features/SYM-1/leak',
       }),
       /symlinks outside cwd/
     );
@@ -120,7 +154,7 @@ describe('linkArtifact', () => {
     // The feature folder itself exists as a directory.
     await assert.rejects(
       () => linkArtifact(cwd, {
-        feature_code: 'DIR-1', artifact_type: 'folder',
+        feature_code: 'DIR-1', artifact_type: 'snapshot',
         path: 'docs/features/DIR-1',
       }),
       /must point at a file/
@@ -133,15 +167,15 @@ describe('linkArtifact', () => {
     touch(cwd, 'docs/features/BP-1/snap.md');
 
     await assert.rejects(
-      () => linkArtifact(cwd, { feature_code: 'BP-1', artifact_type: 's', path: '/etc/passwd' }),
+      () => linkArtifact(cwd, { feature_code: 'BP-1', artifact_type: 'snapshot', path: '/etc/passwd' }),
       /repo-relative/
     );
     await assert.rejects(
-      () => linkArtifact(cwd, { feature_code: 'BP-1', artifact_type: 's', path: '~/secret' }),
+      () => linkArtifact(cwd, { feature_code: 'BP-1', artifact_type: 'snapshot', path: '~/secret' }),
       /repo-relative/
     );
     await assert.rejects(
-      () => linkArtifact(cwd, { feature_code: 'BP-1', artifact_type: 's', path: 'docs/../../../etc/passwd' }),
+      () => linkArtifact(cwd, { feature_code: 'BP-1', artifact_type: 'snapshot', path: 'docs/../../../etc/passwd' }),
       /\.\./
     );
   });
@@ -213,7 +247,7 @@ describe('linkArtifact', () => {
     touch(cwd, 'docs/orphan/file.md');
     await assert.rejects(
       () => linkArtifact(cwd, {
-        feature_code: 'GHOST-1', artifact_type: 's', path: 'docs/orphan/file.md',
+        feature_code: 'GHOST-1', artifact_type: 'snapshot', path: 'docs/orphan/file.md',
       }),
       /not found/
     );
@@ -551,7 +585,7 @@ describe('getFeatureArtifacts', () => {
     touch(cwd, 'docs/features/GA-1/snap.md');
     touch(cwd, 'docs/orphan/note.md');
     await linkArtifact(cwd, { feature_code: 'GA-1', artifact_type: 'snapshot', path: 'docs/features/GA-1/snap.md' });
-    await linkArtifact(cwd, { feature_code: 'GA-1', artifact_type: 'finding', path: 'docs/orphan/note.md' });
+    await linkArtifact(cwd, { feature_code: 'GA-1', artifact_type: 'report', path: 'docs/orphan/note.md' });
 
     const r = await getFeatureArtifacts(cwd, { feature_code: 'GA-1' });
     assert.equal(r.feature_code, 'GA-1');
@@ -562,8 +596,8 @@ describe('getFeatureArtifacts', () => {
     // Now delete one and re-check.
     rmSync(join(cwd, 'docs/orphan/note.md'));
     const r2 = await getFeatureArtifacts(cwd, { feature_code: 'GA-1' });
-    const finding = r2.linked.find(l => l.type === 'finding');
-    assert.equal(finding.exists, false);
+    const report = r2.linked.find(l => l.type === 'report');
+    assert.equal(report.exists, false);
   });
 
   test('returns canonical assessment when feature folder has design.md', async () => {

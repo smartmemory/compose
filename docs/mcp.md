@@ -22,7 +22,7 @@ Compose exposes project state as MCP tools via `server/compose-mcp.js` (stdio tr
 | `add_roadmap_entry` | Register a new feature: writes `feature.json` + regenerates `ROADMAP.md`. Audit-log append is best-effort. Use instead of editing ROADMAP by hand. |
 | `set_feature_status` | Flip a feature status with transition-policy enforcement (`force: true` overrides). Appends an audit event (best-effort). |
 | `roadmap_diff` | Read the feature-management audit log for a window. Returns `events[]`, `added[]`, `status_changed[]`. |
-| `link_artifact` | Register a non-canonical artifact (snapshot, journal, finding, etc.) on a feature. Stores in `feature.json` `artifacts[]`; dedups on `(type, path)`. Audit append best-effort. |
+| `link_artifact` | Register a non-canonical artifact, such as a snapshot or journal, on a feature. Stores it in `feature.json` `artifacts[]`. Audit append is best-effort. |
 | `link_features` | Register a typed cross-feature relationship (`surfaced_by`, `blocks`, `depends_on`, `follow_up`, `supersedes`, `related`). Stored on the source; query inverse via `get_feature_links(direction:'incoming')`. |
 | `get_feature_artifacts` | Read both canonical (auto-discovered) and linked artifacts for a feature in one call. Each linked entry carries a current existence stamp. |
 | `get_feature_links` | Read outgoing/incoming/both links for a feature; optional `kind` filter. |
@@ -90,7 +90,7 @@ These fields are disjoint from the ROADMAP-WRITER set (`commit_sha`, `tags`, `pa
 
 **No bidirectional auto-mirroring.** A link from A → B is stored on A only. To find what links to A, use `get_feature_links(direction: 'incoming')`. This is intentional — bidirectional mirroring would double-write and create reconciliation surface.
 
-**Recommended `artifact_type` values:** `journal`, `snapshot`, `finding`, `report-supplement`, `link`, `external`. The field accepts any non-empty string; the recommended set is what existing features use.
+The [feature.json schema](../contracts/feature-json.schema.json) defines the allowed `artifact_type` values. The tool lists them in its input description and returns `ARTIFACT_TYPE_INVALID` before writing if the type falls outside that list. For an `incident`, supply the 1-based `line` of a ledger entry starting with `- `.
 
 ## Changelog writer (COMP-MCP-CHANGELOG-WRITER)
 
