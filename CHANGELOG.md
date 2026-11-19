@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- **COMP-TUI-5:** `compose build` shows a running list of distinct changed files, sorted and limited to ten displayed paths. The completion summary includes the final file count.
+
 - **COMP-TUI-6:** `compose build` prints a completion table with each step's status, elapsed time, retries, and recorded usage, followed by build totals. Piped progress is plain text and missing usage is shown as `n/a`.
 
 - **COMP-DOGFOOD-LIVE-STATE-FEED-CURSOR-1 (review B-1): `backfill-keys` gives an order a decision key only from the fixed position** (`lib/live-state.js` `leadDecision`, `FIXED_DECISION_RE`): `OWNER D-NNNN` anywhere or a text that starts with `D-NNNN`, never the first `D-NNNN` anywhere, and never for an amendment (`D-NNNN amended ...`). Before, an order that only cited a decision (`held to the D-0077 lift`) got that decision's key on the next tick and was retired by `supersedes D-0077`. Same rule as `owner_orders_feed.py` `lead_decision` in smart-memory-ops (pinned there). Test: `test/live-state.test.js` (backfillKeys fixed-position case).
