@@ -38,6 +38,8 @@ const LEGACY_TOOLS_FOR_FEATURE_JSON = [
   'add_roadmap_entry', 'set_feature_status', 'link_artifact',
   'link_features', 'record_completion', 'backfill_completion', 'propose_followup',
   'complete_feature', 'kill_feature',
+  // COMP-DOGFOOD-DECLARE-FU-1: scaffold_feature with `kind` writes the existing feature.json.
+  'scaffold_feature',
 ];
 
 const FD = 'docs/features';
