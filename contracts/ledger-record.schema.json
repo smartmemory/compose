@@ -11,11 +11,11 @@
   "additionalProperties": false,
   "properties": {
     "v": { "const": 1 },
-    "id": { "description": "owner_orders_feed.identity(date, hh:mm, by, body) over the line as written (a trailing ` [no receipt: WORD]` stripped): sha256 of the whitespace-normalized text, first 24 hex.", "type": "string", "pattern": "^[0-9a-f]{24}$" },
+    "id": { "description": "owner_orders_feed.identity(date, hh:mm, by, body) over the line as written (a trailing ` [no receipt: WORD]` stripped): sha256 of the whitespace-normalized text, first 24 hex. A line not in the `- [date ]HH:MM by: body` shape (another writer's format, a continuation line) is hashed whole: identity('', '', 'raw', line).", "type": "string", "pattern": "^[0-9a-f]{24}$" },
     "day": { "description": "The line's Asia/Singapore date: a dated line's own date, else the latest date whose HH:MM is not after the moment the line was written.", "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
     "at": { "description": "The line's stamp as ISO in Asia/Singapore (minute precision, the ledger's own); its date is `day`.", "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(:[0-9]{2})?\\+08:00$" },
     "written_at": { "description": "When the writer wrote the line or swept it (seconds).", "type": "string", "format": "date-time" },
-    "by": { "description": "The line's writer (the ledger's `<by>`).", "type": "string", "pattern": "^[A-Za-z0-9._-]{1,80}$" },
+    "by": { "description": "The line's writer (the ledger's `<by>`). For a line in another shape, its loose writer token with refused characters made `_`, or `unknown` when it has none.", "type": "string", "pattern": "^[A-Za-z0-9._-]{1,80}$" },
     "text": { "description": "The line's body as written, with no stamp or writer.", "type": "string", "minLength": 1, "maxLength": 20000 },
     "line": { "description": "The whole ledger line as written, without its newline.", "type": "string", "minLength": 1, "maxLength": 20200 },
     "source": { "description": "`ledger.py` (its own append), `swept` (a line another writer appended, committed by ledger.py's commit), `timer` (committed by the ledger_push tick).", "enum": ["ledger.py", "swept", "timer"] },
