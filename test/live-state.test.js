@@ -15,7 +15,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
-  LiveStateError, DECISION_RE, activeOrders, addOrder, backfillKeys, buildLiveState, configureLiveState, formatLiveStateSection,
+  LiveStateError, DECISION_RE, leadDecision, activeOrders, addOrder, backfillKeys, buildLiveState, configureLiveState, formatLiveStateSection,
   readHardRules, readStore, ruleBullets, storePath, supersedeOrder,
 } from '../lib/live-state.js';
 import { run as cliRun } from '../lib/live-state-cli.js';
@@ -469,6 +469,18 @@ test('backfillKeys: a keyless order and a single-key order gain the decision key
   assert.equal('key' in o[3], false);
   assert.deepEqual([o[4].key, o[4].keys], ['k5', ['owner-ledger:D-0055']]); // the source carries the id when the text has none
   assert.deepEqual(o[5].keys, ['other']);
+});
+
+test('backfillKeys: only a fixed-position decision gives a key; a citation or an amendment gets none (FEED-CURSOR-1 B-1)', () => {
+  const { dataDir } = workspace();
+  addOrder(dataDir, { text: 'ELEVENLABS-GRANT-USE-1: relaunch held to the D-0077 lift', source: 'ledger.md#h1', key: 'owner-ledger:h1' }, { now: NOW });
+  addOrder(dataDir, { text: "D-0052 amended (OWNER): prefer seat1", source: 'ledger.md#h2', key: 'owner-ledger:h2' }, { now: NOW });
+  addOrder(dataDir, { text: "s1-chat (08:10): OWNER D-0189 'auto': od1", source: 'ledger.md#h3', key: 'owner-ledger:h3' }, { now: NOW });
+  assert.deepEqual(backfillKeys(dataDir, { prefix: 'owner-ledger:' }).changed, ['LO-3']);
+  const o = readStore(dataDir).live_orders;
+  assert.equal('keys' in o[0], false); assert.equal('keys' in o[1], false);
+  assert.deepEqual(o[2].keys, ['owner-ledger:D-0189']);
+  assert.deepEqual([leadDecision('per OWNER D-0077 lift'), leadDecision('D-0084 amendment OWNER x'), leadDecision('see D-0077')], ['D-0077', null, null]);
 });
 
 test('backfillKeys: idempotent, the second run changes nothing and writes nothing', () => {
