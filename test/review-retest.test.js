@@ -10,6 +10,8 @@
  *
  * Cases: docs/features/COMP-SETUP-PREFLIGHT-1/brief-fix-round-2.md.
  */
+// COMPOSE-GOLDEN-LEAK-1: scrub inherited GIT_* redirection before any git call, even under a bare `node --test`.
+import './helpers/git-env-scrub.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';

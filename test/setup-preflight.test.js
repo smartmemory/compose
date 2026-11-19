@@ -7,6 +7,8 @@
  *
  * Hand-run cases and the two incident replays: docs/features/COMP-SETUP-PREFLIGHT-1/report.md.
  */
+// COMPOSE-GOLDEN-LEAK-1: scrub inherited GIT_* redirection before any git call, even under a bare `node --test`.
+import './helpers/git-env-scrub.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
@@ -23,6 +25,7 @@ import {
 } from '../lib/preflight.js';
 import { declaredTiers, tierSkipLine } from '../lib/gate-tiers.js';
 import { TS_MCP_BIN } from './helpers/stratum-test-bin.js';
+import { pollUntil } from './helpers/poll-until.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const COMPOSE_BIN = join(HERE, '..', 'bin', 'compose.js');
@@ -65,8 +68,11 @@ async function startHolder(dir, seconds) {
   const child = spawn(process.execPath, [COMPOSE_BIN, 'preflight', '--gate', '--', process.execPath, '-e', `setTimeout(()=>{}, ${seconds * 1000})`],
     { cwd: dir, env: NO_SKIP, stdio: 'ignore' });
   const owner = join(dir, RUN_LOCK_REL, 'owner');
-  for (let i = 0; i < 200 && !existsSync(owner); i++) await new Promise((r) => setTimeout(r, 50));
-  assert.ok(existsSync(owner), 'holder took the lock');
+  await pollUntil(() => {
+    if (existsSync(owner)) return true;
+    if (child.exitCode !== null || child.signalCode) throw new Error(`holder exited (${child.exitCode ?? child.signalCode}) before taking the lock`);
+    return false;
+  }, 'holder took the lock', { rethrow: () => true });
   return child;
 }
 const exited = (child) => new Promise((r) => { if (child.exitCode !== null || child.signalCode) r(); else child.on('exit', r); });
