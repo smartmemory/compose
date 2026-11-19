@@ -162,6 +162,8 @@ compose feature AUTH-1 "JWT middleware with refresh tokens"
 compose build AUTH-1
 ```
 
+At the end of a build, Compose prints each step's status, elapsed time, retries, and recorded usage. The totals include wall time, recorded tokens and cost, and the build result. Missing usage is shown as `n/a`.
+
 ## Run the cockpit
 
 From a source checkout, `scripts/cockpit.sh start` runs the API server (4001), the agent server (4002) and the Vite UI (5195) under `server/supervisor.js`, all bound to `127.0.0.1`, then waits until each port answers. Open `http://127.0.0.1:5195`.
