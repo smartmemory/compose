@@ -235,8 +235,9 @@ test('toolsWritingCanon: feature-json writers include the lifecycle pair', () =>
   assert.ok(writers.includes('complete_feature'));
   assert.ok(writers.includes('kill_feature'));
   assert.ok(writers.includes('record_completion'));
-  // Traced same day: scaffold_feature writes only the six markdown templates.
-  assert.ok(!writers.includes('scaffold_feature'), 'scaffold_feature does not write feature.json');
+  // scaffold_feature writes the markdown templates, plus feature.json when `kind` is given
+  // (COMP-DOGFOOD-CONTROL-INCIDENT-1); declared honestly by COMP-DOGFOOD-DECLARE-FU-1.
+  assert.ok(writers.includes('scaffold_feature'), 'scaffold_feature writes feature.json when kind is given');
 });
 
 test('toolsWritingCanon: roadmap_xref_push writes EXTERNAL trackers, not our canon', () => {

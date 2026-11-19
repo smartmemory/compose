@@ -311,7 +311,7 @@ export const TOOLS = [
   {
     name: 'scaffold_feature',
     effect: 'mutating',
-    writes: [],
+    writes: ["feature-json"],
     description: 'Create feature folder with template stubs for all phase artifacts. Existing files are never overwritten. With kind "control" (a new guard, daemon, gate, watcher or kill switch) it also sets kind in the existing feature.json, and refuses FEATURE_JSON_REQUIRED when there is none; validate_feature then requires a linked incident (CONTROL_NO_INCIDENT).',
     inputSchema: {
       type: 'object',
@@ -393,7 +393,7 @@ export const TOOLS = [
     name: 'set_feature_status',
     effect: 'mutating',
     writes: ["feature-json", "roadmap"],
-    description: 'Flip a feature status. Updates feature.json and regenerates ROADMAP.md. Enforces a transition policy (use force: true to bypass). Appends an audit event (best-effort).',
+    description: 'Flip a feature status. Updates feature.json and regenerates ROADMAP.md. Enforces a transition policy (use force: true to bypass). When the evidence capability is on, COMPLETE needs a `sha` or `command` receipt (`evidence`, refused EVIDENCE_REQUIRED without one); PLANNED, IN_PROGRESS, BLOCKED and PARKED need none. Appends an audit event (best-effort).',
     inputSchema: {
       type: 'object',
       required: ['code', 'status'],

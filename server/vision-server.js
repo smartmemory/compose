@@ -45,7 +45,7 @@ import { attachUsageRoutes } from './usage-routes.js';
 import { attachJournalRoutes } from './journal-routes.js';
 import { CoalescingBuffer } from './coalescing-buffer.js';
 /** Settings defaults (previously derived from contracts/lifecycle.json). */
-const SETTINGS_DEFAULTS = {
+export const SETTINGS_DEFAULTS = {
   phases: [
     { id: 'explore_design', defaultPolicy: null },
     { id: 'prd', defaultPolicy: 'skip' },
@@ -59,7 +59,7 @@ const SETTINGS_DEFAULTS = {
     { id: 'ship', defaultPolicy: 'gate' },
   ],
   iterationDefaults: {
-    review: { maxIterations: 4, timeout: 15, maxTotal: 20 },
+    review: { maxIterations: 2, timeout: 15, maxTotal: 20 },
     coverage: { maxIterations: 15, timeout: 30, maxTotal: 50 },
   },
   policyModes: ['gate', 'flag', 'skip'],

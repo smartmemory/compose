@@ -17,9 +17,10 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const { VisionStore } = await import(`${REPO_ROOT}/server/vision-store.js`);
 const { SettingsStore } = await import(`${REPO_ROOT}/server/settings-store.js`);
 const { attachVisionRoutes } = await import(`${REPO_ROOT}/server/vision-routes.js`);
+const { SETTINGS_DEFAULTS } = await import(`${REPO_ROOT}/server/vision-server.js`);
 const { loadSchema } = await import(`${REPO_ROOT}/server/schema-validator.js`);
 
-function setupServer() {
+function setupServer(iterationDefaults) {
   const tmpDir = mkdtempSync(join(tmpdir(), 'iter-test-'));
   const dataDir = join(tmpDir, 'data');
   mkdirSync(dataDir, { recursive: true });
@@ -28,7 +29,7 @@ function setupServer() {
   const store = new VisionStore(dataDir);
   const settingsStore = new SettingsStore(dataDir, {
     phases: [{ id: 'execute', defaultPolicy: null }],
-    iterationDefaults: { review: { maxIterations: 4 }, coverage: { maxIterations: 15 } },
+    iterationDefaults: iterationDefaults || { review: { maxIterations: 4 }, coverage: { maxIterations: 15 } },
     policyModes: ['gate', 'flag', 'skip'],
   });
 
@@ -283,5 +284,28 @@ describe('iteration routes', () => {
       assert.equal(ok.status, 200);
       assert.equal(stateOf(ctx).abort_reason, 'owner changed scope');
     });
+  });
+});
+
+// COMP-DOGFOOD-DECLARE-FU-1: the shipped default review budget equals the standard round cap,
+// so a default start no longer records capped_from; a user-set 4 still does.
+describe('shipped review default (SETTINGS_DEFAULTS)', () => {
+  let ctx;
+  afterEach(() => { ctx.server.close(); rmSync(ctx.tmpDir, { recursive: true, force: true }); });
+  const startReview = (c) => post(c.port, `/api/vision/items/${c.item.id}/lifecycle/iteration/start`, { loopType: 'review' });
+
+  test('default start: maxIterations 2 and no capped_from', async () => {
+    ctx = await setupServer(SETTINGS_DEFAULTS.iterationDefaults);
+    const res = await startReview(ctx);
+    assert.equal(res.status, 200);
+    assert.equal(res.body.maxIterations, 2);
+    assert.equal(res.body.capped_from, null);
+  });
+
+  test('user override of 4 still records capped_from 4', async () => {
+    ctx = await setupServer({ ...SETTINGS_DEFAULTS.iterationDefaults, review: { maxIterations: 4 } });
+    const res = await startReview(ctx);
+    assert.equal(res.body.maxIterations, 2);
+    assert.equal(res.body.capped_from, 4);
   });
 });
