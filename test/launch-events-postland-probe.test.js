@@ -28,7 +28,7 @@ if (!isMainThread) {
   syncBuiltinESMExports();
   parentPort.postMessage(recordLaunchEvent(root, event).status);
 } else {
-  test('overlapping refusal writers persist only one row for the same key', { todo: 'F5' }, async (t) => {
+  test('overlapping refusal writers persist only one row for the same key', async (t) => {
     const root = fs.mkdtempSync(join(tmpdir(), 'n3-launch-probe-'));
     const store = join(root, '.compose', 'data', 'feature-events.jsonl');
     const at = '2026-11-04T00:00:00.000Z';
@@ -54,6 +54,7 @@ if (!isMainThread) {
       return status;
     }));
 
+    assert.deepEqual(statuses.sort(), ['duplicate', 'written']);
     assert.equal(readLaunchEvents(root).filter((row) => row.idempotency_key === event.idempotency_key).length, 1,
       `writer statuses: ${statuses.join(', ')}`);
   });
