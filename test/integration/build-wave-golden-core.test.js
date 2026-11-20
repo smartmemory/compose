@@ -155,10 +155,11 @@ test('real engine + connector: outside files_owned replaces worker success with 
   assert.equal(git(f.workspace, ['rev-parse', 'HEAD']), f.base);
   assert.equal(git(f.workspace, ['diff', '--name-only', 'HEAD']), '', 'tracked parent tree untouched');
   assert.deepEqual(await readFile(join(f.workspace, '.git/index')), index);
-  // The engine's default contract-failure policy allows two attempts.
-  assert.deepEqual(workers(await f.readAgentPids()).map(c => c.lane), ['ESCAPE', 'ESCAPE']);
+  // COMP-TUI-4-1 (stratum 4292d94 + c90836c): an ownership violation is deterministic, so the engine stops after one
+  // attempt instead of re-dispatching the same item against the same files_owned.
+  assert.deepEqual(workers(await f.readAgentPids()).map(c => c.lane), ['ESCAPE']);
   const reports = (await readGoldenTrace(f)).filter(c => c.kind === 'step_done' && c.step.startsWith('execute/'));
-  assert.equal(reports.length, 2);
+  assert.equal(reports.length, 1);
   // Deliberately exact: a different production code is an owning-dispatch defect.
   for (const report of reports) {
     assert.match(report.envelope.failure, /^FILES_OWNED_VIOLATION:/);
