@@ -6,9 +6,11 @@
  * connects a StdioServerTransport at module load, so importing it for `TOOLS`
  * hangs any consumer (lib/tool-inventory.js, its contract test, validate).
  *
- * Data only — no I/O, no imports. Each entry declares `effect` and, when
+ * Tool metadata only. Each entry declares `effect` and, when
  * mutating, `writes` (canon-registry entry ids). See lib/tool-inventory.js.
  */
+import { ARTIFACT_TYPES } from '../lib/artifact-types.js';
+
 /**
  * COMP-DOGFOOD-EVIDENCE-GATE-1: the `evidence` argument of the state tools. The
  * definition is contracts/evidence.schema.json (lib/evidence.js validates
@@ -536,7 +538,7 @@ export const TOOLS = [
       required: ['feature_code', 'artifact_type', 'path'],
       properties: {
         feature_code: { type: 'string' },
-        artifact_type: { type: 'string', description: 'e.g. "journal", "snapshot", "finding", "report-supplement", "link", "external", "incident" (a ledger line that justifies a kind "control" feature; needs line)' },
+        artifact_type: { type: 'string', description: `Allowed artifact types: ${ARTIFACT_TYPES.map(type => JSON.stringify(type)).join(', ')}.` },
         path: { type: 'string', description: 'Repo-relative path. Must exist; cannot contain ".." after normalization.' },
         line: { type: 'integer', minimum: 1, description: 'Required for artifact_type "incident": the 1-based ledger line, which must start with "- " (else INCIDENT_LINE_INVALID). The path, line and first 200 characters are stored.' },
         status: { type: 'string', enum: ['current', 'superseded', 'historical'] },
