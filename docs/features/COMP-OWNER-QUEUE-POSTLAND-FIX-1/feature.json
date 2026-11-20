@@ -1,0 +1,11 @@
+{
+  "code": "COMP-OWNER-QUEUE-POSTLAND-FIX-1",
+  "description": "Bug: land ops n3/forge-owner-queue-fix 003ab011210d (Opus review HIGH=0 MEDIUM=0). Fixes 3 real MEDIUMs from COMP-DOGFOOD-OWNER-QUEUE-NAMED-1 post-land review: live tick skips an owner answer under a scratch queue env, scratch spool uses the live transport, outbox override reaches the live chat. Verdict: smart-memory-ops units/COMP-DOGFOOD-OWNER-QUEUE-NAMED-1/verdict-review-postland-codex.md",
+  "status": "PLANNED",
+  "phase": "COMP-DOGFOOD-POSTLAND: post-land review follow-ups (forge-catchup 2026-11-21)",
+  "created": "2026-11-20",
+  "updated": "2026-11-20",
+  "complexity": "S",
+  "position": 3,
+  "impact": "medium"
+}

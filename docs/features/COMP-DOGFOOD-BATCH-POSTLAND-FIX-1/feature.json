@@ -1,0 +1,11 @@
+{
+  "code": "COMP-DOGFOOD-BATCH-POSTLAND-FIX-1",
+  "description": "Bug: land compose n3/forge-batch-fix d70124d2a709 (Opus review HIGH=0 MEDIUM=0). Fixes 5 real MEDIUMs from COMP-DOGFOOD-BATCH-1 post-land review: tag accepted as branch tip, guarded completion drops the sibling repo, clean flag overrides a repeated class, old loops keep the old round cap, old receipts unreadable. Verdict: smart-memory-ops units/COMP-DOGFOOD-BATCH-1/verdict-review-postland-codex.md",
+  "status": "PLANNED",
+  "phase": "COMP-DOGFOOD-POSTLAND: post-land review follow-ups (forge-catchup 2026-11-21)",
+  "created": "2026-11-20",
+  "updated": "2026-11-20",
+  "complexity": "S",
+  "position": 2,
+  "impact": "medium"
+}

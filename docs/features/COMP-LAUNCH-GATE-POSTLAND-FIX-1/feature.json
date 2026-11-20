@@ -1,0 +1,11 @@
+{
+  "code": "COMP-LAUNCH-GATE-POSTLAND-FIX-1",
+  "description": "Bug: land n3/forge-launch-gate-fix (ops 4643d0f40674 + compose 168408929346; Opus review HIGH=0 MEDIUM=0). Fixes 4 real MEDIUMs from COMP-DOGFOOD-LAUNCH-GATE-1 post-land review: refused worker shows RUNNING (F1), resume refusal lost after running (F2), spool replay erases a late event (F3, data loss, reproduced on ops main), duplicate launch events (F5). Verdict: smart-memory-ops units/COMP-DOGFOOD-LAUNCH-GATE-1/verdict-review-postland-codex.md",
+  "status": "PLANNED",
+  "phase": "COMP-DOGFOOD-POSTLAND: post-land review follow-ups (forge-catchup 2026-11-21)",
+  "created": "2026-11-20",
+  "updated": "2026-11-20",
+  "complexity": "S",
+  "position": 1,
+  "impact": "medium"
+}
