@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url';
 import { addRoadmapEntry, linkArtifact } from '../lib/feature-writer.js';
 import { readFeature, updateFeature } from '../lib/feature-json.js';
 import { validateFeature } from '../lib/feature-validator.js';
-import { FILING_BAR, filingBarText } from '../lib/filing-bar.js';
+import { FILING_BAR, FILING_BAR_HEAD, filingBarText } from '../lib/filing-bar.js';
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const OPS_REVIEW_LOOP = '/Users/ruze/reg/my/SmartMemory/smart-memory-ops/claude/rules/review-loop.md';
@@ -155,9 +155,12 @@ describe('scaffold_feature kind=control', () => {
 });
 
 describe('the FILING BAR text', () => {
-  test('the built-in constant equals review-loop.md:11 in smart-memory-ops', (t) => {
+  test('the built-in constant equals the FILING BAR bullet of review-loop.md in smart-memory-ops', (t) => {
     if (!existsSync(OPS_REVIEW_LOOP)) { t.skip(`ops file not present: ${OPS_REVIEW_LOOP}`); return; }
-    assert.equal(FILING_BAR, readFileSync(OPS_REVIEW_LOOP, 'utf8').split('\n')[10]);
+    // Found by its heading, not a line number: the bullet moved from line 11 to 15 when rules were added above it.
+    const bullet = readFileSync(OPS_REVIEW_LOOP, 'utf8').split('\n').find((l) => l.startsWith(FILING_BAR_HEAD));
+    assert.ok(bullet, `no FILING BAR bullet in ${OPS_REVIEW_LOOP}`);
+    assert.equal(FILING_BAR, bullet);
   });
 
   test('a configured rules dir is read fresh, with no fallback warning', () => {
