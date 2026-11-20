@@ -63,6 +63,8 @@ compose build TODO-1
   -> done: feature implemented, reviewed, tested, documented
 ```
 
+As the build reports changed files, the terminal shows the first ten distinct paths in sorted order. The build summary includes the total file count.
+
 Starting from a fuzzy goal instead of a known feature? Use the planning lifecycle:
 
 ```bash
