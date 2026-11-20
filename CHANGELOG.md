@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- COMP-DOGFOOD-LAUNCH-GATE-1. Concurrent launch and replay writers now store a refusal key only once.
 - **COMP-DOGFOOD-BATCH-1** fixes completion branch lookup and verifies guarded completion in the selected Git repo. A repeated HIGH or MEDIUM review finding now requires redesign even when the report says it is clean, and legacy reviews respect the current standard round cap. Existing receipt IDs remain readable when their stored subjects include legacy metadata.
 
 - **COMP-TUI-5:** `compose build` shows a running list of distinct changed files, sorted and limited to ten displayed paths. The completion summary includes the final file count.
