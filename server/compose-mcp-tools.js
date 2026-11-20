@@ -876,6 +876,7 @@ export async function toolCompleteFeature(args = {}) {
   const { resolveLandSha } = await import('../lib/land-sha.js');
   const landed = resolveLandSha({ code: _featureCodeOf(id), commit_sha, branch: args.branch, repo: args.repo, evidence: args.evidence }, { root: getTargetRoot() });
   if (landed.commit_sha !== undefined) body.commit_sha = landed.commit_sha;
+  if (landed.repo !== undefined) body.repo = landed.repo;
   if (tests_pass !== undefined) body.tests_pass = tests_pass;
   if (files_changed !== undefined) body.files_changed = files_changed;
   if (notes !== undefined) body.notes = notes;

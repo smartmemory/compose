@@ -37,6 +37,7 @@ import { emitDriftAxes } from './drift-emit.js';
 import { resolveGateTimeoutMs } from '../lib/gate-timeout.js';
 import { isComposeGateExpired } from '../lib/owner-gates.js';
 import { attachEvidenceRoutes } from './evidence-routes.js';
+import { gitRepositoryRoot } from '../lib/land-sha.js';
 
 let _schemaValidator = null;
 function getSchemaValidator() {
@@ -544,6 +545,12 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
 
       const featureCode = item.lifecycle.featureCode;
       const completionResult = { partial: false };
+      const { commit_sha, tests_pass, files_changed, notes, repo } = req.body || {};
+      let evidenceRoot = projectRoot;
+      if (repo !== undefined) {
+        evidenceRoot = typeof repo === 'string' && path.isAbsolute(repo) ? gitRepositoryRoot(repo) : null;
+        if (!evidenceRoot) return res.status(400).json({ error: 'repo must be an absolute path to a Git repository' });
+      }
       let now;
 
       // MANAGED build item = bound to a code, build mode, feature.json exists
@@ -561,7 +568,6 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
         // commit_sha is refused by the evidence check: an evidence-free cockpit
         // completion was path 7's quieter twin and is closed on purpose.
         const { completionGate } = await import('../lib/completion-gate.js');
-        const { commit_sha, tests_pass, files_changed, notes } = req.body || {};
         const gated = await completionGate({
           featureCode,
           ...(commit_sha ? { commitSha: commit_sha } : {}),
@@ -572,6 +578,7 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
           filesChanged: files_changed ?? [],
           notes: notes ?? `cockpit lifecycle: ${featureCode} complete`,
           workspaceRoot: projectRoot,
+          evidenceRoot,
           mode: modeOf(item),
           visionItemId: req.params.id,
           visionProjector: ({ visionItemId, commitSha, ledgerRef, guarded }) => applyVerifiedProjection(store, {
@@ -607,18 +614,18 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
         completionResult.verified_by = gated.visionProjection?.verified_by ?? null;
       } else {
         // Fix/plan (no feature.json — COMP-COMPLETION-GATE-MODES) and items
-        // with no feature code: the pre-slice-3 path, byte-identical.
+        // with no feature code use the direct guard transition.
         if (guardEnabled()) {
           const ev = await verifyCompletionEvidence({
-            commitSha: req.body?.commit_sha,
-            cwd: projectRoot,
+            commitSha: commit_sha,
+            cwd: evidenceRoot,
             testCommand: guardTestCommand(projectRoot),
-            testsPassClaim: req.body?.tests_pass,
+            testsPassClaim: tests_pass,
           });
           if (!ev.ok) {
             return res.status(422).json({ error: 'completion evidence not satisfied', reasons: ev.reasons });
           }
-          const g = await guardedTransition({ featureCode: item.lifecycle.featureCode, from: completable, to: 'complete', workspaceRoot: projectRoot, commitSha: req.body?.commit_sha, resolvedBy: 'agent', mode: modeOf(item) });
+          const g = await guardedTransition({ featureCode: item.lifecycle.featureCode, from: completable, to: 'complete', workspaceRoot: projectRoot, commitSha: commit_sha, resolvedBy: 'agent', mode: modeOf(item) });
           if (!g.applied) return res.status(422).json({ error: 'completion refused by guard', from: completable, to: 'complete', verdict: g.verdict, guardError: g.error });
         }
         now = new Date().toISOString();
@@ -813,6 +820,15 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
       const { result } = req.body;
       if (!result || typeof result !== 'object') return res.status(400).json({ error: 'result object required' });
       const isReview = iter.loopType === 'review' && Array.isArray(iter.rounds);
+      // Legacy reviews have no tier or class history. Retain their report format
+      // while applying the standard cap to any further rounds.
+      const isLegacyReview = iter.loopType === 'review' && !isReview;
+      const maxIterations = isLegacyReview
+        ? Math.min(iter.maxIterations, ROUND_CAPS.standard)
+        : iter.maxIterations;
+      if (isLegacyReview && iter.count >= maxIterations) {
+        return iterRefuse(res, 409, 'ROUND_CAP_EXCEEDED', `This legacy review has reached its limit of ${maxIterations} rounds. Abort it before starting a new review.`);
+      }
       // COMP-DOGFOOD-REVIEW-LOOP-1: validate before anything is written
       if (isReview && iter.needs_redesign) {
         return iterRefuse(res, 409, 'NEEDS_REDESIGN', `This loop stopped on a repeated finding class (${iter.rounds.at(-1)?.classes?.join(', ')}); no further round. Write the alternatives note and abort with redesign_note (review-loop.md:8)`);
@@ -838,6 +854,7 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
         roundHighClasses = [...new Set(hm.filter(f => f.severity === 'HIGH').map(f => classKey(f.class)))];
       }
       const now = new Date().toISOString();
+      iter.maxIterations = maxIterations;
       iter.count++;
       iter.iterations.push({ n: iter.count, startedAt: now, result });
       let repeated = [];
@@ -855,12 +872,12 @@ export function attachVisionRoutes(app, { store, scheduleBroadcast, broadcastMes
                     : iter.loopType === 'coverage' ? result.passing === true
                     : false;
       let shouldContinue = true;
-      if (exitMet) {
-        iter.status = 'complete'; iter.outcome = 'clean'; iter.completedAt = now; shouldContinue = false;
-      } else if (repeated.length) {
+      if (repeated.length) {
         // review-loop.md:8: same class again means redesign, never one more round (beats the 3rd-round allowance).
         // The loop stays `running` so it can only close through abort with a redesign_note.
         iter.needs_redesign = true; iter.outcome = 'same_class'; shouldContinue = false;
+      } else if (exitMet) {
+        iter.status = 'complete'; iter.outcome = 'clean'; iter.completedAt = now; shouldContinue = false;
       } else if (isReview && iter.tier === 'security' && !iter.security_extension && iter.count === iter.cap && iter.count >= iter.maxIterations && roundHighClasses.length) {
         // review-loop.md:6: a 3rd round only for a security HIGH, here of a class round 1 did not carry
         iter.security_extension = true; iter.maxIterations = iter.cap + 1;
