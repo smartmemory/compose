@@ -473,7 +473,7 @@ Rich terminal interface for `compose build`. Replaces raw text output with struc
 | 133 | COMP-TUI-6 | Build summary: completion report with step durations, retries, total cost/tokens, pass/fail per step. | COMPLETE |
 | 134 | COMP-TUI-7 | Split pane layout: top pane for pipeline progress, bottom for tool output. Terminal equivalent of cockpit main area + agent bar. | PLANNED |
 | 135 | COMP-TUI-8 | Item detail on gate: pull item connections, lifecycle phase, related artifacts into the gate review panel. | PLANNED |
-| 136 | COMP-TUI-4-1 | Do not retry a consumer fanout item whose failure is deterministic (ownership violations) | PLANNED |
+| 136 | COMP-TUI-4-1 | Do not retry a consumer fanout item whose failure is deterministic (ownership violations) | COMPLETE |
 
 **Support features (complete):**
 - Heartbeat timer: 5s elapsed time tick during silent agent runs
@@ -1827,6 +1827,6 @@ OWNER DECISION D-0024 (2026-11-02, ops ledger `66c3049a018b`): the wiki moves to
 
 | # | Feature | Description | Status |
 |---|---------|-------------|--------|
-| 1 | COMP-LAUNCH-GATE-POSTLAND-FIX-1 | Bug: land n3/forge-launch-gate-fix (ops 4643d0f40674 + compose 168408929346; Opus review HIGH=0 MEDIUM=0). Fixes 4 real MEDIUMs from COMP-DOGFOOD-LAUNCH-GATE-1 post-land review: refused worker shows RUNNING (F1), resume refusal lost after running (F2), spool replay erases a late event (F3, data loss, reproduced on ops main), duplicate launch events (F5). Verdict: smart-memory-ops units/COMP-DOGFOOD-LAUNCH-GATE-1/verdict-review-postland-codex.md | PLANNED |
-| 2 | COMP-DOGFOOD-BATCH-POSTLAND-FIX-1 | Bug: land compose n3/forge-batch-fix d70124d2a709 (Opus review HIGH=0 MEDIUM=0). Fixes 5 real MEDIUMs from COMP-DOGFOOD-BATCH-1 post-land review: tag accepted as branch tip, guarded completion drops the sibling repo, clean flag overrides a repeated class, old loops keep the old round cap, old receipts unreadable. Verdict: smart-memory-ops units/COMP-DOGFOOD-BATCH-1/verdict-review-postland-codex.md | PLANNED |
+| 1 | COMP-LAUNCH-GATE-POSTLAND-FIX-1 | Bug: land n3/forge-launch-gate-fix (ops 4643d0f40674 + compose 168408929346; Opus review HIGH=0 MEDIUM=0). Fixes 4 real MEDIUMs from COMP-DOGFOOD-LAUNCH-GATE-1 post-land review: refused worker shows RUNNING (F1), resume refusal lost after running (F2), spool replay erases a late event (F3, data loss, reproduced on ops main), duplicate launch events (F5). Verdict: smart-memory-ops units/COMP-DOGFOOD-LAUNCH-GATE-1/verdict-review-postland-codex.md | IN_PROGRESS |
+| 2 | COMP-DOGFOOD-BATCH-POSTLAND-FIX-1 | Bug: land compose n3/forge-batch-fix d70124d2a709 (Opus review HIGH=0 MEDIUM=0). Fixes 5 real MEDIUMs from COMP-DOGFOOD-BATCH-1 post-land review: tag accepted as branch tip, guarded completion drops the sibling repo, clean flag overrides a repeated class, old loops keep the old round cap, old receipts unreadable. Verdict: smart-memory-ops units/COMP-DOGFOOD-BATCH-1/verdict-review-postland-codex.md | COMPLETE |
 | 3 | COMP-OWNER-QUEUE-POSTLAND-FIX-1 | Bug: land ops n3/forge-owner-queue-fix 003ab011210d (Opus review HIGH=0 MEDIUM=0). Fixes 3 real MEDIUMs from COMP-DOGFOOD-OWNER-QUEUE-NAMED-1 post-land review: live tick skips an owner answer under a scratch queue env, scratch spool uses the live transport, outbox override reaches the live chat. Verdict: smart-memory-ops units/COMP-DOGFOOD-OWNER-QUEUE-NAMED-1/verdict-review-postland-codex.md | PLANNED |

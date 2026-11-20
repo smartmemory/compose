@@ -1,10 +1,10 @@
 {
   "code": "COMP-TUI-4-1",
   "description": "Do not retry a consumer fanout item whose failure is deterministic (ownership violations)",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "phase": "COMP-TUI: CLI Terminal UI",
   "created": "2026-09-15",
-  "updated": "2026-09-15",
+  "updated": "2026-11-20",
   "complexity": "S",
   "position": 136,
   "parent": "COMP-TUI-4",
@@ -13,5 +13,22 @@
       "kind": "surfaced_by",
       "to_code": "COMP-TUI-4"
     }
-  ]
+  ],
+  "completions": [
+    {
+      "completion_id": "COMP-TUI-4-1:c90836ce0042815daf79778bc9288f9ec8c908f0",
+      "feature_code": "COMP-TUI-4-1",
+      "commit_sha": "c90836ce0042815daf79778bc9288f9ec8c908f0",
+      "commit_sha_short": "c90836ce",
+      "tests_pass": true,
+      "files_changed": [
+        "ts/src/engine/engine.ts",
+        "ts/tests/engine/p4.test.ts"
+      ],
+      "recorded_at": "2026-11-20T23:11:09.806Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Stratum 4292d94 (no retry of contract failures) + c90836c (a reported failure with no output stays retryable; only FILES_OWNED_VIOLATION stops). p4 32/32, tsc 0; stratum ts/dist rebuilt 2026-11-21; compose golden fanout 43/43, wave-golden-core 8/8 (abfc7098), pre-push node 9192/9194 fail 0."
+    }
+  ],
+  "commit_sha": "c90836ce0042815daf79778bc9288f9ec8c908f0"
 }

@@ -1,11 +1,31 @@
 {
   "code": "COMP-DOGFOOD-BATCH-POSTLAND-FIX-1",
   "description": "Bug: land compose n3/forge-batch-fix d70124d2a709 (Opus review HIGH=0 MEDIUM=0). Fixes 5 real MEDIUMs from COMP-DOGFOOD-BATCH-1 post-land review: tag accepted as branch tip, guarded completion drops the sibling repo, clean flag overrides a repeated class, old loops keep the old round cap, old receipts unreadable. Verdict: smart-memory-ops units/COMP-DOGFOOD-BATCH-1/verdict-review-postland-codex.md",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "phase": "COMP-DOGFOOD-POSTLAND: post-land review follow-ups (forge-catchup 2026-11-21)",
   "created": "2026-11-20",
   "updated": "2026-11-20",
   "complexity": "S",
   "position": 2,
-  "impact": "medium"
+  "impact": "medium",
+  "completions": [
+    {
+      "completion_id": "COMP-DOGFOOD-BATCH-POSTLAND-FIX-1:68c166ca3bc935e128ee0553d496025d898a4390",
+      "feature_code": "COMP-DOGFOOD-BATCH-POSTLAND-FIX-1",
+      "commit_sha": "68c166ca3bc935e128ee0553d496025d898a4390",
+      "commit_sha_short": "68c166ca",
+      "tests_pass": true,
+      "files_changed": [
+        "lib/evidence.js",
+        "lib/land-sha.js",
+        "server/compose-mcp-tools.js",
+        "server/vision-routes.js",
+        "test/postland-dogfood-batch.test.js"
+      ],
+      "recorded_at": "2026-11-20T23:11:00.372Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Merged n3/forge-batch-fix (d70124d2) to compose main, pushed f8fbe1ea..abfc7098. Touched tests + golden 197/197 (FORGE-RESUME-2026-11-19/followups-compose-tests.log); pre-push node 9192/9194 fail 0."
+    }
+  ],
+  "commit_sha": "68c166ca3bc935e128ee0553d496025d898a4390"
 }
