@@ -1,11 +1,29 @@
 {
   "code": "COMP-LAUNCH-GATE-POSTLAND-FIX-1",
   "description": "Bug: land n3/forge-launch-gate-fix (ops 4643d0f40674 + compose 168408929346; Opus review HIGH=0 MEDIUM=0). Fixes 4 real MEDIUMs from COMP-DOGFOOD-LAUNCH-GATE-1 post-land review: refused worker shows RUNNING (F1), resume refusal lost after running (F2), spool replay erases a late event (F3, data loss, reproduced on ops main), duplicate launch events (F5). Verdict: smart-memory-ops units/COMP-DOGFOOD-LAUNCH-GATE-1/verdict-review-postland-codex.md",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETE",
   "phase": "COMP-DOGFOOD-POSTLAND: post-land review follow-ups (forge-catchup 2026-11-21)",
   "created": "2026-11-20",
-  "updated": "2026-11-20",
+  "updated": "2026-11-23",
   "complexity": "S",
   "position": 1,
-  "impact": "medium"
+  "impact": "medium",
+  "completions": [
+    {
+      "completion_id": "COMP-LAUNCH-GATE-POSTLAND-FIX-1:a19b80859949da3683eb70c834d457e72afce1a2",
+      "feature_code": "COMP-LAUNCH-GATE-POSTLAND-FIX-1",
+      "commit_sha": "a19b80859949da3683eb70c834d457e72afce1a2",
+      "commit_sha_short": "a19b8085",
+      "tests_pass": true,
+      "files_changed": [
+        "lib/dir-lock.js",
+        "lib/launch-events.js",
+        "test/launch-events-postland-probe.test.js"
+      ],
+      "recorded_at": "2026-11-23T00:19:23.152Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Compose half merged a19b8085 (n3/forge-launch-gate-fix, 168408929346); ops half 4643d0f40674 on ops main (rev-list main..n3/forge-launch-gate-fix = 0). Touched tests green per units/FORGE-RESUME-2026-11-19/followups-compose-tests.log; no test run in this flip."
+    }
+  ],
+  "commit_sha": "a19b80859949da3683eb70c834d457e72afce1a2"
 }

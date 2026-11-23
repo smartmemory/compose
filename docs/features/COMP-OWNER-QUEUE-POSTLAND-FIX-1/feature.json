@@ -1,11 +1,29 @@
 {
   "code": "COMP-OWNER-QUEUE-POSTLAND-FIX-1",
   "description": "Bug: land ops n3/forge-owner-queue-fix 003ab011210d (Opus review HIGH=0 MEDIUM=0). Fixes 3 real MEDIUMs from COMP-DOGFOOD-OWNER-QUEUE-NAMED-1 post-land review: live tick skips an owner answer under a scratch queue env, scratch spool uses the live transport, outbox override reaches the live chat. Verdict: smart-memory-ops units/COMP-DOGFOOD-OWNER-QUEUE-NAMED-1/verdict-review-postland-codex.md",
-  "status": "PLANNED",
+  "status": "COMPLETE",
   "phase": "COMP-DOGFOOD-POSTLAND: post-land review follow-ups (forge-catchup 2026-11-21)",
   "created": "2026-11-20",
-  "updated": "2026-11-20",
+  "updated": "2026-11-23",
   "complexity": "S",
   "position": 3,
-  "impact": "medium"
+  "impact": "medium",
+  "completions": [
+    {
+      "completion_id": "COMP-OWNER-QUEUE-POSTLAND-FIX-1:003ab011210ddd405ffaeb72ddf0ffce7959c4a4",
+      "feature_code": "COMP-OWNER-QUEUE-POSTLAND-FIX-1",
+      "commit_sha": "003ab011210ddd405ffaeb72ddf0ffce7959c4a4",
+      "commit_sha_short": "003ab011",
+      "tests_pass": true,
+      "files_changed": [
+        "claude/scripts/notify_client.py",
+        "claude/scripts/owner_queue.py",
+        "claude/scripts/tests/test_owner_queue_postland_probe.py"
+      ],
+      "recorded_at": "2026-11-23T00:19:29.607Z",
+      "recorded_by": "mcp:agent",
+      "notes": "Ops-only: n3/forge-owner-queue-fix 003ab011210d on ops main (rev-list main..n3/forge-owner-queue-fix = 0); evidence root smart-memory-ops. Opus review HIGH=0 MEDIUM=0. No test run in this flip."
+    }
+  ],
+  "commit_sha": "003ab011210ddd405ffaeb72ddf0ffce7959c4a4"
 }
