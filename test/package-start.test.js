@@ -155,10 +155,11 @@ test('a real production install can start the packaged cockpit without Vite', as
   // `dist/` is gitignored build output that package.json `files` ships. A fresh
   // checkout or worktree has none, so the packed tarball carried no cockpit and
   // the installed server answered `Cannot GET /` (measured 2026-10-24, clean
-  // worktree: 404; same tree with dist/ copied in: pass). Build it when absent.
+  // worktree: 404; same tree with dist/ copied in: pass). Build it when absent,
+  // with the packaged build the publish runs (`build:package`, Wiki tab off).
   if (!existsSync(join(REPO_ROOT, 'dist', 'index.html'))) {
-    const built = await run('npm', ['run', 'build'], { cwd: REPO_ROOT, env: cleanEnv });
-    assert.equal(built.code, 0, `npm run build failed:\n${built.stdout.slice(-2000)}${built.stderr.slice(-2000)}`);
+    const built = await run('npm', ['run', 'build:package'], { cwd: REPO_ROOT, env: cleanEnv });
+    assert.equal(built.code, 0, `npm run build:package failed:\n${built.stdout.slice(-2000)}${built.stderr.slice(-2000)}`);
   }
   const packed = await run('npm', ['pack', '--json', '--pack-destination', packDir, '--cache', packCache], {
     cwd: REPO_ROOT,

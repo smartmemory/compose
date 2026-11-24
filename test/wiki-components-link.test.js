@@ -14,10 +14,19 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const SRC = fileURLToPath(new URL('../lib/wiki-components-link.js', import.meta.url));
 
-function fakePackage(dir) {
-  mkdirSync(join(dir, 'src'), { recursive: true });
+// The names Compose imports (lib REQUIRED_EXPORTS), written the way the real package writes them.
+const MAIN = 'export { default as FeatureHub, prefixOnly } from "./FeatureHub";\nexport { default as Search } from "./Search";\n'
+  + 'export { default as Decisions } from "./Decisions";\nexport { default as Sources } from "./Sources";\nexport { default as AreaDocs } from "./AreaDocs";\n'
+  + 'export { default as Ledger } from "./Ledger";\nexport { default as Features } from "./Features";\n'
+  + 'export { WikiDataProvider, useDataClient } from "./data-client";\nexport { wikiPath, wsName } from "./lib";\n';
+const GRAPH = 'export { default as GraphPage, GRAPH_ASPECTS, resetWebGL2Probe, wholeGraph } from "./pages/GraphPage";\nexport { GraphHost } from "./host";\n';
+
+// `stale` = the npm 0.6.0 shape: everything but `Features` (COMPOSE-RELEASE-NPM-1).
+function fakePackage(dir, { stale = false } = {}) {
+  mkdirSync(join(dir, 'src', 'graph'), { recursive: true });
   writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: '@smartmemory/wiki-components', version: '0.0.0-test', type: 'module', exports: { '.': './src/index.js', './package.json': './package.json' } }));
-  writeFileSync(join(dir, 'src', 'index.js'), 'export {};\n');
+  writeFileSync(join(dir, 'src', 'index.js'), stale ? MAIN.replace('export { default as Features } from "./Features";\n', '') : MAIN);
+  writeFileSync(join(dir, 'src', 'graph', 'index.js'), GRAPH);
   writeFileSync(join(dir, 'src', 'data-client.jsx'), 'export {};\n');
   return dir;
 }
@@ -37,6 +46,10 @@ const ROWS = [
   { name: 'none forces absent', sibling: true, installed: true, env: { COMPOSE_WIKI_COMPONENTS_DIR: 'none' }, want: null },
   { name: 'override wins', sibling: true, installed: true, env: { COMPOSE_WIKI_COMPONENTS_DIR: 'override' }, want: 'override' },
   { name: 'missing override does not fall back', sibling: true, installed: true, env: { COMPOSE_WIKI_COMPONENTS_DIR: 'missing' }, want: null },
+  // COMPOSE-RELEASE-NPM-1: an installed package older than the source (no `Features`) is absent, not a broken build.
+  { name: 'stale installed only is absent', sibling: false, installed: 'stale', env: {}, want: null, warns: /lacks src\/index\.js: Features/ },
+  { name: 'stale sibling falls through to a complete installed', sibling: 'stale', installed: true, env: {}, want: 'installed', warns: null },
+  { name: 'none warns that the tab is off', sibling: true, installed: true, env: { COMPOSE_WIKI_COMPONENTS_DIR: 'none' }, want: null, warns: /Wiki tab is off/ },
 ];
 
 describe('resolveWikiComponentsDir', () => {
@@ -54,13 +67,36 @@ describe('resolveWikiComponentsDir', () => {
         override: fakePackage(join(base, 'override')),
         missing: join(base, 'missing'),
       };
-      if (row.sibling) fakePackage(dirs.sibling);
+      if (row.sibling) fakePackage(dirs.sibling, { stale: row.sibling === 'stale' });
       if (row.stale) fakePackage(dirs.stale);
-      if (row.installed) fakePackage(dirs.installed);
+      if (row.installed) fakePackage(dirs.installed, { stale: row.installed === 'stale' });
       const env = { ...row.env };
       if (env.COMPOSE_WIKI_COMPONENTS_DIR && env.COMPOSE_WIKI_COMPONENTS_DIR !== 'none') env.COMPOSE_WIKI_COMPONENTS_DIR = dirs[env.COMPOSE_WIKI_COMPONENTS_DIR];
       const { resolveWikiComponentsDir } = await import(pathToFileURL(join(compose, 'lib', 'wiki-components-link.js')).href);
-      assert.equal(resolveWikiComponentsDir(env), row.want ? dirs[row.want] : null);
+      const warnings = [];
+      const orig = console.warn;
+      console.warn = (msg) => warnings.push(String(msg));
+      let got;
+      try { got = resolveWikiComponentsDir(env); resolveWikiComponentsDir(env); } finally { console.warn = orig; }
+      assert.equal(got, row.want ? dirs[row.want] : null);
+      if (row.warns) {
+        assert.equal(warnings.length, 1, `exactly one WARNING per process, got ${JSON.stringify(warnings)}`);
+        assert.match(warnings[0], /^WARNING \[wiki-components\]/);
+        assert.match(warnings[0], row.warns);
+      } else if (row.warns === null) {
+        assert.deepEqual(warnings, []);
+      }
     });
   }
+});
+
+describe('REQUIRED_EXPORTS matches the stubs', () => {
+  it('each stub exports exactly the required names', async () => {
+    const { REQUIRED_EXPORTS, exportedNames } = await import(pathToFileURL(SRC).href);
+    const stubs = { 'src/index.js': '../src/lib/wiki-components-stub.js', 'src/graph/index.js': '../src/lib/wiki-components-graph-stub.js' };
+    for (const [entry, stub] of Object.entries(stubs)) {
+      const have = [...exportedNames(fileURLToPath(new URL(stub, import.meta.url)))].sort();
+      assert.deepEqual(have, [...REQUIRED_EXPORTS[entry]].sort(), entry);
+    }
+  });
 });

@@ -80,7 +80,7 @@ esac
 
 echo ">> $MODE: $PKG@$VERSION  ->  dist-tag '$TAG'  ${DRY:+[DRY-RUN]}"
 set_version "$VERSION"
-echo ">> build (vite)"; npm run build >/dev/null
+echo ">> build (vite, packaged: Wiki tab off)"; npm run build:package >/dev/null
 echo ">> publish"
 npm publish --access public --tag "$TAG" --ignore-scripts $DRY --userconfig "$TMPRC"
 
