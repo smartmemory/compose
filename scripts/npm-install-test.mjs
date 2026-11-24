@@ -20,23 +20,24 @@
  * The child env is minimal (HOME, PATH, TMPDIR) and carries invalid provider keys, so the build
  * step can never reach a model on someone's account: the run stops it at its first step line.
  */
+// Strip inherited GIT_* redirectors before this file's own `git init`/`commit` (COMPOSE-GOLDEN-LEAK-1 guard).
+import '../test/helpers/git-env-scrub.js';
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..');
 const spec = process.env.COMPOSE_NPM_SPEC || '@smartmemory/compose@latest';
 const extra = (process.env.COMPOSE_NPM_EXTRA || '').split(/\s+/).filter(Boolean);
-const root = process.env.COMPOSE_NPM_DIR || mkdtempSync(join(tmpdir(), 'compose-npm-install-'));
+const root = process.env.COMPOSE_NPM_DIR || join(tmpdir(), `compose-npm-install-${process.pid}-${Date.now()}`);
 const home = join(root, 'home');
 const install = join(root, 'install');
 const proj = join(root, 'proj');
 const cache = process.env.COMPOSE_NPM_CACHE || join(root, 'npm-cache');
-for (const d of [home, install, proj]) mkdirSync(d, { recursive: true });
 
 // Requests a packaged install cannot answer: these routes exist only with the owner's sibling
 // checkouts (Cadence UI, ops status). Reported as WARNING, never silently dropped.
@@ -74,6 +75,7 @@ function killGroup(child) {
 }
 
 async function main() {
+  for (const d of [home, install, proj]) mkdirSync(d, { recursive: true });
   console.log(`[npm-install-test] dir ${root}`);
   console.log(`[npm-install-test] installing ${[spec, ...extra].join(' ')} (cache ${cache})`);
   writeFileSync(join(install, 'package.json'), '{"name":"compose-npm-install-test","private":true}\n');
@@ -172,14 +174,17 @@ async function main() {
   }
 }
 
-try {
-  await main();
-} catch (e) {
-  record('npm install test', false, e.stack || String(e));
-} finally {
-  if (process.env.COMPOSE_NPM_KEEP === '1' || process.env.COMPOSE_NPM_DIR) console.log(`[npm-install-test] kept ${root}`);
-  else rmSync(root, { recursive: true, force: true });
+// Only when run as a script: importing this file (the git-writer guard does) must not start an install.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  try {
+    await main();
+  } catch (e) {
+    record('npm install test', false, e.stack || String(e));
+  } finally {
+    if (process.env.COMPOSE_NPM_KEEP === '1' || process.env.COMPOSE_NPM_DIR) console.log(`[npm-install-test] kept ${root}`);
+    else rmSync(root, { recursive: true, force: true });
+  }
+  const failedCount = results.filter((r) => !r.ok).length;
+  console.log(`[npm-install-test] ${results.length - failedCount}/${results.length} passed`);
+  process.exit(failedCount === 0 && results.length > 0 ? 0 : 1);
 }
-const failedCount = results.filter((r) => !r.ok).length;
-console.log(`[npm-install-test] ${results.length - failedCount}/${results.length} passed`);
-process.exit(failedCount === 0 && results.length > 0 ? 0 : 1);
