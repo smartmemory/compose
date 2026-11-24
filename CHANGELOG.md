@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- **STRATUM-NPM-PUBLISH-CURRENT-1:** the Stratum dependency ranges move to `@smartmemory/stratum` `^0.7.4` and `@smartmemory/stratum-ui` `^0.1.1`, the first npm releases with the `models` command (`compose build` loads its model catalog from it) and the `NavProvider` export (the cockpit rendered blank without it). New `npm run test:npm-install` (`scripts/npm-install-test.mjs`) installs Compose from the registry into an empty directory and walks setup, init, feature, build and start with a headless UI load, so a stale npm dependency fails a check instead of hiding behind a local checkout. See `docs/install.md`.
+
 - COMP-DOGFOOD-LAUNCH-GATE-1. Concurrent launch and replay writers now store a refusal key only once.
 - **COMP-DOGFOOD-BATCH-1** fixes completion branch lookup and verifies guarded completion in the selected Git repo. A repeated HIGH or MEDIUM review finding now requires redesign even when the report says it is clean, and legacy reviews respect the current standard round cap. Existing receipt IDs remain readable when their stored subjects include legacy metadata.
 
