@@ -114,6 +114,10 @@ Check the installed version, git SHA, and root path:
 compose --version
 ```
 
+## Checking a clean npm install
+
+`npm run test:npm-install` installs Compose from the npm registry into an empty temp directory with a fresh HOME (no sibling checkouts, no links), then runs `setup`, `init`, `feature`, `build` up to its first step and `start` with a headless load of the cockpit and the Stratum view. It needs network access and takes several minutes on a cold cache. `COMPOSE_NPM_SPEC` picks what to install (default `@smartmemory/compose@latest`, a tarball path works) and `COMPOSE_NPM_EXTRA` adds packages, for example local Stratum tarballs before they are published. Run it before a release: a sibling `stratum/` checkout hides a stale npm Stratum from every other test.
+
 ## Backwards compatibility
 
 `compose install` runs both `init` and `setup` in sequence.
