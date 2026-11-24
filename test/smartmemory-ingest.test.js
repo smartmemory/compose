@@ -201,20 +201,27 @@ describe('circuit breaker', () => {
       smartmemory: { enabled: true, baseUrl, apiKeyEnv: 'SM_BRK_KEY' },
     }));
     const originalWarn = console.warn;
-    let warnCount = 0;
-    console.warn = (...args) => { warnCount++; originalWarn(...args); };
+    // Compose's own lines carry `[smartmemory]`. `@smartmemory/sdk-js` 1.5.x also prints
+    // `[session] Service unavailable: HTTP 500` once per failed call from its recovery layer, with no
+    // option to turn it off (1.4.x printed nothing), so a fresh install counted 4 here (COMPOSE-RELEASE-NPM-1).
+    // What Compose owns: exactly one warning when the breaker trips, and NO output of any kind once open.
+    const warnings = [];
+    console.warn = (...args) => { warnings.push(args.map(String).join(' ')); originalWarn(...args); };
+    const composeWarnings = () => warnings.filter((w) => w.includes('[smartmemory]'));
     try {
       for (let i = 0; i < 3; i++) {
         emitFeatureEvent(dir, { ts: 't', tool: 'x', code: `FOO-${i}` });
         await flushPending();
       }
       assert.equal(seen.length, 3);
-      assert.equal(warnCount, 1);
+      assert.equal(composeWarnings().length, 1, `one Compose warning per trip, got ${JSON.stringify(composeWarnings())}`);
 
-      // 4th call: breaker now open, no fetch should occur.
+      // 4th call: breaker now open, no fetch should occur, and nothing is printed at all.
+      const before = warnings.length;
       emitFeatureEvent(dir, { ts: 't', tool: 'x', code: 'FOO-4' });
       await flushPending();
       assert.equal(seen.length, 3, 'breaker should have suppressed the 4th fetch');
+      assert.deepEqual(warnings.slice(before), [], 'an open breaker prints nothing');
     } finally {
       console.warn = originalWarn;
       delete process.env.SM_BRK_KEY;
