@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 - **STRATUM-NPM-PUBLISH-CURRENT-1:** the Stratum dependency ranges move to `@smartmemory/stratum` `^0.7.4` and `@smartmemory/stratum-ui` `^0.1.1`, the first npm releases with the `models` command (`compose build` loads its model catalog from it) and the `NavProvider` export (the cockpit rendered blank without it). New `npm run test:npm-install` (`scripts/npm-install-test.mjs`) installs Compose from the registry into an empty directory and walks setup, init, feature, build and start with a headless UI load, so a stale npm dependency fails a check instead of hiding behind a local checkout. See `docs/install.md`.
+- **COMP-NEWUSER-README-1.** `compose feature` writes its ROADMAP row in the shape of the table it lands in (new `lib/roadmap-append.js`). Before, it wrote a four-column row into the three-column table `compose init` creates, and `compose roadmap` then exited with "no named feature rows were parsed". A three-column `# | Item | Status` table gains a Feature column first and its existing rows stay anonymous. Test: `test/feature-roadmap-roundtrip.test.js` (init, feature, roadmap in an empty project). README rewritten for a new user (Node 22.15+, a quickstart that works from a clone and from npm, a command table generated from `lib/cli-commands.js`), routing and Devin internals moved to `docs/routing-and-devin.md`. `scripts/cockpit.sh` no longer warns when the maintainer's pinned Node and Python paths are absent. CHANGELOG entries added for 0.6.2 through 0.7.2.
 
 - COMP-DOGFOOD-LAUNCH-GATE-1. Concurrent launch and replay writers now store a refusal key only once.
 - **COMP-DOGFOOD-BATCH-1** fixes completion branch lookup and verifies guarded completion in the selected Git repo. A repeated HIGH or MEDIUM review finding now requires redesign even when the report says it is clean, and legacy reviews respect the current standard round cap. Existing receipt IDs remain readable when their stored subjects include legacy metadata.
@@ -521,6 +522,39 @@
   `COMPLETE/KILLED/SUPERSEDED → closed`, `PARKED → null`) used later by promotion-created links
   instead of a stored, write-time-synced `expect` (4 tests, `test/status-projection.test.js`).
   Design/blueprint/plan at `docs/features/COMP-TRACKER-FORGEJO/`.
+
+## [0.7.2] - 2026-09-29
+
+- The default Claude model is `claude-sonnet-5-5`. Requires `@smartmemory/stratum` `^0.7.3`.
+- Fixed: `compose new` filtered out its own description. The dashboard empty state named the wrong compose command. Pipeline conversions emitted a dead Stratum dialect and wrote it to disk. Ideabox writes glued idea paragraphs together because parsing dropped blank lines, and ideabox state is cleared on a project switch.
+- The UI gained a favicon and now loads the Inter typeface.
+
+## [0.7.1] - 2026-09-27
+
+- **Explicit Devin agents (COMP-AGENT-DEVIN-1).** Compose accepts `devin` where an agent is named: the provider list, `swe-2` tiers, sandbox forwarding, producer-stated zero cost, reviewer fallback. Ordinary GSD direct steps refuse Devin with a named error. Requires `@smartmemory/stratum` `^0.7.1`.
+
+## [0.7.0] - 2026-09-26
+
+- A build prints a summary of lessons awaiting review, including after a failed or thrown build. Requires `@smartmemory/stratum` `^0.7.0`.
+- Test servers bind to `127.0.0.1`.
+
+## [0.6.5] - 2026-09-25
+
+- Fixed a `ROUTING_SCHEMA_INVALID` regression from 0.6.4: the routing outcome schema accepts `executedTier.status`.
+
+## [0.6.4] - 2026-09-25
+
+- **License changed from MIT to Business Source License 1.1** (Regression Analytics LLC). Versions released before 2026-09-25 remain available under MIT. Requires `@smartmemory/stratum` `^0.6.3`.
+- Routing records whether the executed tier was known or unknown. Test harnesses isolate Stratum flow stores.
+
+## [0.6.3] - 2026-09-24
+
+- Model tiers moved to current models: `critical` and `standard` use `claude-opus-5-5`, Codex `standard` uses `gpt-6-sol` at medium effort, `fast` and `budget` use `gpt-6-luna`. Requires `@smartmemory/stratum` `^0.6.1`.
+
+## [0.6.2] - 2026-09-20
+
+- Gate re-entry and the same-failure guard no longer reset on `--resume`, and the same-failure kill switch uses a stable fingerprint (COMP-GATE-REENTRY-RESUME, COMP-GATE-MERGE-FINGERPRINT).
+- The product-new flow keeps token and cost usage instead of discarding it. Ordinary review prompts are budgeted, not only consumer ones (COMP-REVIEW-BUDGET-2).
 
 ## [0.6.1] — 2026-09-18
 

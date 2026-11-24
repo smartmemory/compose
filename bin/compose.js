@@ -1266,32 +1266,13 @@ _This is a seed design doc created by \`compose feature\`. The \`compose build\`
   if (existsSync(roadmapPath)) {
     let roadmap = readFileSync(roadmapPath, 'utf-8')
 
-    // Find the last table row with a number to get the next item number
-    const itemNums = [...roadmap.matchAll(/^\| (\d+) \|/gm)].map(m => parseInt(m[1], 10))
-    const nextNum = itemNums.length > 0 ? Math.max(...itemNums) + 1 : 1
-
-    // Find the first PLANNED phase table and append, or append to the last table
-    const tableRowPattern = /^(\| \d+ \|.*\| PLANNED \|)$/m
-    const match = roadmap.match(tableRowPattern)
-
-    if (match) {
-      // Insert after the last row of this table
-      const tableEnd = roadmap.indexOf(match[0]) + match[0].length
-      // Find end of table (next blank line or ---)
-      let insertPos = tableEnd
-      const rest = roadmap.slice(tableEnd)
-      const nextRows = rest.match(/^(\| \d+ \|.*\|)$/gm)
-      if (nextRows) {
-        for (const row of nextRows) {
-          insertPos = roadmap.indexOf(row, insertPos) + row.length
-        }
-      }
-      const newRow = `\n| ${nextNum} | ${featureCode} | ${description} | PLANNED |`
-      roadmap = roadmap.slice(0, insertPos) + newRow + roadmap.slice(insertPos)
-    } else {
-      // No PLANNED table found — append a features section
-      roadmap += `\n\n## Features\n\n| # | Feature | Item | Status |\n|---|---------|------|--------|\n| ${nextNum} | ${featureCode} | ${description} | PLANNED |\n`
-    }
+    // The row is written in the shape of the table it lands in (a 3-column
+    // `# | Item | Status` table gains a Feature column first), so `compose roadmap`
+    // can parse what `compose feature` wrote (COMP-NEWUSER-README-1).
+    const { appendFeatureRow } = await import('../lib/roadmap-append.js')
+    const appended = appendFeatureRow(roadmap, featureCode, description)
+    roadmap = appended.text
+    const nextNum = appended.itemNumber
 
     writeFileSync(roadmapPath, roadmap)
     console.log(`Added ${featureCode} to ROADMAP.md (item #${nextNum})`)
