@@ -73,6 +73,7 @@ describe('resolveWikiComponentsDir', () => {
       const env = { ...row.env };
       if (env.COMPOSE_WIKI_COMPONENTS_DIR && env.COMPOSE_WIKI_COMPONENTS_DIR !== 'none') env.COMPOSE_WIKI_COMPONENTS_DIR = dirs[env.COMPOSE_WIKI_COMPONENTS_DIR];
       const { resolveWikiComponentsDir } = await import(pathToFileURL(join(compose, 'lib', 'wiki-components-link.js')).href);
+      delete process.env.COMPOSE_WIKI_COMPONENTS_WARNED; // each row is its own "process" for the once-per-process WARNING
       const warnings = [];
       const orig = console.warn;
       console.warn = (msg) => warnings.push(String(msg));
