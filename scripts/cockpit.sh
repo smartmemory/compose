@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # On-demand supervised start of the Compose cockpit (API 4001, agent 4002, UI 5195), all on 127.0.0.1.
-# Usage: scripts/cockpit.sh start|stop|status. Ports are registered to `compose` in ~/.ports.
+# Usage: scripts/cockpit.sh start|stop|status. Works from any source checkout with `node` on PATH.
+# Environment overrides: PORT, AGENT_PORT, VITE_PORT (or COCKPIT_PORTS for all three), COCKPIT_NODE (Node binary),
+# COMPOSE_FLEET_PYTHON (Python 3.12+ for the optional fleet readers), COCKPIT_RUN (pidfile and log dir, default ~/.compose/run).
+# The pinned Node and Python paths below are the maintainer's defaults. They are used only when they exist,
+# otherwise the script falls back to `node` and `python3` on PATH. A path you set yourself that is missing is a warning.
 set -u
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RUN="${COCKPIT_RUN:-${COMPOSE_RUN_DIR:-$HOME/.compose/run}}"
@@ -14,13 +18,16 @@ ENTRY="${COCKPIT_ENTRY:-server/supervisor.js}"  # relative to the repo root; tes
 # children (vite) resolve the same node.
 NODE="${COCKPIT_NODE:-$HOME/.nvm/versions/node/v22.22.3/bin/node}"
 if [ -x "$NODE" ]; then PATH="$(dirname "$NODE"):$PATH"; export PATH
-else echo "cockpit.sh: WARNING pinned node $NODE not found, falling back to $(command -v node) from PATH" >&2; NODE=node; fi
+else
+  [ -n "${COCKPIT_NODE:-}" ] && echo "cockpit.sh: WARNING COCKPIT_NODE=$NODE not found, falling back to $(command -v node) from PATH" >&2
+  NODE=node
+fi
 # Our Python scripts (sm_status, owner_queue, usage_watch, estimate, notify_client) need 3.12+, and a bare `python3` on the
 # cockpit's PATH is Apple's /usr/bin 3.9 (owner 2026-11-03 "we're on 3.13 across the board"). Every server reader and the notify
 # gate take COMPOSE_FLEET_PYTHON (fleet-routes.js, ribbon-routes.js, usage-routes.js, ops-status-routes.js, notify-gate.js).
 PY="${COMPOSE_FLEET_PYTHON:-$HOME/miniconda3/envs/py313/bin/python3}"
 if [ -x "$PY" ]; then COMPOSE_FLEET_PYTHON="$PY"; export COMPOSE_FLEET_PYTHON
-else echo "cockpit.sh: WARNING python $PY not found, the fleet readers fall back to $(command -v python3) from PATH" >&2; fi
+elif [ -n "${COMPOSE_FLEET_PYTHON:-}" ]; then echo "cockpit.sh: WARNING python $PY not found, the fleet readers fall back to $(command -v python3) from PATH" >&2; fi
 
 alive() { [ -n "${1:-}" ] && kill -0 "$1" 2>/dev/null; }
 sup_pid() { [ -f "$PIDFILE" ] && cat "$PIDFILE"; }

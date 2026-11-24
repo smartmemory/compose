@@ -12,7 +12,7 @@ range already pins. The rule and its enforcing test live at `.claude/rules/versi
 
 ## Prerequisites
 
-- Node.js 18+
+- Node.js 22.15 or newer (required by `@smartmemory/stratum`)
 - Stratum. **Nothing to install:** `@smartmemory/stratum` is a declared dependency of
   `@smartmemory/compose`, so `npm install` brings it down and `compose init` registers that
   installed copy's MCP entrypoint. A sibling `stratum/` checkout is a *development* convenience,

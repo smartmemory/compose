@@ -1,6 +1,6 @@
 # CLI Reference
 
-Reference for every `compose` subcommand. Source of truth: `bin/compose.js`, indexed from `lib/cli-commands.js`.
+Reference for every top-level `compose` command and its subcommands. Source of truth: `bin/compose.js`, indexed from `lib/cli-commands.js`.
 
 The Command Index below is generated from the command table and lists every shipped command. Deep-dives for the primary verbs follow.
 
@@ -81,6 +81,30 @@ The Command Index below is generated from the command table and lists every ship
 | `compose migrate-anon` | Promote anonymous ROADMAP rows to typed features (interactive) |
 | `compose hooks` | Manage Claude Code hooks (install \| uninstall \| status) |
 | `compose version` (alias: `--version`, `-V`) | Print compose version, git SHA, and install root |
+
+## Subcommands
+
+The index above lists top-level commands. These take a subcommand as their first argument (read from the dispatch in `bin/compose.js`, `compose <command> --help` or the command's own usage line has the flags).
+
+| Command | Subcommands |
+|---|---|
+| `compose roadmap` | none (show status), `generate` (alias `gen`), `add`, `migrate`, `check`, `promote-issue`, `xref-sync`, `xref-push`, `graph` |
+| `compose guard` | `init`, `verify`, `install`, `uninstall`, `status`, `descriptors`, `sign`, `enrol` |
+| `compose hooks` | `install`, `uninstall`, `status` |
+| `compose gates` | `report`, `answer`, `list`, `resolve` |
+| `compose loops` | `add`, `list`, `resolve` |
+| `compose lineage` | `stamp`, `stale`, `show` |
+| `compose context` | `decisions` |
+| `compose items` | `list` (default), `show` |
+| `compose ideabox` | `add`, `list`, `promote`, `kill`, `resurrect`, `pri`, `discuss`, `triage`, `render`, `adopt-file`, `discard-edits` |
+| `compose judgment` | `trace <slug>` |
+| `compose process` | `publish` |
+| `compose smartmemory` | `sync` |
+| `compose tracker` | `status`, `sync` |
+| `compose remote` | `pair`, `list`, `revoke`, `rotate-secret`, `status` |
+| `compose pipeline` | `gsd`, `experiment`, `triage` runners, or no argument to view and edit the build pipeline |
+
+Environment: `PORT` (API server, default 4001), `AGENT_PORT` (agent server, 4002) and `VITE_PORT` (UI, 5195) move the ports `compose start` and `scripts/cockpit.sh` use.
 
 ## Workflow
 
