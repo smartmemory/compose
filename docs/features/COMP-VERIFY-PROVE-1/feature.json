@@ -1,0 +1,23 @@
+{
+  "code": "COMP-VERIFY-PROVE-1",
+  "description": "A bug fix proves itself mechanically: Compose runs the reproduce test (or a COMP-VERIFY-FLOW-1 flow) on the base commit and on the fix commit, and records a receipt only when it fails on base and passes on head (exit codes: proved / not proved / app failed to start / failed before its assertion). Today pipelines/bug-fix.stratum.yaml:126-134 asks the agent to write a test that \"must fail before any fix\" but its ensure only checks outcome == complete, so the fail-on-base half is self-reported. Opt-in evidence kind bound to the completion, not a new default gate. Extends lib/completion-gate.js, lib/evidence.js, the bug-fix pipeline reproduce/verify steps; builds on COMP-VERIFY-FLOW-1. Pattern from t3code scripts/prove-scenario.ts. Notes in docs/features/COMP-VERIFY-PROVE-1/source.md",
+  "status": "PLANNED",
+  "phase": "COMP-VERIFY: Verification that proves the outcome (OPS-VERIFY-CONFORM-1 ruling, owner \"agree all\" 2026-11-17)",
+  "created": "2026-11-23",
+  "updated": "2026-11-23",
+  "complexity": "S",
+  "position": 12,
+  "tags": [
+    "verify",
+    "bug-fix"
+  ],
+  "impact": "medium",
+  "class": "code",
+  "links": [
+    {
+      "kind": "depends_on",
+      "to_code": "COMP-VERIFY-FLOW-1",
+      "note": "proof runs the FLOW-1 flow command on base and head"
+    }
+  ]
+}

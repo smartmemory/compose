@@ -1,0 +1,17 @@
+{
+  "code": "COMP-PROMPT-EVAL-1",
+  "description": "Evals for the text models read: MCP tool descriptions and schemas, pipeline step prompts, review and brief templates. One eval first (compose MCP tool use or the review prompt): cases are data, each from a real incident and added before the fix (fails on the old text, passes on the new), control cases where the right action is ordinary work, several samples per case (fails at half or more), compared against a baseline on the same model; the eval imports the live text from source, never a copy; runs on demand, never in CI (paid). No shared eval library until a second eval needs it. Narrower than the killed COMP-REVIEWER-EVAL-1 (no reviewer benchmark, no held-out sets). Pattern from t3code evals/README.md. Notes in docs/features/COMP-PROMPT-EVAL-1/source.md",
+  "status": "PLANNED",
+  "phase": "COMP-VERIFY: Verification that proves the outcome (OPS-VERIFY-CONFORM-1 ruling, owner \"agree all\" 2026-11-17)",
+  "created": "2026-11-23",
+  "updated": "2026-11-23",
+  "complexity": "M",
+  "position": 13,
+  "tags": [
+    "verify",
+    "evals",
+    "prompts"
+  ],
+  "impact": "medium",
+  "class": "code"
+}

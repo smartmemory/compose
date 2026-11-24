@@ -103,7 +103,11 @@ export default function ItemFormDialog({ open, onClose, parentItem, initialType 
         governance: form.governance !== 'flag' ? form.governance : undefined,
         featureCode: form.featureCode.trim() || undefined,
       };
-      await createItem(payload);
+      const result = await createItem(payload);
+      if (result?.error) {
+        setError(`Failed to create item: ${result.error}`);
+        return;
+      }
       onClose();
     } catch (err) {
       setError('Failed to create item');

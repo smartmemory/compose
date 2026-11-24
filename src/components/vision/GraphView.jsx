@@ -1266,9 +1266,9 @@ export default function GraphView({ items, connections, selectedItemId, onSelect
             gates={gates}
             items={items}
             badgePositions={badgePositions}
-            onResolve={(gateId, outcome, comment) => {
-              if (resolveGate) resolveGate(gateId, outcome, comment);
-              setGatePopoverNodeId(null);
+            onResolve={async (gateId, outcome, comment) => {
+              const result = resolveGate ? await resolveGate(gateId, outcome, comment) : null;
+              if (!result?.error) setGatePopoverNodeId(null);
             }}
             onClose={() => setGatePopoverNodeId(null)}
           />
