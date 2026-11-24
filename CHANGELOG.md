@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- **COMP-APICALL-ERRORS-1:** a failed server call from the cockpit UI now shows an error toast (HTTP error, stopped server or unreadable reply) instead of failing silently, and `apiCall` no longer throws on network errors. The New item dialog stays open with the reason, Delete keeps the panel open, and the graph gate popover stays open when the server refuses. Tests: `test/ui/apicall-errors.test.js`, `test/ui/apicall-errors-real-http.test.jsx`.
+
 - COMP-DOGFOOD-LAUNCH-GATE-1. Concurrent launch and replay writers now store a refusal key only once.
 - **COMP-DOGFOOD-BATCH-1** fixes completion branch lookup and verifies guarded completion in the selected Git repo. A repeated HIGH or MEDIUM review finding now requires redesign even when the report says it is clean, and legacy reviews respect the current standard round cap. Existing receipt IDs remain readable when their stored subjects include legacy metadata.
 

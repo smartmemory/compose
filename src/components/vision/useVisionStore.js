@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import YAML from 'yaml';
 import { handleVisionMessage } from './visionMessageHandler.js';
 import { wsFetch } from '../../lib/wsFetch.js';
+import { notify } from '../cockpit/NotificationBar.jsx';
 import { createReconnectingWS } from '../../lib/wsReconnect.js';
 import { visionWsUrl } from '../../lib/wsUrl.js';
 import {
@@ -163,13 +164,28 @@ const EMPTY_CHANGES = { newIds: new Set(), changedIds: new Set() };
 export const useVisionStore = create((set, get) => {
   // ── REST helpers ─────────────────────────────────────────────────────────
 
-  async function apiCall(url, options) {
-    const res = await wsFetch(url, options);
-    const data = await res.json();
-    if (!res.ok) {
-      console.error(`[vision] API error ${res.status}:`, data.error || data);
-      return { error: data.error || `HTTP ${res.status}` };
+  // COMP-APICALL-ERRORS-1: every failure (HTTP error, network error, unreadable body) is shown
+  // through the app's existing toast (`notify`) and returned as `{error}`; it never throws.
+  // `silent` is for callers that render the error on their own surface (inline form error).
+  async function apiCall(url, options, { silent = false } = {}) {
+    const fail = (message) => {
+      console.error(`[vision] API error ${url}:`, message);
+      if (!silent) notify(`Request failed: ${message}`, 'error');
+      return { error: message };
+    };
+    let res;
+    try {
+      res = await wsFetch(url, options);
+    } catch (err) {
+      return fail(err?.message || 'Network error');
     }
+    let data;
+    try {
+      data = await res.json();
+    } catch {
+      return res.ok ? fail('Unreadable server response') : fail(`HTTP ${res.status}`);
+    }
+    if (!res.ok) return fail(data?.error || `HTTP ${res.status}`);
     return data;
   }
 
@@ -483,7 +499,7 @@ export const useVisionStore = create((set, get) => {
     // Load a spec's raw YAML, parse it, build the editable model, and select the
     // first editable flow. v0.1 specs load read-only with editorReadOnly=true.
     loadSpecForEdit: async (file) => {
-      const data = await apiCall(`/api/pipeline/spec?file=${encodeURIComponent(file)}`);
+      const data = await apiCall(`/api/pipeline/spec?file=${encodeURIComponent(file)}`, undefined, { silent: true });
       if (data?.error || typeof data?.text !== 'string') {
         set({ editorErrors: { errors: [data?.error || 'Failed to load spec'], warningsByStepId: {} } });
         return null;
@@ -1103,7 +1119,7 @@ export const useVisionStore = create((set, get) => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ filename, model: editorModel, metadata }),
-      });
+      }, { silent: true });
     },
 
     setFeatureTimeline: (updater) => set(s => ({

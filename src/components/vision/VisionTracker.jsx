@@ -169,7 +169,8 @@ export default function VisionTracker({ onContextSelect, sidebarOpen = true, onT
   }, [createItem, selectedPhase]);
 
   const handleDelete = useCallback(async (id) => {
-    await deleteItem(id);
+    const result = await deleteItem(id);
+    if (result?.error) return;
     if (selectedItemId === id) {
       setSelectedItemId(null);
       if (onContextSelect) onContextSelect(null);

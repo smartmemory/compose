@@ -151,9 +151,9 @@ export default function ContextItemDetail({ itemId, onSelect, onClose, onOpenFil
               connections={connections}
               gates={gates}
               onUpdate={(id, data) => updateItem(id, data)}
-              onDelete={(id) => {
-                deleteItem(id);
-                onClose();
+              onDelete={async (id) => {
+                const result = await deleteItem(id);
+                if (!result?.error) onClose();
               }}
               onCreateConnection={createConnection}
               onDeleteConnection={deleteConnection}

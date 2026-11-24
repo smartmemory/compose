@@ -1205,7 +1205,8 @@ function AppInner() {
   const pendingGateCount = useMemo(() => gates.filter(g => g.status === 'pending').length, [gates]);
 
   const handleDelete = useCallback(async (id) => {
-    await deleteItem(id);
+    const result = await deleteItem(id);
+    if (result?.error) return;
     if (selectedItemId === id) {
       setSelectedItemId(null);
       onContextSelect(null);
